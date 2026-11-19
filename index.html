@@ -367,6 +367,8 @@ table.list.wl tfoot td { background: var(--panel-3); border-top: 1px solid var(-
 @media (max-width: 720px) { .bar select { flex: 1 1 140px; min-width: 0; } }
 .sec.exp { background: var(--panel); border: 1px solid var(--line-2); border-radius: 10px; padding: 14px; }
 .sec.exp h4 { color: var(--accent-2); }
+.save-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; flex: 1 1 280px; }
+.save-row span { font-size: 12.5px; flex: 1 1 200px; }
 .vlist { display: grid; gap: 6px; }
 .vrow { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; background: var(--panel-2); border-radius: 8px; padding: 7px 10px; font-size: 12.5px; min-width: 0; }
 .vrow a.vlink { flex: 1 1 160px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); }
@@ -547,7 +549,7 @@ button.tc:hover { background: var(--accent); color: var(--accent-ink); }
     <div class="rv-stages" id="rvStages">
       <div class="rv-pane"><div class="rv-plabel" id="rvLabA" hidden></div><div class="rv-stage" id="rvStage"></div></div>
       <div class="rv-pane" id="rvPaneB" hidden><div class="rv-plabel"><span>Right</span><select id="rvVerB" aria-label="Right video version"></select></div><div class="rv-stage" id="rvStageB"></div></div>
-      <div class="rv-sync" id="rvSync" hidden><button class="btn sm" data-sync="play" type="button">▶ Play both</button><button class="btn sm" data-sync="pause" type="button">⏸ Pause both</button><button class="btn sm" data-sync="match" type="button">⇄ Match right to left time</button><span class="muted" id="rvSyncNote"></span></div>
+      <div class="rv-sync" id="rvSync" hidden></div>
     </div>
     <aside class="rv-side" aria-label="Comments">
       <div class="rv-note" id="rvNote" hidden></div>
@@ -1166,7 +1168,9 @@ function drawTask() {
     <div class="sec exp"><h4>Exported video ${safeUrl(t.videoUrl) ? "" : `<span class="muted" style="font:500 12px var(--body)">· optional for now</span>`}</h4>${exportBox(t, id)}</div>
     <div class="sec"><h4>Message for the client</h4><div class="f"><textarea id="fCn" placeholder="Shown to the client next to the video, e.g. Here's the first cut. Music is a placeholder.">${esc(t.clientNote)}</textarea></div></div>
     <div class="sec" style="display:flex;flex-wrap:wrap;gap:8px;justify-content:space-between">
-      <button class="btn primary" id="toReview" ${t.status === "review" ? "disabled" : ""}>Send to client for review</button>
+      ${(() => { const pv = parseVideo(t.videoUrl); return pv && pv.kind !== "notvideo"
+        ? `<button class="btn primary" id="toReview" ${t.status === "review" ? "disabled" : ""}>Send to client for review</button>`
+        : `<div class="save-row"><button class="btn primary" id="saveTask" type="button">${admin ? "Save task" : "Save"}</button><span class="muted">${admin ? "The editor sees it straight away. They'll add the export when the edit is ready." : "Paste the exported video above when the edit is ready, then send it to the client."}</span></div>`; })()}
       ${admin ? `<button class="btn ghost danger" id="delTask">Delete task</button>` : ""}</div>`;
     $("#fSt").addEventListener("change", (e) => { flushTask(); setStatus(id, e.target.value, "", "team"); });
     $("#openRv")?.addEventListener("click", () => { flushTask(); openReview(id); });
@@ -1209,7 +1213,13 @@ function drawTask() {
     $("#fBr").addEventListener("input", (e) => patchTask({ brief: e.target.value }));
     $("#fCn").addEventListener("input", (e) => patchTask({ clientNote: e.target.value }));
     $$("[data-k]", body).forEach((inp) => inp.addEventListener("change", () => { patchTask({ [inp.dataset.k]: inp.value.trim() }, true); setTimeout(drawTask, 30); }));
-    $("#toReview").addEventListener("click", () => {
+    $("#saveTask")?.addEventListener("click", () => {
+      flushTask(); const cur = S.tasks.get(id) || {};
+      if (admin && !cur.assignee) { toast("Saved. Pick an editor so someone can start on it."); $("#fAs").focus(); return; }
+      closeDrawer(); render();
+      toast(admin ? `Saved. ${personName(cur.assignee) || "The editor"} can see it in their tasks.` : "Saved");
+    });
+    $("#toReview")?.addEventListener("click", () => {
       flushTask(); const cur = S.merged.get(id);
       if (!cur.client) { toast("Pick a client first."); return; }
       const pv = parseVideo(cur.videoUrl);
@@ -1556,7 +1566,7 @@ function loadYT() {
 
 // Returns { canTime, time(), seek(t), pause(), destroy() }
 function makePlayer(stage, v, team) {
-  const none = { canTime: false, time: () => null, seek() {}, pause() {}, play() {}, destroy() { stage.innerHTML = ""; } };
+  const none = { canTime: false, ready: false, time: () => null, seek() {}, setTime() {}, pause() {}, play() {}, playing: () => false, mute() {}, destroy() { stage.innerHTML = ""; } };
   const msg = (title, body, link) => { stage.innerHTML = `<div class="rv-msg"><b>${title}</b><p>${body}</p>${link ? `<a class="btn" href="${esc(link)}" target="_blank" rel="noopener">Open the link ↗</a>` : ""}</div>`; return none; };
   if (!v) return msg("No video yet", team ? "Paste the video link in the task first." : "The team hasn't added the video yet.");
   if (v.kind === "notvideo") return msg("This link isn't a video", team ? "It's a Google Doc or Sheet. Upload the video to Google Drive, set sharing to “Anyone with the link”, then paste that link in the task." : "The team linked a document here by mistake. Let them know.", v.url);
@@ -1569,13 +1579,13 @@ function makePlayer(stage, v, team) {
       if (dead || api.mode === "iframe") return; clearTimeout(tm);
       const el = $("video", stage); if (el) { el.removeAttribute("src"); el.load(); }
       stage.innerHTML = `<iframe src="https://drive.google.com/file/d/${encodeURIComponent(v.id)}/preview" allow="autoplay; fullscreen" allowfullscreen title="Video"></iframe>`;
-      Object.assign(api, { mode: "iframe", canTime: false, time: () => null, seek() {}, pause() {}, play() {} }); rvPlayerReady();
+      Object.assign(api, { mode: "iframe", canTime: false, ready: false, time: () => null, seek() {}, setTime() {}, pause() {}, play() {}, playing: () => false, mute() {} }); rvPlayerReady();
     };
     stage.innerHTML = `<video controls playsinline preload="metadata"></video><div class="rv-wait">Loading video…</div>`;
     const el = $("video", stage);
     el.addEventListener("loadedmetadata", () => {
       if (dead || api.mode === "iframe") return; clearTimeout(tm); $(".rv-wait", stage)?.remove();
-      Object.assign(api, { mode: "direct", canTime: true, time: () => el.currentTime || 0, seek: (t) => { el.currentTime = t; el.play().catch(() => {}); }, pause: () => el.pause(), play: () => el.play().catch(() => {}) });
+      Object.assign(api, { mode: "direct", canTime: true, ready: true, time: () => el.currentTime || 0, seek: (t) => { el.currentTime = t; el.play().catch(() => {}); }, setTime: (t) => { el.currentTime = t; }, pause: () => el.pause(), play: () => el.play().catch(() => { el.muted = true; el.play().catch(() => {}); }), playing: () => !el.paused && !el.ended, mute: (m) => { el.muted = !!m; } });
       rvPlayerReady();
     }, { once: true });
     el.addEventListener("error", useIframe, { once: true });
@@ -1586,22 +1596,27 @@ function makePlayer(stage, v, team) {
   if (v.kind === "file") {
     stage.innerHTML = `<video controls playsinline preload="metadata"></video>`;
     const el = $("video", stage); el.src = v.src;
-    return { canTime: true, time: () => el.currentTime || 0, seek: (t) => { el.currentTime = t; el.play().catch(() => {}); }, pause: () => el.pause(), play: () => el.play().catch(() => {}), destroy() { el.pause(); el.removeAttribute("src"); el.load(); stage.innerHTML = ""; } };
+    return { canTime: true, ready: true, time: () => el.currentTime || 0, seek: (t) => { el.currentTime = t; el.play().catch(() => {}); }, setTime: (t) => { el.currentTime = t; }, pause: () => el.pause(), play: () => el.play().catch(() => { el.muted = true; el.play().catch(() => {}); }), playing: () => !el.paused && !el.ended, mute: (m) => { el.muted = !!m; }, destroy() { el.pause(); el.removeAttribute("src"); el.load(); stage.innerHTML = ""; } };
   }
   // YouTube: use the official player so the page can read and set the time.
   const pid = "yt" + uid(); stage.innerHTML = `<div id="${pid}"></div>`;
-  let p = null, dead = false;
+  let p = null, dead = false, wantMute = false;
+  const ok = () => api.ready && p;
   const api = {
-    canTime: true,
-    time: () => { try { return p && p.getCurrentTime ? p.getCurrentTime() : 0; } catch (e) { return 0; } },
-    seek: (t) => { try { p && p.seekTo(t, true); p && p.playVideo && p.playVideo(); } catch (e) {} },
-    pause: () => { try { p && p.pauseVideo && p.pauseVideo(); } catch (e) {} },
-    play: () => { try { p && p.playVideo && p.playVideo(); } catch (e) {} },
+    canTime: true, ready: false,
+    time: () => { try { return ok() ? p.getCurrentTime() : 0; } catch (e) { return 0; } },
+    seek: (t) => { try { if (ok()) { p.seekTo(t, true); p.playVideo(); } } catch (e) {} },
+    setTime: (t) => { try { ok() && p.seekTo(t, true); } catch (e) {} },
+    pause: () => { try { ok() && p.pauseVideo(); } catch (e) {} },
+    play: () => { try { ok() && p.playVideo(); } catch (e) {} },
+    playing: () => { try { return ok() ? p.getPlayerState() === 1 : false; } catch (e) { return false; } },
+    mute: (m) => { wantMute = !!m; try { if (ok()) (m ? p.mute() : p.unMute()); } catch (e) {} },
     destroy() { dead = true; try { p && p.destroy && p.destroy(); } catch (e) {} stage.innerHTML = ""; },
   };
   loadYT().then(() => {
     if (dead) return;
-    p = new YT.Player(pid, { videoId: v.id, width: "100%", height: "100%", playerVars: { rel: 0, playsinline: 1, modestbranding: 1 } });
+    p = new YT.Player(pid, { videoId: v.id, width: "100%", height: "100%", playerVars: { rel: 0, playsinline: 1, modestbranding: 1 },
+      events: { onReady: () => { if (dead) return; api.ready = true; if (wantMute) p.mute(); rvPlayerReady(); } } });
   }).catch(() => {
     if (dead) return;
     stage.innerHTML = `<iframe src="https://www.youtube-nocookie.com/embed/${encodeURIComponent(v.id)}?rel=0" allow="autoplay; fullscreen; encrypted-media" allowfullscreen title="Video"></iframe>`;
@@ -1634,7 +1649,7 @@ function openReview(id, ver) {
 function closeReview() {
   if (!rv.id) return;
   clearInterval(rv.tick); try { rv.unsub && rv.unsub(); } catch (e) {}
-  rv.player && rv.player.destroy(); rv.player = null; rv.unsub = null; rv.id = null; rvCompare(0);
+  rvCompare(0); rv.player && rv.player.destroy(); rv.player = null; rv.unsub = null; rv.id = null;
   rvEl.hidden = true; document.body.classList.remove("rv-lock");
 }
 function rvLoadPlayer() {
@@ -1644,7 +1659,7 @@ function rvLoadPlayer() {
   rv.player && rv.player.destroy();
   rv.url = want;
   const v = parseVideo(rv.url);
-  rv.player = makePlayer($("#rvStage"), v, !isClient());
+  rv.player = makePlayer($("#rvStage"), v, !isClient()); if (rv.cmp) rv.autoStart = true;
   const open = $("#rvOpen"); const link = safeUrl(rv.url);
   open.hidden = !link || (v && v.kind !== "drive" && v.kind !== "yt"); if (link) open.href = link;
   rvSyncComposer();
@@ -1781,20 +1796,52 @@ $("#rvDecSend").addEventListener("click", () => {
 
 /* ---------------- compare two versions side by side ---------------- */
 function rvCompare(b) {
+  const was = !!rv.cmp;
   rv.cmp = b || 0;
   const on = !!rv.cmp;
   $("#rvStages").classList.toggle("cmp", on); $(".rv-main").classList.toggle("cmp", on);
   $("#rvPaneB").hidden = !on; $("#rvSync").hidden = !on; $("#rvLabA").hidden = !on;
-  if (!on) { rv.playerB && rv.playerB.destroy(); rv.playerB = null; rv.urlB = ""; return; }
+  if (!on) { clearInterval(rv.syncT); rv.syncT = 0; rv.playerB && rv.playerB.destroy(); rv.playerB = null; rv.urlB = ""; rv.player && rv.player.mute && rv.player.mute(false); return; }
+  if (!was) { rv.linked = true; rv.sound = "left"; rv.autoStart = true; }
   const t = S.merged.get(rv.id) || {}, vs = versionsOf(t).filter((x) => parseVideo(x.url));
   const opts = (cur) => vs.slice().reverse().map((x) => `<option value="${x.v}" ${x.v === cur ? "selected" : ""}>v${x.v}${x.v === rv.ver ? " (latest)" : ""}</option>`).join("");
   $("#rvLabA").innerHTML = `<span>Left</span><select id="rvVerA" aria-label="Left video version">${opts(rv.view)}</select>`;
   $("#rvVerB").innerHTML = opts(rv.cmp);
   const want = (vs.find((x) => x.v === rv.cmp) || {}).url || "";
-  if (!rv.playerB || rv.urlB !== want) { rv.playerB && rv.playerB.destroy(); rv.urlB = want; rv.playerB = makePlayer($("#rvStageB"), parseVideo(want), !isClient()); }
-  const both = rv.player && rv.player.canTime && rv.playerB && rv.playerB.canTime;
-  $$("#rvSync button").forEach((x) => (x.hidden = !both));
-  $("#rvSyncNote").textContent = both ? "" : "Google Drive videos can't be controlled from here, so play each one yourself.";
+  if (!rv.playerB || rv.urlB !== want) { rv.playerB && rv.playerB.destroy(); rv.urlB = want; rv.playerB = makePlayer($("#rvStageB"), parseVideo(want), !isClient()); rv.autoStart = true; }
+  rvSound();
+  if (!rv.syncT) rv.syncT = setInterval(rvSyncTick, 250);
+  rvSyncBar();
+}
+// Both players can be driven from here (YouTube, video files, Drive files that play directly)?
+const rvBoth = () => rv.player && rv.player.canTime && rv.playerB && rv.playerB.canTime;
+function rvSound() { if (!rv.player || !rv.playerB) return; rv.player.mute(rv.sound !== "left"); rv.playerB.mute(rv.sound !== "right"); }
+function rvSyncBar() {
+  const both = rvBoth(), playing = both && rv.player.playing();
+  const bar = $("#rvSync");
+  bar.innerHTML = both
+    ? `<button class="btn sm primary" data-sync="toggle" type="button">${playing ? "⏸ Pause both" : "▶ Play both"}</button>
+       <button class="btn sm" data-sync="restart" type="button">⏮ Start both from 0:00</button>
+       <button class="btn sm" data-sync="link" type="button" aria-pressed="${rv.linked}">${rv.linked ? "🔗 Playing together" : "Playing separately"}</button>
+       <button class="btn sm" data-sync="sound" type="button">🔊 Sound: ${rv.sound === "left" ? "left" : "right"} video</button>
+       <span class="muted">${rv.linked ? "The right video follows the left one." : "Each video plays on its own."}</span>`
+    : `<span class="muted">${(rv.player && rv.player.mode === "trying") || (rv.playerB && rv.playerB.mode === "trying") ? "Loading the videos…" : "One of these videos plays in Google Drive's own player, so it can't be started from here. Press play on each one."}</span>`;
+}
+let rvLastFix = 0;
+function rvSyncTick() {
+  if (!rv.cmp || !rvBoth()) return;
+  const a = rv.player, b = rv.playerB;
+  if (!a.ready || !b.ready) return;
+  if (rv.autoStart) {                                   // compare just opened: start both together
+    rv.autoStart = false; b.setTime(a.time()); a.play(); b.play(); setTimeout(rvSyncBar, 300); return;
+  }
+  if (!rv.linked) return;
+  const ap = a.playing(), bp = b.playing();
+  if (ap && !bp) b.play();
+  if (!ap && bp) b.pause();
+  const now = performance.now();
+  if (now - rvLastFix > 1500 && Math.abs(a.time() - b.time()) > 0.5) { rvLastFix = now; b.setTime(a.time()); }
+  const label = $('#rvSync [data-sync="toggle"]'); if (label) label.textContent = ap ? "⏸ Pause both" : "▶ Play both";
 }
 $("#rvVer").addEventListener("change", (e) => { rv.view = Number(e.target.value); rvHead(); rvRender(); if (rv.cmp) rvCompare(rv.cmp); });
 $("#rvCmp").addEventListener("click", () => {
@@ -1809,11 +1856,13 @@ $("#rvStages").addEventListener("change", (e) => {
   if (e.target.id === "rvVerB") rvCompare(Number(e.target.value));
 });
 $("#rvSync").addEventListener("click", (e) => {
-  const b = e.target.closest("[data-sync]"); if (!b || !rv.player || !rv.playerB) return;
-  const a = rv.player, c = rv.playerB, k = b.dataset.sync;
-  if (k === "play") { a.play(); c.play(); }
-  if (k === "pause") { a.pause(); c.pause(); }
-  if (k === "match") { c.seek(a.time()); a.pause(); setTimeout(() => c.pause(), 50); }
+  const btn = e.target.closest("[data-sync]"); if (!btn || !rvBoth()) return;
+  const a = rv.player, b = rv.playerB, k = btn.dataset.sync;
+  if (k === "toggle") { if (a.playing()) { a.pause(); b.pause(); } else { b.setTime(a.time()); a.play(); b.play(); } }
+  if (k === "restart") { a.setTime(0); b.setTime(0); a.play(); b.play(); }
+  if (k === "link") { rv.linked = !rv.linked; if (rv.linked) b.setTime(a.time()); }
+  if (k === "sound") { rv.sound = rv.sound === "left" ? "right" : "left"; rvSound(); }
+  setTimeout(rvSyncBar, 250);
 });
 
 /* Click a comment: go to its version and time in the video. */
