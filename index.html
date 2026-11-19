@@ -264,11 +264,17 @@ table.list tr:last-child td { border-bottom: 0; }
 .inv { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 150px), 1fr)); gap: 8px; }
 .inv input, .inv select { width: 100%; background: var(--panel-2); border: 1px solid var(--line-2); border-radius: 8px; padding: 8px 10px; color: var(--fg); min-width: 0; }
 .prow > .av { flex: none; width: 28px; height: 28px; font-size: 11px; }
+.prow { flex-wrap: wrap; }
+.plist { grid-template-columns: minmax(0, 1fr); }
 .prow > span:not(.av) { min-width: 0; }
+.prow > span:not(.av):not(.role-chip):not(.muted) { flex: 1 1 140px; }
+.prow > .role-chip { flex: none; }
 .modal-box, .pm-sec { grid-template-columns: minmax(0, 1fr); }
 .prow small { color: var(--muted); display: block; font-size: 12px; overflow: hidden; text-overflow: ellipsis; }
 .prow select { background: var(--panel); border: 1px solid var(--line-2); border-radius: 7px; padding: 4px 6px; color: var(--fg); }
 .copyrow { display: flex; gap: 8px; align-items: center; background: var(--panel-2); border-radius: 8px; padding: 8px 10px; font-size: 12.5px; }
+.prow .linkbox { flex: 1 1 100%; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; background: var(--panel-2); border-radius: 8px; padding: 6px 8px; font-size: 12px; min-width: 0; }
+.prow .linkbox code { flex: 1 1 160px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--mono); user-select: all; }
 .copyrow code { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--mono); user-select: all; }
 /* ---- loading screen ---- */
 .splash { position: fixed; inset: 0; z-index: 90; display: grid; place-items: center; padding: 24px; background: radial-gradient(70% 55% at 50% 42%, #2a130a, var(--bg) 72%); transition: opacity .5s ease, visibility .5s; }
@@ -373,6 +379,7 @@ table.list.wl tfoot td { background: var(--panel-3); border-top: 1px solid var(-
 .wl-rates input { background: var(--panel-2); border: 1px solid var(--line-2); border-radius: 6px; padding: 5px 7px; color: var(--fg); margin-left: 4px; }
 .prow select[data-wl] { max-width: 170px; }
 .prow { flex-wrap: wrap; }
+.plist { grid-template-columns: minmax(0, 1fr); }
 .prow > span:not(.av):not(.role-chip):not(.muted) { flex: 1 1 140px; }
 .tabs { overflow-x: auto; max-width: 100%; scrollbar-width: none; }
 .tabs button { white-space: nowrap; }
@@ -489,6 +496,15 @@ button.tc:hover { background: var(--accent); color: var(--accent-ink); }
       <button class="btn primary" id="vGo" type="button">I've confirmed, continue</button>
       <div class="auth-err" id="vErr" role="alert"></div><div class="auth-ok" id="vOk" role="status"></div>
       <div style="display:flex;justify-content:space-between;gap:10px;font-size:13px"><button class="linkbtn" id="vResend" type="button">Send the link again</button><button class="linkbtn" id="vOut" type="button">Use another account</button></div>
+    </div>
+    <div id="aGuest" hidden style="display:grid;gap:12px">
+      <p id="gHello">Opening your link…</p>
+      <form id="guestForm" novalidate style="display:grid;gap:10px" hidden>
+        <input id="gName" type="text" placeholder="Your name" maxlength="60" autocomplete="name" aria-label="Your name">
+        <button class="btn primary" id="gGo">Watch the videos</button>
+      </form>
+      <div class="auth-err" id="gErr" role="alert"></div>
+      <button class="linkbtn" id="gTeam" type="button" style="justify-self:start;font-size:13px">FW Studio team? Sign in here</button>
     </div>
     <div id="aNo" hidden style="display:grid;gap:12px">
       <p><b id="nEmail" style="color:var(--fg)"></b> doesn't have access yet. Ask FW Studio to invite this exact email address, then press Try again.</p>
@@ -872,7 +888,7 @@ const STATUSES = [
 ];
 const ST = Object.fromEntries(STATUSES.map((s) => [s.id, s]));
 const PRIORITY = { high: "High", normal: "Normal", low: "Low" };
-const ROLE_LABEL = { admin: "Admin", editor: "Editor", client: "Client" };
+const ROLE_LABEL = { admin: "Admin", editor: "Editor", client: "Client", guest: "Guest" };
 const TASK_FIELDS = ["title", "assignee", "client", "due", "type", "priority", "brief", "notes", "sheet", "assignedAt", "videoUrl", "versions", "rawUrl", "docUrl", "sheetUrl", "clientNote", "order", "createdAt", "updatedAt"];
 const MIRROR_FIELDS = ["title", "assignee", "client", "due", "type", "videoUrl", "versions", "clientNote"];   // what the client is allowed to see
 const pick = (o, keys) => Object.fromEntries(keys.filter((k) => o[k] !== undefined).map((k) => [k, o[k]]));
@@ -891,6 +907,8 @@ const Store = (() => {
   }
   function watchDoc(ref, cb) { unsubs.push(ref.onSnapshot((s) => cb(s.exists ? s.data() : null), (e) => { console.warn(e); cb(null); })); }
   async function run(key, job) {
+    const [kc, kid] = key.split("|");
+    if (kid && kid === ui.draftId && ["tasks", "reviews", "downloads"].includes(kc)) return;     // unsaved new task: keep it in this browser only
     if (inflight.has(key)) {                                    // merge with what's already waiting
       const p = pending.get(key);
       if (!p || job.kind !== "update") pending.set(key, job);
@@ -918,12 +936,12 @@ const Store = (() => {
 })();
 
 /* ---------------- state ---------------- */
-const S = { tasks: new Map(), reviews: new Map(), users: new Map(), invites: new Map(), clients: new Map(), docs: new Map(), sheets: new Map(), merged: new Map(), dl: new Map(), worklog: new Map(), wlSettings: null, wlRates: null };
+const S = { tasks: new Map(), reviews: new Map(), users: new Map(), invites: new Map(), clients: new Map(), docs: new Map(), sheets: new Map(), merged: new Map(), dl: new Map(), links: new Map(), worklog: new Map(), wlSettings: null, wlRates: null };
 const got = new Set();          // which live lists have arrived at least once
 let me = null, view = "board", loaded = false;
-const ui = { q: "", fAssignee: "", fClient: "", sort: { key: "due", dir: 1 }, openKind: null, openId: null, subtab: "overview" };
+const ui = { draftId: null, q: "", fAssignee: "", fClient: "", sort: { key: "due", dir: 1 }, openKind: null, openId: null, subtab: "overview" };
 try { const v = localStorage.getItem("fw-ws-view"); if (v) view = v; } catch (e) {}
-const isAdmin = () => me && me.role === "admin", isEditor = () => me && me.role === "editor", isClient = () => me && me.role === "client";
+const isAdmin = () => me && me.role === "admin", isEditor = () => me && me.role === "editor", isClient = () => me && (me.role === "client" || me.role === "guest");
 const team = () => [...S.users.entries()].filter(([, u]) => u.role === "admin" || u.role === "editor").map(([id, u]) => ({ id, name: u.name || u.email })).sort((a, b) => a.name.localeCompare(b.name));
 const clients = () => [...S.clients.entries()].map(([id, c]) => ({ id, name: c.name })).sort((a, b) => a.name.localeCompare(b.name));
 const personName = (id) => { if (!id) return ""; const u = S.users.get(id); if (u) return u.name || u.email || ""; const c = S.clients.get(id); return c ? c.name : ""; };
@@ -939,7 +957,7 @@ function setBanner(msg) { const b = $("#banner"); b.textContent = msg || ""; b.c
 /* ---------------- views ---------------- */
 function filteredTasks() {
   const q = ui.q.trim().toLowerCase();
-  return [...S.merged.entries()].map(([id, t]) => ({ id, ...t })).filter((t) =>
+  return [...S.merged.entries()].map(([id, t]) => ({ id, ...t })).filter((t) => t.id !== ui.draftId &&
     (!q || [t.title, personName(t.client), personName(t.assignee), t.brief].join(" ").toLowerCase().includes(q)) &&
     (!ui.fAssignee || t.assignee === ui.fAssignee) && (!ui.fClient || t.client === ui.fClient));
 }
@@ -1093,7 +1111,17 @@ function setStatus(id, status, note, by, quiet) {
 const drawer = $("#drawer"), scrim = $("#scrim");
 let liveEditor = null, liveGrid = null;
 function openDrawer(wide) { drawer.classList.toggle("wide", !!wide); drawer.classList.add("on"); scrim.classList.add("on"); drawer.setAttribute("aria-hidden", "false"); }
-function closeDrawer() { flushTask(); flushFile(); drawer.classList.remove("on"); scrim.classList.remove("on"); drawer.setAttribute("aria-hidden", "true"); ui.openKind = ui.openId = null; liveEditor = liveGrid = null; setTimeout(() => { if (!ui.openKind) drawer.innerHTML = ""; }, 300); }
+let draftArmed = 0;
+function closeDrawer(force) {
+  if (ui.draftId && ui.openId === ui.draftId) {
+    const t = taskDraft || S.tasks.get(ui.draftId) || {};
+    const filled = t.title || t.assignee || t.client || t.brief || t.rawUrl || t.videoUrl || t.due;
+    if (filled && force !== true && Date.now() - draftArmed > 4000) { draftArmed = Date.now(); toast("This task isn't saved yet. Press Save task, or close again to throw it away."); return; }
+    discardDraft(); if (filled) toast("New task thrown away");
+  }
+  closeDrawer2();
+}
+function closeDrawer2() { flushTask(); flushFile(); drawer.classList.remove("on"); scrim.classList.remove("on"); drawer.setAttribute("aria-hidden", "true"); ui.openKind = ui.openId = null; liveEditor = liveGrid = null; setTimeout(() => { if (!ui.openKind) drawer.innerHTML = ""; }, 300); }
 scrim.addEventListener("click", closeDrawer);
 addEventListener("keydown", (e) => { if (e.key === "Escape" && !rv.id && drawer.classList.contains("on") && !e.target.closest(".sh-grid td.edit, .rt-link")) closeDrawer(); });
 
@@ -1152,11 +1180,31 @@ function newTask() {
   const id = uid();
   const t = { title: "", assignee: ui.fAssignee || "", client: ui.fClient || "", due: "", type: "Reel", priority: "normal", brief: "", notes: "", sheet: { cells: {}, rows: 12, cols: 6 }, assignedAt: ui.fAssignee ? now() : "", videoUrl: "", rawUrl: "", docUrl: "", sheetUrl: "", clientNote: "", order: Date.now(), createdAt: now(), updatedAt: now() };
   const r = { ...pick(t, MIRROR_FIELDS), status: "todo", history: [], updatedAt: now() };
-  S.tasks.set(id, t); S.reviews.set(id, r); merge();
-  Store.set("tasks", id, t); Store.set("reviews", id, r);
-  render(); openTask(id, true);
+  if (ui.draftId) discardDraft();
+  ui.draftId = id; S.tasks.set(id, t); S.reviews.set(id, r); S.dl.set(id, {}); merge();     // nothing is saved until "Save task"
+  openTask(id, true);
 }
-function openTask(id, focusTitle) { flushTask(); ui.openKind = "task"; ui.openId = id; ui.subtab = "overview"; drawTask(); openDrawer(false); if (focusTitle) setTimeout(() => $("#tTitle")?.focus(), 250); }
+// Write a new task for the first time.
+function commitDraft() {
+  const id = ui.draftId; if (!id) return;
+  if (taskDraft) { S.tasks.set(id, { ...S.tasks.get(id), ...taskDraft }); taskDraft = null; }
+  clearTimeout(taskTimer);
+  const t = S.tasks.get(id), r = S.reviews.get(id) || {}; if (!t) return;
+  ui.draftId = null;
+  const task = { ...pick(t, TASK_FIELDS), createdAt: now(), updatedAt: now() };
+  if (task.assignee && !task.assignedAt) task.assignedAt = now();
+  S.tasks.set(id, task);
+  Store.set("tasks", id, task);
+  Store.set("reviews", id, { ...pick(task, MIRROR_FIELDS), status: r.status || "todo", history: r.history || [], updatedAt: now() });
+  const d = S.dl.get(id); if (d && d.url) Store.set("downloads", id, { url: d.url, updatedAt: now() });
+  merge(); render();
+}
+function discardDraft() {
+  const id = ui.draftId; if (!id) return;
+  ui.draftId = null; taskDraft = null; clearTimeout(taskTimer);
+  S.tasks.delete(id); S.reviews.delete(id); S.dl.delete(id); merge();
+}
+function openTask(id, focusTitle) { if (ui.draftId && ui.draftId !== id) discardDraft(); flushTask(); ui.openKind = "task"; ui.openId = id; ui.subtab = "overview"; drawTask(); openDrawer(false); if (focusTitle) setTimeout(() => $("#tTitle")?.focus(), 250); }
 function drawTask() {
   const id = ui.openId, t = S.merged.get(id); if (!t) { closeDrawer(); return; }
   const admin = isAdmin();
@@ -1192,10 +1240,11 @@ function drawTask() {
     <div class="sec exp"><h4>Exported video ${safeUrl(t.videoUrl) ? "" : `<span class="muted" style="font:500 12px var(--body)">· optional for now</span>`}</h4>${exportBox(t, id)}</div>
     <div class="sec"><h4>Message for the client</h4><div class="f"><textarea id="fCn" placeholder="Shown to the client next to the video, e.g. Here's the first cut. Music is a placeholder.">${esc(t.clientNote)}</textarea></div></div>
     <div class="sec" style="display:flex;flex-wrap:wrap;gap:8px;justify-content:space-between">
-      ${(() => { const pv = parseVideo(t.videoUrl); return pv && pv.kind !== "notvideo"
+      ${(() => { const pv = parseVideo(t.videoUrl); if (ui.draftId === id) return `<div class="save-row"><button class="btn primary" id="saveTask" type="button">Save task</button>${pv && pv.kind !== "notvideo" && t.client ? `<button class="btn" id="toReview" type="button">Save &amp; send to client</button>` : ""}<span class="muted">Nothing is added to the board until you save.</span></div>`;
+        return pv && pv.kind !== "notvideo"
         ? `<button class="btn primary" id="toReview" ${t.status === "review" ? "disabled" : ""}>Send to client for review</button>`
         : `<div class="save-row"><button class="btn primary" id="saveTask" type="button">${admin ? "Save task" : "Save"}</button><span class="muted">${admin ? "The editor sees it straight away. They'll add the export when the edit is ready." : "Paste the exported video above when the edit is ready, then send it to the client."}</span></div>`; })()}
-      ${admin ? `<button class="btn ghost danger" id="delTask">Delete task</button>` : ""}</div>`;
+      ${admin ? `<button class="btn ghost danger" id="delTask">${ui.draftId === id ? "Discard" : "Delete task"}</button>` : ""}</div>`;
     $("#fSt").addEventListener("change", (e) => { flushTask(); setStatus(id, e.target.value, "", "team"); });
     $("#openRv")?.addEventListener("click", () => { flushTask(); openReview(id); });
     $$("[data-watchv]", body).forEach((b) => b.addEventListener("click", () => { flushTask(); openReview(id, Number(b.dataset.watchv)); }));
@@ -1254,12 +1303,20 @@ function drawTask() {
       patchTask(patch, true); setTimeout(drawTask, 30); if (msg) toast(msg);
     }));
     $("#saveTask")?.addEventListener("click", () => {
+      if (ui.draftId === id) {
+        const cur = { ...(S.tasks.get(id) || {}), ...(taskDraft || {}) };
+        if (!String(cur.title || "").trim()) { toast("Give the task a name first."); $("#tTitle").focus(); return; }
+        commitDraft();
+        if (!cur.assignee) { drawTask(); toast("Saved. Pick an editor so someone can start on it."); $("#fAs")?.focus(); return; }
+        closeDrawer2(); render(); toast(`Saved. ${personName(cur.assignee) || "The editor"} can see it in their tasks.`); return;
+      }
       flushTask(); const cur = S.tasks.get(id) || {};
       if (admin && !cur.assignee) { toast("Saved. Pick an editor so someone can start on it."); $("#fAs").focus(); return; }
       closeDrawer(); render();
       toast(admin ? `Saved. ${personName(cur.assignee) || "The editor"} can see it in their tasks.` : "Saved");
     });
     $("#toReview")?.addEventListener("click", () => {
+      if (ui.draftId === id) { const c0 = { ...(S.tasks.get(id) || {}), ...(taskDraft || {}) }; if (!String(c0.title || "").trim()) { toast("Give the task a name first."); $("#tTitle").focus(); return; } commitDraft(); }
       flushTask(); const cur = S.merged.get(id);
       if (!cur.client) { toast("Pick a client first."); return; }
       const pv = parseVideo(cur.videoUrl);
@@ -1269,6 +1326,7 @@ function drawTask() {
     });
     const del = $("#delTask"); let armed = false;
     del?.addEventListener("click", () => {
+      if (ui.draftId === id) { discardDraft(); closeDrawer2(); render(); toast("New task thrown away"); return; }
       if (!armed) { armed = true; del.textContent = "Click again to delete for good"; setTimeout(() => { armed = false; if (del.isConnected) del.textContent = "Delete task"; }, 3500); return; }
       taskDraft = null; S.tasks.delete(id); S.reviews.delete(id); merge(); Store.remove("tasks", id); Store.remove("reviews", id); closeDrawer(); render(); toast("Task deleted");
     });
@@ -1313,20 +1371,31 @@ function openFile(kind, id) {
 
 /* ---------------- people (admin only) ---------------- */
 const SITE_LINK = location.origin + location.pathname;
+function randomToken(n = 26) { const a = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789"; return [...crypto.getRandomValues(new Uint8Array(n))].map((x) => a[x % a.length]).join(""); }
+function copyText(t, msg) {
+  const done = () => toast(msg || "Copied");
+  try { navigator.clipboard.writeText(t).then(done, () => { prompt0(t); }); } catch (e) { prompt0(t); }
+  function prompt0(x) { const ta = document.createElement("textarea"); ta.value = x; document.body.appendChild(ta); ta.select(); try { document.execCommand("copy"); done(); } catch (e) { toast("Select the link and copy it."); } ta.remove(); }
+}
 function drawPeople() {
   $("#siteLink").textContent = SITE_LINK;
   const cOpts = clients().map((c) => `<option value="${esc(c.id)}">${esc(c.name)}</option>`).join("");
   const ic = $("#invClient"), keep = ic.value; ic.innerHTML = cOpts + `<option value="__new">+ New client…</option>`; if (keep) ic.value = keep;
   syncInvite();
   const members = [...S.users.entries()].map(([id, u]) => ({ id, ...u })).sort((a, b) => (a.role > b.role ? 1 : -1) || String(a.name).localeCompare(b.name));
-  $("#memberList").innerHTML = members.map((u) => `<div class="prow" data-uid="${esc(u.id)}"><span class="av">${esc(initials(u.name || u.email))}</span><span>${esc(u.name || u.email)}<small>${esc(u.email)}${u.role === "client" ? " · " + esc(personName(u.clientId) || "client") : ""}</small></span>
-    ${u.role === "client" ? `<span class="role-chip">Client</span>` : `<select data-role aria-label="Role" ${u.id === me.uid ? "disabled" : ""}><option value="editor" ${u.role === "editor" ? "selected" : ""}>Editor</option><option value="admin" ${u.role === "admin" ? "selected" : ""}>Admin</option></select>`}
+  $("#memberList").innerHTML = members.map((u) => `<div class="prow" data-uid="${esc(u.id)}"><span class="av">${esc(initials(u.name || u.email))}</span><span>${esc(u.name || u.email)}<small>${u.role === "guest" ? "Opened the share link · " + esc(personName(u.clientId) || "client") : esc(u.email) + (u.role === "client" ? " · " + esc(personName(u.clientId) || "client") : "")}</small></span>
+    ${u.role === "client" || u.role === "guest" ? `<span class="role-chip">${u.role === "guest" ? "Guest" : "Client"}</span>` : `<select data-role aria-label="Role" ${u.id === me.uid ? "disabled" : ""}><option value="editor" ${u.role === "editor" ? "selected" : ""}>Editor</option><option value="admin" ${u.role === "admin" ? "selected" : ""}>Admin</option></select>`}
     ${u.role === "editor" ? `<select data-wl aria-label="Work log access for ${esc(u.name || u.email)}" title="Can this editor see the work log?"><option value="" ${!u.worklog ? "selected" : ""}>Work log: hidden</option><option value="count" ${u.worklog === "count" ? "selected" : ""}>Video count only</option><option value="own" ${u.worklog === "own" ? "selected" : ""}>Own videos + pay</option><option value="all" ${u.worklog === "all" ? "selected" : ""}>Everyone + pay</option></select>` : ""}
     ${u.id === me.uid ? `<span class="muted" style="font-size:12px">You</span>` : `<button class="btn sm ghost danger" data-rm>Remove</button>`}</div>`).join("") || `<span class="muted">Nobody yet.</span>`;
   const joined = new Set([...S.users.values()].map((u) => String(u.email || "").toLowerCase()));
   const waiting = [...S.invites.entries()].filter(([email]) => !joined.has(email));
   $("#inviteList").innerHTML = waiting.map(([email, v]) => `<div class="prow" data-inv="${esc(email)}"><span class="av">${esc(initials(v.name || email))}</span><span>${esc(v.name || email)}<small>${esc(email)} · ${ROLE_LABEL[v.role] || v.role}${v.role === "client" ? " · " + esc(personName(v.clientId)) : ""}</small></span><button class="btn sm ghost danger" data-cancel>Cancel</button></div>`).join("") || `<span class="muted">No pending invites.</span>`;
-  $("#clientList").innerHTML = clients().map((c) => `<div class="prow" data-cid="${esc(c.id)}"><span class="av">${esc(initials(c.name))}</span><span>${esc(c.name)}</span><button class="btn sm ghost danger" data-delc>Remove</button></div>`).join("") || `<span class="muted">No clients yet.</span>`;
+  $("#clientList").innerHTML = clients().map((c) => {
+    const lk = [...S.links.entries()].find(([, l]) => l.clientId === c.id && l.active), guests = members.filter((u) => u.role === "guest" && u.clientId === c.id).length;
+    return `<div class="prow" data-cid="${esc(c.id)}"><span class="av">${esc(initials(c.name))}</span><span>${esc(c.name)}<small>${lk ? `Share link on${guests ? " · " + guests + " guest" + (guests > 1 ? "s" : "") : ""}` : "No share link"}</small></span>
+      ${lk ? "" : `<button class="btn sm" data-mklink type="button">Create share link</button>`}<button class="btn sm ghost danger" data-delc>Remove</button>
+      ${lk ? `<div class="linkbox" data-token="${esc(lk[0])}"><code>${esc(SITE_LINK + "#c=" + lk[0])}</code><button class="btn sm" data-copylink type="button">Copy link</button><button class="btn sm ghost danger" data-offlink type="button">Turn off</button></div>` : ""}</div>`;
+  }).join("") || `<span class="muted">No clients yet.</span>`;
 }
 function syncInvite() {
   const client = $("#invRole").value === "client";
@@ -1368,7 +1437,20 @@ $("#peopleModal").addEventListener("click", (e) => {
   } else if (e.target.closest("[data-cancel]")) { const em = row.dataset.inv; S.invites.delete(em); Store.remove("invites", em); drawPeople(); }
   else if (e.target.closest("[data-delc]")) {
     const b = e.target.closest("[data-delc]"); if (!b.dataset.armed) { b.dataset.armed = 1; b.textContent = "Click to confirm"; setTimeout(() => { if (b.isConnected) { delete b.dataset.armed; b.textContent = "Remove"; } }, 3500); return; }
-    const id = row.dataset.cid; S.clients.delete(id); Store.remove("clients", id); drawPeople(); render();
+    const id = row.dataset.cid; S.clients.delete(id); Store.remove("clients", id);
+    [...S.links.entries()].filter(([, l]) => l.clientId === id).forEach(([k]) => { S.links.delete(k); Store.remove("links", k); });
+    drawPeople(); render();
+  } else if (e.target.closest("[data-mklink]")) {
+    const id = row.dataset.cid, c = S.clients.get(id) || {}, token = randomToken();
+    const l = { clientId: id, clientName: (c.name || "").slice(0, 60), active: true, createdAt: now(), createdBy: me.uid };
+    S.links.set(token, l); Store.set("links", token, l); drawPeople();
+    copyText(SITE_LINK + "#c=" + token, "Share link made and copied. Send it to " + (c.name || "the client") + ".");
+  } else if (e.target.closest("[data-copylink]")) {
+    copyText(SITE_LINK + "#c=" + e.target.closest("[data-token]").dataset.token, "Link copied");
+  } else if (e.target.closest("[data-offlink]")) {
+    const b = e.target.closest("[data-offlink]"); if (!b.dataset.armed) { b.dataset.armed = 1; b.textContent = "Click to confirm"; setTimeout(() => { if (b.isConnected) { delete b.dataset.armed; b.textContent = "Turn off"; } }, 3500); return; }
+    const token = e.target.closest("[data-token]").dataset.token; S.links.delete(token); Store.remove("links", token);
+    drawPeople(); toast("Link turned off. Anyone using it can't open the videos any more.");
   }
 });
 $("#peopleModal").addEventListener("change", (e) => {
@@ -1408,7 +1490,8 @@ function render() {
 function onRows(col) {
   return (rows) => {
     const draft = col === "tasks" ? taskDraft : (col === fileKind ? fileDraft : null);
-    S[col] = new Map(rows); got.add(col);
+    const keep = ui.draftId && (col === "tasks" || col === "reviews") ? S[col].get(ui.draftId) : null;   // an unsaved new task isn't in the database yet
+    S[col] = new Map(rows); got.add(col); if (keep) S[col].set(ui.draftId, keep);
     if (draft && ui.openId) S[col].set(ui.openId, col === "tasks" ? draft : (({ __id, ...x }) => x)(draft));   // keep what you're typing
     if (col === "tasks" || col === "reviews") merge();
     loaded = true; render();
@@ -1430,7 +1513,7 @@ function onRows(col) {
 const authEl = $("#auth");
 function showAuth(which, info = {}) {
   authEl.hidden = false; $("#top").hidden = true; $("#main").hidden = true;
-  ["aLoading", "aSignin", "aVerify", "aNo"].forEach((id) => { $("#" + id).hidden = id !== which; });
+  ["aLoading", "aSignin", "aVerify", "aNo", "aGuest"].forEach((id) => { $("#" + id).hidden = id !== which; });
   if (which !== "aLoading") hideSplash();
   if (which === "aVerify") $("#vEmail").textContent = info.email || "";
   if (which === "aNo") { $("#nEmail").textContent = info.email || "This account"; $("#nErr").textContent = info.error || ""; }
@@ -1483,7 +1566,7 @@ $("#vGo").addEventListener("click", async () => {
   if (auth.currentUser.emailVerified) handleUser(auth.currentUser); else $("#vErr").textContent = "Not confirmed yet. Open the link in the email first.";
 });
 $("#vResend").addEventListener("click", async () => { try { await auth.currentUser.sendEmailVerification(); $("#vOk").textContent = "Sent again."; } catch (er) { $("#vErr").textContent = authMsg(er); } });
-[["#vOut"], ["#nOut"], ["#outBtn"]].forEach(([s]) => $(s).addEventListener("click", () => { closeDrawer(); auth.signOut(); }));
+[["#vOut"], ["#nOut"], ["#outBtn"]].forEach(([s]) => $(s).addEventListener("click", () => { closeDrawer(true); auth.signOut(); }));
 $("#nRetry").addEventListener("click", () => auth.currentUser && handleUser(auth.currentUser));
 
 async function ensureProfile(u) {
@@ -1498,10 +1581,51 @@ async function ensureProfile(u) {
   const p = { name: inv.name || u.displayName || email, email, role: inv.role, clientId: inv.clientId || "", createdAt: now() };
   await ref.set(p); return p;
 }
+/* ---------------- guests: a client's share link, no email ---------------- */
+const LINK = (location.hash.match(/[#&]c=([A-Za-z0-9_-]{20,64})/) || [])[1] || "";
+let guestJoin = null, guestLink = null, wantTeamSignin = false;
+async function showGuest(msg) {
+  showAuth("aGuest"); $("#gErr").textContent = msg || ""; $("#guestForm").hidden = true; $("#gGo").disabled = false;
+  $("#gHello").textContent = "Opening your link…";
+  try { const s = await Store.col("links").doc(LINK).get(); guestLink = s.exists ? s.data() : null; } catch (e) { guestLink = null; }
+  if (!guestLink || !guestLink.active) { $("#gHello").textContent = "This link isn't working any more. Ask FW Studio to send you a new one."; return; }
+  $("#gHello").innerHTML = `<b style="color:var(--fg)">${esc(guestLink.clientName || "Your")}</b> videos from FW Studio. Type your name so the team knows who's commenting.`;
+  $("#guestForm").hidden = false; setTimeout(() => $("#gName").focus(), 50);
+}
+$("#guestForm").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const name = $("#gName").value.trim(); if (!name) { $("#gErr").textContent = "Please type your name."; $("#gName").focus(); return; }
+  if (!guestLink) return;
+  guestJoin = { name: name.slice(0, 60), token: LINK, clientId: guestLink.clientId }; $("#gGo").disabled = true; $("#gErr").textContent = "";
+  try { await auth.signInAnonymously(); }
+  catch (err) { guestJoin = null; $("#gGo").disabled = false; $("#gErr").textContent = /admin-restricted|operation-not-allowed/.test((err && err.code) || "") ? "Share links aren't switched on yet. Ask FW Studio to turn on guest sign-in." : "Couldn't open the videos. Check your connection and try again."; }
+});
+$("#gTeam").addEventListener("click", () => { wantTeamSignin = true; showAuth("aSignin"); });
+async function guestProfile(u) {
+  const ref = Store.col("users").doc(u.uid), s = await ref.get();
+  let p = s.exists ? s.data() : null;
+  if (p && LINK && p.linkToken !== LINK) return null;               // opened a different client's link: start again
+  if (!p && guestJoin && guestJoin.token === LINK) {
+    p = { name: guestJoin.name, email: "", role: "guest", clientId: guestJoin.clientId, linkToken: guestJoin.token, createdAt: now() };
+    await ref.set(p); guestJoin = null;
+  }
+  if (!p) return null;
+  const l = await Store.col("links").doc(p.linkToken).get();
+  if (!l.exists || !l.data().active || l.data().clientId !== p.clientId) return { off: true };
+  return p;
+}
 async function handleUser(u) {
   closeReview(); dlWatching.clear(); got.clear(); clearTimeout(wlTimer); guideAsked = false; $("#guide").classList.remove("on");
   Store.stop(); me = null; loaded = false; Object.keys(S).forEach((k) => (S[k] = new Map())); S.wlSettings = S.wlRates = null;
-  if (!u) { setMode(false); showAuth("aSignin"); return; }
+  if (!u) { setMode(false); if (LINK && !wantTeamSignin) showGuest(); else showAuth("aSignin"); return; }
+  if (u.isAnonymous) {
+    showAuth("aLoading"); splashMsg("Opening your videos…");
+    let p = null;
+    try { p = await guestProfile(u); } catch (e) { console.warn(e); }
+    if (p && p.off) { await auth.signOut(); if (LINK) showGuest("This link was turned off. Ask FW Studio for a new one."); else showAuth("aSignin"); return; }
+    if (!p) { await auth.signOut(); return; }                            // back to the name screen (or sign-in)
+    start(u, p); return;
+  }
   const pwd = (u.providerData || []).some((p) => p.providerId === "password");
   if (pwd && !u.emailVerified) { showAuth("aVerify", { email: u.email }); return; }
   showAuth("aLoading"); splashMsg("Signing you in…");
@@ -1514,14 +1638,15 @@ function start(u, p) {
   splashMsg("Loading your videos…");
   me = { uid: u.uid, ...p };
   authEl.hidden = true; $("#top").hidden = false; $("#main").hidden = false; setBanner("");
-  $("#meName").textContent = me.name || ""; $("#meMail").textContent = me.email || ""; $("#meRole").textContent = ROLE_LABEL[me.role] || me.role;
+  $("#meName").textContent = me.name || ""; $("#meMail").textContent = me.email || (me.role === "guest" ? "Guest via share link" : ""); $("#meRole").textContent = ROLE_LABEL[me.role] || me.role;
   const col = Store.col;
   Store.watchDoc(col("users").doc(u.uid), (d) => {          // removed or role changed while signed in
     if (!d) { Store.stop(); me = null; showAuth("aNo", { email: u.email, error: "Your access was removed." }); return; }
     if (d.role !== me.role || d.clientId !== me.clientId || (d.worklog || "") !== (me.worklog || "")) { handleUser(auth.currentUser); return; }
     me = { uid: u.uid, ...d }; $("#meName").textContent = me.name || "";
   });
-  if (me.role === "client") {
+  if (me.role === "guest") Store.watchDoc(col("links").doc(me.linkToken || "-"), (l) => { if (!l || !l.active) auth.signOut(); });   // link turned off: out you go
+  if (isClient()) {
     Store.watch("videos", col("reviews").where("client", "==", me.clientId || "-"), onRows("reviews"));
     Store.watchDoc(col("clients").doc(me.clientId || "-"), (c) => { S.clients = new Map(c ? [[me.clientId, c]] : []); render(); });
   } else {
@@ -1531,6 +1656,7 @@ function start(u, p) {
       Store.watch("tasks", col("tasks"), onRows("tasks"));
       Store.watch("reviews", col("reviews"), onRows("reviews"));
       Store.watch("invites", col("invites"), onRows("invites"));
+      Store.watch("share links", col("links"), onRows("links"));
     } else {
       Store.watch("tasks", col("tasks").where("assignee", "==", u.uid), onRows("tasks"));
       Store.watch("reviews", col("reviews").where("assignee", "==", u.uid), onRows("reviews"));
@@ -1964,6 +2090,7 @@ function wlSync() {
   const rates = (S.wlRates && S.wlRates.rates) || {};
   const def = (ed) => (typeof rates[ed] === "number" ? rates[ed] : null);
   S.merged.forEach((t, id) => {
+    if (id === ui.draftId) return;                 // not saved yet
     const a = wlAuto(id, t), row = S.worklog.get(id);
     if (!row) {
       if (!a.editor) return;
@@ -2153,7 +2280,7 @@ const chip = (t, k) => `<span class="g-chip${k ? " " + k : ""}">${t}</span>`;
 const GUIDES = {
   admin: [
     { t: "Welcome to your workspace", d: "Everything for a video lives here: the task, the raw footage, the edit, the client's comments, the approval and the editor's pay. This quick tour shows you where everything is." },
-    { el: "#peopleBtn", t: "1. Invite your team and clients", d: "Click <b>People</b>. Type their name and the exact email they'll sign in with, pick <b>Editor</b> or <b>Client</b>, and press Send invite. Then send them the site link with <b>Copy link</b>." },
+    { el: "#peopleBtn", t: "1. Invite your team and clients", d: "Click <b>People</b>. Type their name and the exact email they'll sign in with, pick <b>Editor</b> or <b>Client</b>, and press Send invite. Then send them the site link with <b>Copy link</b>. For a client who shouldn't need an email login, use <b>Create share link</b> next to their name under Clients." },
     { el: "#newBtn", t: "2. Create a task", d: "Click <b>+ New task</b>. Pick the editor, the client and the due date, write the brief and paste the <b>raw footage</b> link, then press <b>Save task</b>. Leave the exported video empty; the editor adds it." },
     { el: "#board", t: "3. Follow every video here", d: "Each task moves across these columns: To do → Editing → Client review → Revision → Approved. Click a card to open it. Drag cards to change their stage." },
     { t: "4. The editor delivers, the client reviews", d: "The editor pastes the export and presses <b>Send to client for review</b>. The client pauses on a moment and types what to change; the time is saved with the comment. Click a comment to jump to that moment. For a new cut, use <b>+ Add new version</b>.", ui: chip("0:12", "tc") + chip("Make the logo bigger") + chip("✓ Approve") + chip("↻ Revision") + chip("+ Add new version", "p") },
@@ -2181,7 +2308,7 @@ const visible = (el) => !!el && el.getClientRects().length > 0 && el.offsetWidth
 function openGuide() {
   if (!me) return;
   if (!isClient() && view !== "board") { view = "board"; render(); }
-  gSteps = (GUIDES[me.role] || GUIDES.editor).filter((s) => !s.el || visible($(s.el)));   // drop steps whose button isn't on screen (empty board…)
+  gSteps = (GUIDES[me.role === "guest" ? "client" : me.role] || GUIDES.editor).filter((s) => !s.el || visible($(s.el)));   // drop steps whose button isn't on screen (empty board…)
   gi = 0; $("#guide").classList.add("on"); drawGuide(); setTimeout(() => $("#gNext").focus(), 0);
 }
 function closeGuide() {
