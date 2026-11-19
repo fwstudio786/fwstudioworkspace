@@ -298,7 +298,19 @@ table.list tr:last-child td { border-bottom: 0; }
 @media (prefers-reduced-motion: reduce) { .splash *, .sp-tl * { animation: none !important; } .splash { transition: none; } }
 /* ---- guide ---- */
 .help { flex: none; width: 34px; height: 34px; min-width: 34px; padding: 0 !important; display: inline-grid; place-items: center; font-weight: 800; border-radius: 50%; }
-.guide-box { width: min(500px, 100%); gap: 18px; padding: 22px; }
+.tour { position: fixed; inset: 0; z-index: 80; display: none; }
+.tour.on { display: block; }
+.tour.center { background: rgb(0 0 0 / .62); }
+.tour-ring { position: fixed; border-radius: 10px; box-shadow: 0 0 0 9999px rgb(0 0 0 / .62), 0 0 0 2px var(--accent), 0 0 24px 4px color-mix(in srgb, var(--accent) 55%, transparent); pointer-events: none; transition: left .35s cubic-bezier(.3,.7,.2,1), top .35s cubic-bezier(.3,.7,.2,1), width .35s cubic-bezier(.3,.7,.2,1), height .35s cubic-bezier(.3,.7,.2,1); }
+.tour-ring::after { content: ""; position: absolute; inset: -2px; border-radius: inherit; border: 2px solid var(--accent); animation: tourPulse 1.6s ease-out infinite; }
+@keyframes tourPulse { from { opacity: .9; transform: scale(1); } to { opacity: 0; transform: scale(1.18); } }
+.tour-card { position: fixed; width: min(390px, calc(100vw - 32px)); max-height: calc(100vh - 32px); overflow: auto; background: var(--panel); border: 1px solid var(--line-2); border-radius: 12px; padding: 18px; display: grid; gap: 16px; box-shadow: 0 24px 60px rgb(0 0 0 / .55); transition: left .35s cubic-bezier(.3,.7,.2,1), top .35s cubic-bezier(.3,.7,.2,1); }
+.tour-card::before { content: ""; position: absolute; left: var(--ax, 50%); width: 14px; height: 14px; background: var(--panel); border: 1px solid var(--line-2); transform: translateX(-50%) rotate(45deg); display: none; }
+.tour-card[data-side="below"]::before { display: block; top: -8px; border-right: 0; border-bottom: 0; }
+.tour-card[data-side="above"]::before { display: block; bottom: -8px; border-left: 0; border-top: 0; }
+.g-here { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; color: var(--accent-2); }
+.g-here::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+@media (prefers-reduced-motion: reduce) { .tour-ring, .tour-card { transition: none; } .tour-ring::after { animation: none; } }
 #gStep { display: grid; gap: 10px; }
 .g-num { font: 600 11px/1 var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--accent-2); }
 #gStep h2 { font-size: 21px; text-wrap: balance; }
@@ -571,8 +583,9 @@ button.tc:hover { background: var(--accent); color: var(--accent-ink); }
   </div>
 </section>
 
-<div class="modal" id="guide" role="dialog" aria-modal="true" aria-labelledby="gTitle">
-  <div class="modal-box guide-box">
+<div class="tour" id="guide" role="dialog" aria-modal="true" aria-labelledby="gTitle">
+  <div class="tour-ring" id="gRing" hidden></div>
+  <div class="tour-card" id="gCard">
     <div id="gStep"></div>
     <div class="g-foot"><div class="g-dots" id="gDots"></div><button class="btn ghost" id="gSkip" type="button">Skip</button><button class="btn" id="gBack" type="button">Back</button><button class="btn primary" id="gNext" type="button">Next</button></div>
   </div>
@@ -860,8 +873,8 @@ const STATUSES = [
 const ST = Object.fromEntries(STATUSES.map((s) => [s.id, s]));
 const PRIORITY = { high: "High", normal: "Normal", low: "Low" };
 const ROLE_LABEL = { admin: "Admin", editor: "Editor", client: "Client" };
-const TASK_FIELDS = ["title", "assignee", "client", "due", "type", "priority", "brief", "notes", "sheet", "assignedAt", "videoUrl", "rawUrl", "docUrl", "sheetUrl", "clientNote", "order", "createdAt", "updatedAt"];
-const MIRROR_FIELDS = ["title", "assignee", "client", "due", "type", "videoUrl", "clientNote"];   // what the client is allowed to see
+const TASK_FIELDS = ["title", "assignee", "client", "due", "type", "priority", "brief", "notes", "sheet", "assignedAt", "videoUrl", "versions", "rawUrl", "docUrl", "sheetUrl", "clientNote", "order", "createdAt", "updatedAt"];
+const MIRROR_FIELDS = ["title", "assignee", "client", "due", "type", "videoUrl", "versions", "clientNote"];   // what the client is allowed to see
 const pick = (o, keys) => Object.fromEntries(keys.filter((k) => o[k] !== undefined).map((k) => [k, o[k]]));
 
 /* ---------------- Firebase ---------------- */
@@ -1053,17 +1066,26 @@ function clientCard(t, decide) {
 }
 
 /* ---------------- status changes + history (stored on the client-visible review) ---------------- */
-function setStatus(id, status, note, by) {
+function setStatus(id, status, note, by, quiet) {
   const r = S.reviews.get(id); if (!r || !ST[status]) return;
-  if ((r.status || "todo") === status && !note) return;
+  if ((r.status || "todo") === status && !note && !quiet) return;
   if (by === "client" && r.status !== "review") return;
   const entry = { state: status, note: note || "", by: by === "client" ? "client" : "team", uid: me.uid, at: now() };
-  if (status === "review" && by !== "client") entry.url = (S.tasks.get(id) || r).videoUrl || "";      // remember which export this version was
+  const patch = { status, updatedAt: now() };
+  if (status === "review" && by !== "client") {
+    const cur = (S.tasks.get(id) || r).videoUrl || "";
+    entry.url = cur;                                                       // remember which export was sent
+    const list = versionList(id);
+    if (!(Array.isArray(r.versions) && r.versions.length) || (cur && list.length && list[list.length - 1].url !== cur)) {
+      const versions = list.length && list[list.length - 1].url === cur ? list : [...list.filter((x) => x.url !== cur), ...(cur ? [{ url: cur, at: now(), note: "" }] : [])];
+      patch.versions = versions; const tk = S.tasks.get(id); if (tk) { S.tasks.set(id, { ...tk, versions }); Store.update("tasks", id, { versions }); }
+    }
+  }
   const history = [...(r.history || []), entry];
-  const patch = { status, history, updatedAt: now() };
+  patch.history = history;
   S.reviews.set(id, { ...r, ...patch }); merge();
   Store.update("reviews", id, patch);
-  toast(by === "client" ? (status === "approved" ? "Approved. Thanks!" : status === "revision" ? "Revision request sent" : "Video rejected") : "Moved to " + ST[status].label);
+  if (!quiet) toast(by === "client" ? (status === "approved" ? "Approved. Thanks!" : status === "revision" ? "Revision request sent" : "Video rejected") : "Moved to " + ST[status].label);
   render(); if (ui.openKind === "task" && ui.openId === id) drawTask();
 }
 
@@ -1077,15 +1099,15 @@ addEventListener("keydown", (e) => { if (e.key === "Escape" && !rv.id && drawer.
 
 function exportBox(t, id) {
   const v = parseVideo(t.videoUrl), url = safeUrl(t.videoUrl), dl = S.dl.get(id) || {};
-  const m = S.merged.get(id) || t, sent = (m.history || []).some((h) => h.state === "review"), vs = sent ? versionsOf(m) : [], next = vs.length + 1;
+  const m = S.merged.get(id) || t, vs = url ? versionsOf(m).filter((x) => x.url) : [], next = vs.length + 1;
   const kind = !v ? "" : v.kind === "yt" ? "YouTube · time stamps on comments" : v.kind === "drive" ? "Google Drive" : v.kind === "file" ? "Video file · time stamps on comments" : v.kind === "notvideo" ? "" : "Opens on another site";
   return `<div class="fields">
-    ${vs.length ? `<div class="f full"><label>Versions sent to the client</label><div class="vlist">${vs.slice().reverse().map((x) => `<div class="vrow"><span class="tag">v${x.v}</span>${x.v === vs.length ? `<span class="now">Latest</span>` : ""}<span class="muted">${esc(fmtTime(x.at))}</span>${safeUrl(x.url) ? `<a class="vlink" href="${esc(safeUrl(x.url))}" target="_blank" rel="noopener" title="${esc(x.url)}">${esc(x.url.replace(/^https?:\/\/(www\.)?/, ""))}</a><button class="btn sm" data-watchv="${x.v}" type="button">▶ Watch</button>` : `<span class="muted vlink">Link not saved for this version</span>`}</div>`).join("")}</div>
+    ${vs.length ? `<div class="f full"><label>Versions</label><div class="vlist">${vs.slice().reverse().map((x) => `<div class="vrow"><span class="tag">v${x.v}</span>${x.v === vs.length ? `<span class="now">Latest</span>` : ""}<span class="muted">${x.sent ? "Sent " + esc(fmtTime(x.sent)) : "Not sent to the client yet"}</span>${safeUrl(x.url) ? `<a class="vlink" href="${esc(safeUrl(x.url))}" target="_blank" rel="noopener" title="${esc(x.url)}">${esc(x.url.replace(/^https?:\/\/(www\.)?/, ""))}</a><button class="btn sm" data-watchv="${x.v}" type="button">▶ Watch</button>` : `<span class="muted vlink">Link not saved for this version</span>`}</div>`).join("")}</div>
       <div id="nvWrap"><button class="btn" id="nvOpen" type="button">+ Add new version (v${next})</button>
         <div class="nv-box" id="nvBox" hidden><label for="nvUrl" style="font-weight:600">Link to v${next}</label><input id="nvUrl" placeholder="Unlisted YouTube or Google Drive link of the new export" inputmode="url">
           <textarea id="nvNote" rows="2" placeholder="What changed? (optional, the client sees this)" maxlength="500"></textarea>
-          <div><button class="btn ghost" id="nvCancel" type="button">Cancel</button><button class="btn primary" id="nvSend" type="button">Add v${next} &amp; send to client</button></div></div></div></div>` : ""}
-    <div class="f full"><label for="fVid">${vs.length ? `Link of the latest version (v${vs.length})` : "Exported video the client watches"}</label><div class="linkrow"><input id="fVid" data-k="videoUrl" value="${esc(t.videoUrl)}" placeholder="Unlisted YouTube or Google Drive video link" inputmode="url">${url ? `<a class="btn" href="${esc(url)}" target="_blank" rel="noopener">Open ↗</a>` : ""}</div>
+          <div><button class="btn ghost" id="nvCancel" type="button">Cancel</button><button class="btn" id="nvSave" type="button">Save v${next}</button>${t.client ? `<button class="btn primary" id="nvSend" type="button">Save v${next} &amp; send to client</button>` : ""}</div></div></div></div>` : ""}
+    <div class="f full"><label for="fVid">${vs.length > 1 ? `Link of the latest version (v${vs.length}). Only change it to fix a wrong link` : "Exported video the client watches"}</label><div class="linkrow"><input id="fVid" data-k="videoUrl" value="${esc(t.videoUrl)}" placeholder="Unlisted YouTube or Google Drive video link" inputmode="url">${url ? `<a class="btn" href="${esc(url)}" target="_blank" rel="noopener">Open ↗</a>` : ""}</div>
       ${v && v.kind === "notvideo" ? `<div class="warn">This is a Google Doc or Sheet, not a video. <button class="linkbtn" id="mvDoc" type="button">Move it to the Google Doc field</button></div>`
         : url ? `<div class="exp-row"><button class="btn primary" id="openRv" type="button">▶ Watch video &amp; comments</button><span class="muted" style="font-size:12px">${esc(kind)}</span></div>`
         : `<small class="muted" style="font-size:12px">Leave this empty for now. The editor pastes the export here when the edit is ready, then presses “Send to client for review”. For Drive, set sharing to “Anyone with the link”.</small>`}</div>
@@ -1095,19 +1117,21 @@ function exportBox(t, id) {
 }
 let taskDraft = null, taskTimer = 0;
 // A new export: the old link stays with its version, the new link becomes the latest version and goes to the client.
-function addVersion(id, url, note) {
+// Saved versions as a plain list, starting from whatever the task already had.
+function versionList(id) {
+  const m = S.merged.get(id) || {};
+  return versionsOf(m).filter((x) => x.url).map((x) => ({ url: x.url, at: x.at || now(), note: x.note || "" }));
+}
+// A new export: the old link stays with its version; the new one becomes the latest. Optionally send it to the client.
+function addVersion(id, url, note, send) {
   const r = S.reviews.get(id), t = S.tasks.get(id); if (!r || !t) return;
   flushTask();
-  const history = (r.history || []).map((h) => ({ ...h }));
-  const last = history.map((h) => h.state).lastIndexOf("review");
-  if (last >= 0 && !history[last].url) history[last].url = t.videoUrl || r.videoUrl || "";
-  history.push({ state: "review", note: note || "", by: "team", uid: me.uid, at: now(), url });
-  const v = history.filter((h) => h.state === "review").length;
-  const tp = { videoUrl: url, updatedAt: now() }; if (note) tp.clientNote = note;
-  S.tasks.set(id, { ...t, ...tp }); Store.update("tasks", id, tp);
-  const rp = { ...tp, status: "review", history };
-  S.reviews.set(id, { ...r, ...rp }); merge(); Store.update("reviews", id, rp);
-  toast(`v${v} sent to the client`); render(); if (ui.openKind === "task" && ui.openId === id) drawTask();
+  const versions = [...versionList(id), { url, at: now(), note: note || "" }];
+  const tp = { videoUrl: url, versions, updatedAt: now() }; if (note) tp.clientNote = note;
+  S.tasks.set(id, { ...S.tasks.get(id), ...tp }); Store.update("tasks", id, tp);
+  S.reviews.set(id, { ...r, ...tp }); merge(); Store.update("reviews", id, tp);
+  if (send) setStatus(id, "review", note || "", "team", true);
+  toast(send ? `v${versions.length} sent to the client` : `v${versions.length} saved`); render(); if (ui.openKind === "task" && ui.openId === id) drawTask();
 }
 function patchTask(patch, quick) {
   const id = ui.openId; const base = taskDraft || S.tasks.get(id); if (!base) return;
@@ -1177,12 +1201,15 @@ function drawTask() {
     $$("[data-watchv]", body).forEach((b) => b.addEventListener("click", () => { flushTask(); openReview(id, Number(b.dataset.watchv)); }));
     $("#nvOpen")?.addEventListener("click", () => { $("#nvBox").hidden = false; $("#nvOpen").hidden = true; $("#nvUrl").focus(); });
     $("#nvCancel")?.addEventListener("click", () => { $("#nvBox").hidden = true; $("#nvOpen").hidden = false; });
-    $("#nvSend")?.addEventListener("click", () => {
+    const nv = (send) => {
       const url = $("#nvUrl").value.trim(), pv = parseVideo(url);
       if (!pv) { toast("Paste the full link of the new export."); $("#nvUrl").focus(); return; }
       if (pv.kind === "notvideo") { toast("That link is a document, not a video."); $("#nvUrl").focus(); return; }
-      addVersion(id, url, $("#nvNote").value.trim());
-    });
+      if (versionList(id).some((x) => x.url === url)) { toast("That link is already one of the versions."); $("#nvUrl").focus(); return; }
+      addVersion(id, url, $("#nvNote").value.trim(), send);
+    };
+    $("#nvSave")?.addEventListener("click", () => nv(false));
+    $("#nvSend")?.addEventListener("click", () => nv(true));
     $("#mvDoc")?.addEventListener("click", () => { const cur = S.tasks.get(id) || {}; patchTask(cur.docUrl ? { rawUrl: cur.rawUrl || cur.videoUrl, videoUrl: "" } : { docUrl: cur.videoUrl, videoUrl: "" }, true); setTimeout(drawTask, 30); toast("Moved. Now paste the exported video link."); });
     if (!S.dl.has(id)) Store.col("downloads").doc(id).get().then((s) => { S.dl.set(id, s.exists ? s.data() : {}); if (ui.openKind === "task" && ui.openId === id && ui.subtab === "overview" && document.activeElement?.id !== "fFin") drawTask(); }).catch(() => S.dl.set(id, {}));
     $("#fFin").addEventListener("change", (e) => {
@@ -1212,7 +1239,20 @@ function drawTask() {
     $("#fPr").addEventListener("change", (e) => patchTask({ priority: e.target.value }, true));
     $("#fBr").addEventListener("input", (e) => patchTask({ brief: e.target.value }));
     $("#fCn").addEventListener("input", (e) => patchTask({ clientNote: e.target.value }));
-    $$("[data-k]", body).forEach((inp) => inp.addEventListener("change", () => { patchTask({ [inp.dataset.k]: inp.value.trim() }, true); setTimeout(drawTask, 30); }));
+    $$("[data-k]", body).forEach((inp) => inp.addEventListener("change", () => {
+      const k = inp.dataset.k, val = inp.value.trim(), patch = { [k]: val }, cur = S.tasks.get(id) || {};
+      let msg = "";
+      if (k === "videoUrl") {
+        const all = versionsOf(S.merged.get(id) || cur).filter((x) => x.url), last = all[all.length - 1];
+        const list = all.map((x) => ({ url: x.url, at: x.at || now(), note: x.note || "" }));
+        if (val && last && last.sent && last.url !== val && parseVideo(val)?.kind !== "notvideo") {      // the client already saw the latest one, so this is a new version
+          patch.versions = [...list, { url: val, at: now(), note: "" }]; msg = `Saved as v${list.length + 1}. The client already saw v${list.length}.`;
+        } else if (list.length && (Array.isArray(cur.versions) && cur.versions.length || last.sent)) {   // fixing the latest link
+          const vs = list.map((x) => ({ ...x })); if (val) vs[vs.length - 1].url = val; else vs.pop(); patch.versions = vs;
+        }
+      }
+      patchTask(patch, true); setTimeout(drawTask, 30); if (msg) toast(msg);
+    }));
     $("#saveTask")?.addEventListener("click", () => {
       flushTask(); const cur = S.tasks.get(id) || {};
       if (admin && !cur.assignee) { toast("Saved. Pick an editor so someone can start on it."); $("#fAs").focus(); return; }
@@ -1542,12 +1582,21 @@ function parseTC(str) {
   if (!/^\d{1,3}(:\d{1,2}){0,2}$/.test(str)) return NaN;
   return str.split(":").reduce((a, p) => a * 60 + Number(p), 0);
 }
-const verOf = (r) => Math.max(1, ((r && r.history) || []).filter((h) => h.state === "review").length);
+const verOf = (r) => Math.max(1, versionsOf(r).length);
 // Every "send to client" stores the export link it sent, so older versions can be watched again.
+// Versions are saved on the task (versions: [{url, at, note}]). Older tasks worked them out from each "send to client".
 function versionsOf(t) {
-  const sent = ((t && t.history) || []).filter((h) => h.state === "review");
-  if (!sent.length) return [{ v: 1, url: (t && t.videoUrl) || "", at: "" }];
-  return sent.map((h, i) => ({ v: i + 1, url: i === sent.length - 1 ? (t.videoUrl || h.url || "") : (h.url || ""), at: h.at }));
+  t = t || {};
+  const sentAt = (url) => { const h = (t.history || []).find((x) => x.state === "review" && x.url && x.url === url); return h ? h.at : ""; };
+  if (Array.isArray(t.versions) && t.versions.length) {
+    const vs = t.versions.map((x, i) => ({ v: i + 1, url: x.url || "", at: x.at || "", note: x.note || "" }));
+    if (t.videoUrl) vs[vs.length - 1].url = t.videoUrl;           // the latest-link field always wins
+    vs.forEach((x) => (x.sent = sentAt(x.url)));
+    return vs;
+  }
+  const sent = (t.history || []).filter((h) => h.state === "review");
+  if (!sent.length) return [{ v: 1, url: t.videoUrl || "", at: "", sent: "" }];
+  return sent.map((h, i) => ({ v: i + 1, url: i === sent.length - 1 ? (t.videoUrl || h.url || "") : (h.url || ""), at: h.at, sent: h.at }));
 }
 
 let ytReady = null;
@@ -2100,33 +2149,40 @@ setTimeout(hideSplash, 15000);   // never get stuck behind it
 
 /* ---------------- first-time guide ---------------- */
 const chip = (t, k) => `<span class="g-chip${k ? " " + k : ""}">${t}</span>`;
+// el: the thing on screen to highlight (skipped when it isn't visible, e.g. on a phone or an empty board).
 const GUIDES = {
   admin: [
-    { t: "Welcome to your workspace", d: "Everything for a video lives in one place: the task, the raw footage, the edit, the client's comments, the approval and the editor's pay.", ui: chip("Board") + chip("Tasks") + chip("Docs") + chip("Sheets") + chip("Work log") },
-    { t: "Invite your team and clients", d: "Open <b>People</b>. Type their name and the exact email they'll sign in with, pick <b>Editor</b> or <b>Client</b>, and press Send invite. Then send them the site link with <b>Copy link</b>.", ui: chip("People") + "→" + chip("Send invite", "p") + chip("Copy link") },
-    { t: "Create a task", d: "Press <b>+ New task</b>. Pick the editor, the client and the due date, write the brief and paste the raw footage folder. Leave the exported video empty; the editor adds it.", ui: chip("+ New task", "p") + chip("Raw footage for the editor") },
-    { t: "The editor delivers", d: "When the edit is ready, the editor pastes the export link (an Unlisted YouTube video, or a Google Drive file shared with “Anyone with the link”) and presses <b>Send to client for review</b>.", ui: chip("Exported video") + "→" + chip("Send to client for review", "p") },
-    { t: "The client reviews", d: "The client pauses on a moment and types what to change; the time is saved with the comment. Click any comment to jump to that moment. They approve, ask for a revision or reject. For a new cut, use <b>+ Add new version</b>.", ui: chip("0:12", "tc") + chip("Make the logo bigger") + chip("✓ Approve") + chip("↻ Revision") },
-    { t: "Track work and pay", d: "<b>Work log</b> counts each editor's videos, how many were on time, and what you owe. Set rates under <b>Rates</b> and tick <b>Paid</b> when you pay. Editors can't see it unless you allow it in People.", ui: chip("Work log") + chip("Rates") + chip("☑ Paid") },
+    { t: "Welcome to your workspace", d: "Everything for a video lives here: the task, the raw footage, the edit, the client's comments, the approval and the editor's pay. This quick tour shows you where everything is." },
+    { el: "#peopleBtn", t: "1. Invite your team and clients", d: "Click <b>People</b>. Type their name and the exact email they'll sign in with, pick <b>Editor</b> or <b>Client</b>, and press Send invite. Then send them the site link with <b>Copy link</b>." },
+    { el: "#newBtn", t: "2. Create a task", d: "Click <b>+ New task</b>. Pick the editor, the client and the due date, write the brief and paste the <b>raw footage</b> link, then press <b>Save task</b>. Leave the exported video empty; the editor adds it." },
+    { el: "#board", t: "3. Follow every video here", d: "Each task moves across these columns: To do → Editing → Client review → Revision → Approved. Click a card to open it. Drag cards to change their stage." },
+    { t: "4. The editor delivers, the client reviews", d: "The editor pastes the export and presses <b>Send to client for review</b>. The client pauses on a moment and types what to change; the time is saved with the comment. Click a comment to jump to that moment. For a new cut, use <b>+ Add new version</b>.", ui: chip("0:12", "tc") + chip("Make the logo bigger") + chip("✓ Approve") + chip("↻ Revision") + chip("+ Add new version", "p") },
+    { el: "#wlTab", t: "5. Track work and pay", d: "<b>Work log</b> counts each editor's videos, whether they were on time, and what you owe. Set rates under <b>Rates</b> and tick <b>Paid</b> when you pay. Editors can't see it unless you allow it in People." },
+    { el: "#helpBtn", t: "Need this again?", d: "Click <b>?</b> any time to replay this tour." },
   ],
   editor: [
-    { t: "Welcome to FW Studio", d: "The videos assigned to you show under <b>My tasks</b>, sorted by stage: To do, Editing, Client review, Revision, Approved.", ui: chip("My tasks") + chip("To do") + chip("Editing") + chip("Client review") },
-    { t: "Start a task", d: "Open a task to read the brief and the due date. The raw footage folder is under <b>Footage &amp; files</b>. Set the status to <b>Editing</b> when you start.", ui: chip("Raw footage for the editor ↗") + chip("Editing") },
-    { t: "Deliver your edit", d: "Upload the export to YouTube as <b>Unlisted</b>, or to Google Drive shared with “Anyone with the link”. Paste the link in <b>Exported video</b> and press <b>Send to client for review</b>.", ui: chip("Exported video") + "→" + chip("Send to client for review", "p") },
-    { t: "Fix revisions", d: "The client's comments have times. Click one to jump to that moment. Tick <b>✓ Done</b> as you fix each one, then deliver the new cut with <b>+ Add new version</b>.", ui: chip("0:12", "tc") + chip("✓ Done") + chip("+ Add new version", "p") },
+    { t: "Welcome to FW Studio", d: "This is where you get your editing tasks, deliver your cuts and see the client's feedback. Here's where everything is." },
+    { el: "#board", t: "1. Your tasks", d: "Videos assigned to you show here, sorted by stage: To do, Editing, Client review, Revision, Approved." },
+    { el: "#board .card", t: "2. Open a task", d: "Click a card to see the brief, the due date and the <b>raw footage</b> link. Set the status to <b>Editing</b> when you start." },
+    { t: "3. Deliver your edit", d: "Upload the export to YouTube as <b>Unlisted</b>, or to Google Drive shared with “Anyone with the link”. In the task, paste it in <b>Exported video</b> and press <b>Send to client for review</b>.", ui: chip("Exported video") + "→" + chip("Send to client for review", "p") },
+    { t: "4. Fix revisions", d: "The client's comments have times. Click one to jump to that moment. Tick <b>✓ Done</b> as you fix each one, then add the new cut with <b>+ Add new version</b>.", ui: chip("0:12", "tc") + chip("✓ Done") + chip("+ Add new version", "p") },
+    { el: "#helpBtn", t: "Need this again?", d: "Click <b>?</b> any time to replay this tour." },
   ],
   client: [
-    { t: "Welcome", d: "This is where you review your videos from FW Studio. Nothing to install; just sign in with the same email each time.", ui: "" },
-    { t: "Watch and comment", d: "Press <b>▶ Watch &amp; comment</b>. Pause where you want a change and type it. The time in the video is saved with your comment, so the editor knows exactly where.", ui: chip("▶ Watch & comment", "p") + chip("0:12", "tc") + chip("Make the logo bigger") },
-    { t: "Approve or ask for changes", d: "Happy with it? <b>Approve</b>. Want changes? <b>Revision</b>; your comments go with it. When a new version comes, you can compare it with the old one.", ui: chip("✓ Approve") + chip("↻ Revision") + chip("⇄ Compare versions") },
-    { t: "Get your video", d: "After you approve, a <b>Download final video</b> button appears on the video.", ui: chip("⬇ Download final video", "p") },
+    { t: "Welcome", d: "This is where you review your videos from FW Studio. Nothing to install; just sign in with the same email each time." },
+    { el: "#main [data-rv]", t: "1. Watch and comment", d: "Click <b>▶ Watch &amp; comment</b>. Pause where you want a change and type it. The time in the video is saved with your comment, so the editor knows exactly where." },
+    { el: "#main .cv-card .decide", t: "2. Approve or ask for changes", d: "Happy with it? <b>Approve</b>. Want changes? <b>Revision</b>; your comments go with it. When a new version arrives, you can compare it with the old one." },
+    { t: "3. Get your video", d: "After you approve, a <b>Download final video</b> button appears on the video.", ui: chip("⬇ Download final video", "p") },
+    { el: "#helpBtn", t: "Need this again?", d: "Click <b>?</b> any time to replay this tour." },
   ],
 };
 let gi = 0, gSteps = [];
+const visible = (el) => !!el && el.getClientRects().length > 0 && el.offsetWidth > 0 && getComputedStyle(el).visibility !== "hidden";
 function openGuide() {
   if (!me) return;
-  gSteps = GUIDES[me.role] || GUIDES.editor; gi = 0; drawGuide();
-  $("#guide").classList.add("on"); setTimeout(() => $("#gNext").focus(), 0);
+  if (!isClient() && view !== "board") { view = "board"; render(); }
+  gSteps = (GUIDES[me.role] || GUIDES.editor).filter((s) => !s.el || visible($(s.el)));   // drop steps whose button isn't on screen (empty board…)
+  gi = 0; $("#guide").classList.add("on"); drawGuide(); setTimeout(() => $("#gNext").focus(), 0);
 }
 function closeGuide() {
   $("#guide").classList.remove("on");
@@ -2134,11 +2190,35 @@ function closeGuide() {
 }
 function drawGuide() {
   const s = gSteps[gi], last = gi === gSteps.length - 1;
-  $("#gStep").innerHTML = `<div class="g-num">Step ${gi + 1} of ${gSteps.length}</div><h2 id="gTitle">${s.t}</h2><p>${s.d}</p>${s.ui ? `<div class="g-ui" aria-hidden="true">${s.ui}</div>` : ""}`;
+  $("#gStep").innerHTML = `<div class="g-num">Step ${gi + 1} of ${gSteps.length}</div><h2 id="gTitle">${s.t}</h2><p>${s.d}</p>${s.ui ? `<div class="g-ui" aria-hidden="true">${s.ui}</div>` : ""}${s.el ? `<span class="g-here">Highlighted on your screen</span>` : ""}`;
   $("#gDots").innerHTML = gSteps.map((_, i) => `<i class="${i === gi ? "on" : ""}"></i>`).join("");
   $("#gBack").hidden = gi === 0; $("#gSkip").hidden = last;
   $("#gNext").textContent = last ? "Got it" : "Next";
+  placeGuide();
 }
+function placeGuide() {
+  if (!$("#guide").classList.contains("on")) return;
+  const s = gSteps[gi], el = s && s.el ? $(s.el) : null, card = $("#gCard"), ring = $("#gRing"), box = $("#guide");
+  const vw = innerWidth, vh = innerHeight;
+  if (!visible(el)) {
+    ring.hidden = true; box.classList.add("center"); card.dataset.side = "";
+    card.style.left = Math.max(16, (vw - card.offsetWidth) / 2) + "px"; card.style.top = Math.max(16, (vh - card.offsetHeight) / 2) + "px"; return;
+  }
+  el.scrollIntoView({ block: "nearest", inline: "nearest" });
+  const r = el.getBoundingClientRect(), pad = 6, gap = 14;
+  const top = Math.max(4, r.top - pad), left = Math.max(4, r.left - pad);
+  const h = Math.min(r.height + pad * 2, vh * 0.6);                    // a tall area (the board): only ring the top of it
+  box.classList.remove("center"); ring.hidden = false;
+  Object.assign(ring.style, { left: left + "px", top: top + "px", width: Math.min(r.width + pad * 2, vw - left - 4) + "px", height: h + "px" });
+  const cw = card.offsetWidth, ch = card.offsetHeight;
+  let side = top + h + gap + ch <= vh - 8 ? "below" : top - gap - ch >= 8 ? "above" : "below";
+  let y = side === "below" ? top + h + gap : top - gap - ch;
+  if (y + ch > vh - 8) { y = Math.max(8, vh - ch - 8); side = ""; }
+  const cx = r.left + r.width / 2, x = Math.min(Math.max(16, cx - cw / 2), vw - cw - 16);
+  card.dataset.side = side; card.style.left = x + "px"; card.style.top = y + "px";
+  card.style.setProperty("--ax", Math.min(Math.max(18, cx - x), cw - 18) + "px");
+}
+addEventListener("resize", placeGuide);
 let guideAsked = false;
 function maybeGuide() {
   if (guideAsked || !me || !loaded || $("#splash")) return;
@@ -2150,7 +2230,6 @@ $("#gNext").addEventListener("click", () => { if (gi < gSteps.length - 1) { gi++
 $("#gBack").addEventListener("click", () => { if (gi > 0) { gi--; drawGuide(); } });
 $("#gSkip").addEventListener("click", closeGuide);
 $("#helpBtn").addEventListener("click", openGuide);
-$("#guide").addEventListener("click", (e) => { if (e.target.id === "guide") closeGuide(); });
 addEventListener("keydown", (e) => {
   if (!$("#guide").classList.contains("on")) return;
   if (e.key === "Escape") closeGuide();
