@@ -270,6 +270,48 @@ table.list tr:last-child td { border-bottom: 0; }
 .prow select { background: var(--panel); border: 1px solid var(--line-2); border-radius: 7px; padding: 4px 6px; color: var(--fg); }
 .copyrow { display: flex; gap: 8px; align-items: center; background: var(--panel-2); border-radius: 8px; padding: 8px 10px; font-size: 12.5px; }
 .copyrow code { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--mono); user-select: all; }
+/* ---- loading screen ---- */
+.splash { position: fixed; inset: 0; z-index: 90; display: grid; place-items: center; padding: 24px; background: radial-gradient(70% 55% at 50% 42%, #2a130a, var(--bg) 72%); transition: opacity .5s ease, visibility .5s; }
+.splash.out { opacity: 0; visibility: hidden; }
+.sp-in { display: grid; justify-items: center; gap: 18px; width: min(340px, 100%); }
+.sp-logo { position: relative; width: 84px; overflow: hidden; animation: spIn .7s cubic-bezier(.2,.8,.2,1) both; }
+.sp-logo img { width: 100%; display: block; }
+.sp-shine { position: absolute; inset: -20% auto -20% -60%; width: 40%; background: linear-gradient(100deg, transparent, rgb(255 255 255 / .55), transparent); transform: skewX(-18deg); animation: spShine 2.2s .5s ease-in-out infinite; mix-blend-mode: overlay; }
+.sp-name { font: 800 20px/1 var(--display); letter-spacing: -.02em; animation: spUp .6s .2s both; }
+.sp-name span { color: var(--muted); font-weight: 600; }
+.sp-msg { color: var(--muted); font-size: 13px; animation: spUp .6s .35s both; min-height: 1.3em; }
+.sp-tl { position: relative; width: 100%; display: grid; gap: 5px; padding: 10px; border-radius: 10px; background: rgb(255 255 255 / .03); border: 1px solid var(--line); animation: spUp .6s .25s both; overflow: hidden; }
+.sp-track { position: relative; height: 14px; border-radius: 4px; background: rgb(255 255 255 / .04); }
+.sp-track i { position: absolute; top: 0; bottom: 0; left: var(--x); width: var(--w); border-radius: 4px; background: linear-gradient(180deg, var(--accent-2), var(--accent)); transform-origin: left; animation: spClip 2.4s var(--d) cubic-bezier(.3,.7,.2,1) infinite; }
+.sp-track.b i { background: linear-gradient(180deg, #a98bff, #7a5cff); }
+.sp-track.a { height: 18px; }
+.sp-track.a i { background: repeating-linear-gradient(90deg, #3ecf8e 0 2px, transparent 2px 4px); -webkit-mask: radial-gradient(60% 120% at 50% 50%, #000 40%, transparent 100%) 0 0 / 18px 100% repeat-x; mask: radial-gradient(60% 120% at 50% 50%, #000 40%, transparent 100%) 0 0 / 18px 100% repeat-x; opacity: .85; }
+.sp-head { position: absolute; top: 4px; bottom: 4px; left: 10px; width: 2px; background: #fff; box-shadow: 0 0 10px rgb(255 255 255 / .7); border-radius: 2px; animation: spHead 2.4s cubic-bezier(.45,.05,.55,.95) infinite; }
+.sp-head::before { content: ""; position: absolute; top: -4px; left: -4px; border: 5px solid transparent; border-top-color: #fff; }
+.sp-tl.mini { width: min(240px, 100%); margin: 6px auto; padding: 8px; }
+.sp-tl.mini .sp-track { height: 9px; } .sp-tl.mini .sp-track.a { height: 11px; }
+@keyframes spIn { from { opacity: 0; transform: scale(.85); } }
+@keyframes spUp { from { opacity: 0; transform: translateY(8px); } }
+@keyframes spShine { 0% { left: -60%; } 55%, 100% { left: 130%; } }
+@keyframes spClip { 0% { transform: scaleX(0); opacity: .3; } 30% { transform: scaleX(1); opacity: 1; } 85% { transform: scaleX(1); opacity: 1; } 100% { transform: scaleX(1); opacity: 0; } }
+@keyframes spHead { 0% { left: 10px; } 100% { left: calc(100% - 12px); } }
+@media (prefers-reduced-motion: reduce) { .splash *, .sp-tl * { animation: none !important; } .splash { transition: none; } }
+/* ---- guide ---- */
+.help { flex: none; width: 34px; height: 34px; min-width: 34px; padding: 0 !important; display: inline-grid; place-items: center; font-weight: 800; border-radius: 50%; }
+.guide-box { width: min(500px, 100%); gap: 18px; padding: 22px; }
+#gStep { display: grid; gap: 10px; }
+.g-num { font: 600 11px/1 var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--accent-2); }
+#gStep h2 { font-size: 21px; text-wrap: balance; }
+#gStep p { margin: 0; color: var(--muted); line-height: 1.55; }
+#gStep p b { color: var(--fg); font-weight: 600; }
+.g-ui { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 14px; border-radius: 10px; background: var(--panel-2); border: 1px solid var(--line); color: var(--faint); }
+.g-chip { font-size: 12.5px; font-weight: 600; padding: 6px 10px; border-radius: 7px; background: var(--panel-3); border: 1px solid var(--line-2); color: var(--fg); white-space: nowrap; }
+.g-chip.p { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.g-chip.tc { font-family: var(--mono); background: var(--accent-soft); border-color: transparent; color: var(--accent-2); }
+.g-foot { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.g-dots { display: flex; gap: 6px; margin-right: auto; }
+.g-dots i { width: 7px; height: 7px; border-radius: 50%; background: var(--line-2); transition: width .2s; }
+.g-dots i.on { width: 20px; border-radius: 4px; background: var(--accent); }
 /* ---- video review ---- */
 body.rv-lock { overflow: hidden; }
 .rv { position: fixed; inset: 0; z-index: 60; background: var(--bg); display: grid; grid-template-rows: auto minmax(0, 1fr); padding: env(safe-area-inset-top, 0px) env(safe-area-inset-right, 0px) env(safe-area-inset-bottom, 0px) env(safe-area-inset-left, 0px); }
@@ -353,6 +395,10 @@ table.list.wl tfoot td { background: var(--panel-3); border-top: 1px solid var(-
 .cm-text { white-space: pre-wrap; overflow-wrap: anywhere; min-width: 0; font-size: 13.5px; line-height: 1.45; }
 .tc { flex: none; font: 600 11.5px/1 var(--mono); padding: 4px 6px; border-radius: 5px; background: var(--accent-soft); color: var(--accent-2); border: 0; }
 button.tc { cursor: pointer; }
+.cm.jump { cursor: pointer; }
+.cm.jump:hover { background: color-mix(in srgb, var(--accent) 6%, transparent); }
+.cm.active { background: color-mix(in srgb, var(--accent) 10%, transparent); box-shadow: inset 3px 0 0 var(--accent); }
+.rv-wait { position: absolute; inset: auto 0 50%; text-align: center; color: #b5a89f; font-size: 13px; pointer-events: none; }
 button.tc:hover { background: var(--accent); color: var(--accent-ink); }
 .cm-a { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; font-size: 12px; }
 .cm-a button { background: none; border: 0; padding: 0; color: var(--muted); font-weight: 600; font-size: 12px; }
@@ -383,10 +429,28 @@ button.tc:hover { background: var(--accent); color: var(--accent-ink); }
 </style>
 </head>
 <body>
+<div class="splash" id="splash" role="status" aria-live="polite">
+  <div class="sp-in">
+    <div class="sp-logo"><img src="data:image/png;base64,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" alt=""><span class="sp-shine"></span></div>
+    <div class="sp-name">FW Studio <span>Workspace</span></div>
+    <div class="sp-tl" aria-hidden="true">
+        <div class="sp-track"><i style="--d:.05s;--x:0%;--w:30%"></i><i style="--d:.3s;--x:33%;--w:24%"></i><i style="--d:.55s;--x:60%;--w:38%"></i></div>
+        <div class="sp-track b"><i style="--d:.2s;--x:8%;--w:44%"></i><i style="--d:.5s;--x:56%;--w:30%"></i></div>
+        <div class="sp-track a"><i style="--d:.35s;--x:0%;--w:98%"></i></div>
+        <div class="sp-head"></div>
+      </div>
+    <div class="sp-msg" id="spMsg">Loading your workspace…</div>
+  </div>
+</div>
 <div class="auth" id="auth">
   <div class="auth-box">
     <div class="logo"><img src="data:image/png;base64,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" alt=""><div><h1>FW Studio Workspace</h1><span class="muted" style="font-size:13px">Tasks, reviews and approvals</span></div></div>
-    <div id="aLoading"><div class="spin" aria-label="Loading"></div></div>
+    <div id="aLoading" aria-label="Loading"><div class="sp-tl mini" aria-hidden="true">
+        <div class="sp-track"><i style="--d:.05s;--x:0%;--w:30%"></i><i style="--d:.3s;--x:33%;--w:24%"></i><i style="--d:.55s;--x:60%;--w:38%"></i></div>
+        <div class="sp-track b"><i style="--d:.2s;--x:8%;--w:44%"></i><i style="--d:.5s;--x:56%;--w:30%"></i></div>
+        <div class="sp-track a"><i style="--d:.35s;--x:0%;--w:98%"></i></div>
+        <div class="sp-head"></div>
+      </div></div>
     <div id="aSignin" hidden>
       <div style="display:grid;gap:12px">
         <button class="btn gbtn" id="gBtn" type="button"><svg viewBox="0 0 48 48" aria-hidden="true"><path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3C33.7 32.7 29.2 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.3-.1-2.4-.4-3.5z"/><path fill="#FF3D00" d="m6.3 14.7 6.6 4.8C14.7 15.1 19 12 24 12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 16.3 4 9.7 8.3 6.3 14.7z"/><path fill="#4CAF50" d="M24 44c5.2 0 9.9-2 13.4-5.2l-6.2-5.2C29.2 35.1 26.7 36 24 36c-5.2 0-9.6-3.3-11.3-7.9l-6.5 5C9.5 39.6 16.2 44 24 44z"/><path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.8 2.2-2.2 4.2-4.1 5.6l6.2 5.2C37 39.2 44 34 44 24c0-1.3-.1-2.4-.4-3.5z"/></svg>Continue with Google</button>
@@ -434,6 +498,7 @@ button.tc:hover { background: var(--accent); color: var(--accent-ink); }
     <div class="spacer"></div>
     <button class="btn ghost" id="peopleBtn" hidden>People</button>
     <button class="btn primary" id="newBtn" hidden>+ New task</button>
+    <button class="btn ghost help" id="helpBtn" type="button" title="How it works" aria-label="How it works">?</button>
     <div class="acct"><div class="who"><span id="meName"></span><small id="meMail"></small></div><span class="role-chip" id="meRole"></span><button class="btn sm" id="outBtn">Sign out</button></div>
   </div>
   <div class="banner wrap" id="banner"></div>
@@ -503,6 +568,13 @@ button.tc:hover { background: var(--accent); color: var(--accent-ink); }
     </aside>
   </div>
 </section>
+
+<div class="modal" id="guide" role="dialog" aria-modal="true" aria-labelledby="gTitle">
+  <div class="modal-box guide-box">
+    <div id="gStep"></div>
+    <div class="g-foot"><div class="g-dots" id="gDots"></div><button class="btn ghost" id="gSkip" type="button">Skip</button><button class="btn" id="gBack" type="button">Back</button><button class="btn primary" id="gNext" type="button">Next</button></div>
+  </div>
+</div>
 
 <div class="toast" id="toast" role="status"></div>
 
@@ -1014,7 +1086,7 @@ function exportBox(t, id) {
     <div class="f full"><label for="fVid">${vs.length ? `Link of the latest version (v${vs.length})` : "Exported video the client watches"}</label><div class="linkrow"><input id="fVid" data-k="videoUrl" value="${esc(t.videoUrl)}" placeholder="Unlisted YouTube or Google Drive video link" inputmode="url">${url ? `<a class="btn" href="${esc(url)}" target="_blank" rel="noopener">Open ↗</a>` : ""}</div>
       ${v && v.kind === "notvideo" ? `<div class="warn">This is a Google Doc or Sheet, not a video. <button class="linkbtn" id="mvDoc" type="button">Move it to the Google Doc field</button></div>`
         : url ? `<div class="exp-row"><button class="btn primary" id="openRv" type="button">▶ Watch video &amp; comments</button><span class="muted" style="font-size:12px">${esc(kind)}</span></div>`
-        : `<small class="muted" style="font-size:12px">Paste the export here when it's ready. For Drive, set sharing to “Anyone with the link”.</small>`}</div>
+        : `<small class="muted" style="font-size:12px">Leave this empty for now. The editor pastes the export here when the edit is ready, then presses “Send to client for review”. For Drive, set sharing to “Anyone with the link”.</small>`}</div>
     <div class="f full"><label for="fFin">Final file for the client to download</label><div class="linkrow"><input id="fFin" placeholder="${S.dl.has(id) ? "https://drive.google.com/… (the full-quality file)" : "Loading…"}" inputmode="url" value="${esc(dl.url || "")}">${safeUrl(dl.url) ? `<a class="btn" href="${esc(safeUrl(dl.url))}" target="_blank" rel="noopener">Open ↗</a>` : ""}</div>
       <small class="muted" style="font-size:12px">The client only gets this link after the video is approved.</small></div>
   </div>`;
@@ -1087,11 +1159,11 @@ function drawTask() {
       <div class="f"><label for="fPr">Priority</label><select id="fPr">${Object.entries(PRIORITY).map(([k, l]) => `<option value="${k}" ${k === (t.priority || "normal") ? "selected" : ""}>${l}</option>`).join("")}</select></div>
       <div class="f full"><label for="fBr">Brief for the editor</label><textarea id="fBr" placeholder="Style, length, music, captions, reference videos…">${esc(t.brief)}</textarea></div>
     </div>
-    <div class="sec exp"><h4>Exported video</h4>${exportBox(t, id)}</div>
-    <div class="sec"><h4>Files &amp; links <span class="muted" style="font:500 12px var(--body)">· team only</span></h4><div class="fields">
-      ${[["fRaw", "rawUrl", "Raw footage / project files", "https://drive.google.com/drive/folders/…"], ["fDoc", "docUrl", "Google Doc", "https://docs.google.com/document/…"], ["fSh", "sheetUrl", "Google Sheet", "https://docs.google.com/spreadsheets/…"]].map(([fid, k, l, ph]) => `
+    <div class="sec"><h4>Footage &amp; files <span class="muted" style="font:500 12px var(--body)">· team only, the client never sees these</span></h4><div class="fields">
+      ${[["fRaw", "rawUrl", "Raw footage for the editor", "Google Drive folder with the clips, music, logo…"], ["fDoc", "docUrl", "Google Doc", "https://docs.google.com/document/…"], ["fSh", "sheetUrl", "Google Sheet", "https://docs.google.com/spreadsheets/…"]].map(([fid, k, l, ph]) => `
       <div class="f full"><label for="${fid}">${l}</label><div class="linkrow"><input id="${fid}" data-k="${k}" value="${esc(t[k])}" placeholder="${ph}" inputmode="url">${safeUrl(t[k]) ? `<a class="btn" href="${esc(safeUrl(t[k]))}" target="_blank" rel="noopener">Open ↗</a>` : ""}</div></div>`).join("")}
     </div></div>
+    <div class="sec exp"><h4>Exported video ${safeUrl(t.videoUrl) ? "" : `<span class="muted" style="font:500 12px var(--body)">· optional for now</span>`}</h4>${exportBox(t, id)}</div>
     <div class="sec"><h4>Message for the client</h4><div class="f"><textarea id="fCn" placeholder="Shown to the client next to the video, e.g. Here's the first cut. Music is a placeholder.">${esc(t.clientNote)}</textarea></div></div>
     <div class="sec" style="display:flex;flex-wrap:wrap;gap:8px;justify-content:space-between">
       <button class="btn primary" id="toReview" ${t.status === "review" ? "disabled" : ""}>Send to client for review</button>
@@ -1141,7 +1213,7 @@ function drawTask() {
       flushTask(); const cur = S.merged.get(id);
       if (!cur.client) { toast("Pick a client first."); return; }
       const pv = parseVideo(cur.videoUrl);
-      if (!pv) { toast("Add the exported video link first."); $("#fVid").focus(); return; }
+      if (!pv) { toast("Paste the exported video link in the Exported video box first."); $("#fVid").focus(); return; }
       if (pv.kind === "notvideo") { toast("That link is a document, not a video."); $("#fVid").focus(); return; }
       setStatus(id, "review", "", "team");
     });
@@ -1266,6 +1338,7 @@ $("#tabs").addEventListener("click", (e) => { const b = e.target.closest("[data-
 $("#newBtn").addEventListener("click", newTask);
 function render() {
   if (!me) return;
+  if (loaded) { hideSplash(); maybeGuide(); }
   const client = isClient();
   $("#tabs").hidden = client; $("#newBtn").hidden = !isAdmin(); $("#peopleBtn").hidden = !isAdmin();
   $("#wlTab").hidden = !wlAccess(); $("#wlTab").textContent = wlAccess() === "count" ? "My videos" : "Work log"; if (view === "worklog" && !wlAccess()) view = "board";
@@ -1308,6 +1381,7 @@ const authEl = $("#auth");
 function showAuth(which, info = {}) {
   authEl.hidden = false; $("#top").hidden = true; $("#main").hidden = true;
   ["aLoading", "aSignin", "aVerify", "aNo"].forEach((id) => { $("#" + id).hidden = id !== which; });
+  if (which !== "aLoading") hideSplash();
   if (which === "aVerify") $("#vEmail").textContent = info.email || "";
   if (which === "aNo") { $("#nEmail").textContent = info.email || "This account"; $("#nErr").textContent = info.error || ""; }
 }
@@ -1375,18 +1449,19 @@ async function ensureProfile(u) {
   await ref.set(p); return p;
 }
 async function handleUser(u) {
-  closeReview(); dlWatching.clear(); got.clear(); clearTimeout(wlTimer);
+  closeReview(); dlWatching.clear(); got.clear(); clearTimeout(wlTimer); guideAsked = false; $("#guide").classList.remove("on");
   Store.stop(); me = null; loaded = false; Object.keys(S).forEach((k) => (S[k] = new Map())); S.wlSettings = S.wlRates = null;
   if (!u) { setMode(false); showAuth("aSignin"); return; }
   const pwd = (u.providerData || []).some((p) => p.providerId === "password");
   if (pwd && !u.emailVerified) { showAuth("aVerify", { email: u.email }); return; }
-  showAuth("aLoading");
+  showAuth("aLoading"); splashMsg("Signing you in…");
   let p = null, err = "";
   try { p = await ensureProfile(u); } catch (e) { console.warn(e); err = e && e.code === "permission-denied" ? "" : "Couldn't reach the workspace. Check your connection and try again."; }
   if (!p) { showAuth("aNo", { email: u.email, error: err }); return; }
   start(u, p);
 }
 function start(u, p) {
+  splashMsg("Loading your videos…");
   me = { uid: u.uid, ...p };
   authEl.hidden = true; $("#top").hidden = false; $("#main").hidden = false; setBanner("");
   $("#meName").textContent = me.name || ""; $("#meMail").textContent = me.email || ""; $("#meRole").textContent = ROLE_LABEL[me.role] || me.role;
@@ -1487,8 +1562,26 @@ function makePlayer(stage, v, team) {
   if (v.kind === "notvideo") return msg("This link isn't a video", team ? "It's a Google Doc or Sheet. Upload the video to Google Drive, set sharing to “Anyone with the link”, then paste that link in the task." : "The team linked a document here by mistake. Let them know.", v.url);
   if (v.kind === "link") return msg("This video opens on another site", "It can't play inside the workspace. Open it, then come back here to leave your comments.", v.url);
   if (v.kind === "drive") {
-    stage.innerHTML = `<iframe src="https://drive.google.com/file/d/${encodeURIComponent(v.id)}/preview" allow="autoplay; fullscreen" allowfullscreen title="Video"></iframe>`;
-    return none;
+    // First try playing the Drive file directly (gives exact times and jumping); if Drive won't stream it, use Drive's own player.
+    let dead = false, tm = 0;
+    const api = { ...none, mode: "trying", destroy() { dead = true; clearTimeout(tm); const el = $("video", stage); if (el) { el.pause(); el.removeAttribute("src"); el.load(); } stage.innerHTML = ""; } };
+    const useIframe = () => {
+      if (dead || api.mode === "iframe") return; clearTimeout(tm);
+      const el = $("video", stage); if (el) { el.removeAttribute("src"); el.load(); }
+      stage.innerHTML = `<iframe src="https://drive.google.com/file/d/${encodeURIComponent(v.id)}/preview" allow="autoplay; fullscreen" allowfullscreen title="Video"></iframe>`;
+      Object.assign(api, { mode: "iframe", canTime: false, time: () => null, seek() {}, pause() {}, play() {} }); rvPlayerReady();
+    };
+    stage.innerHTML = `<video controls playsinline preload="metadata"></video><div class="rv-wait">Loading video…</div>`;
+    const el = $("video", stage);
+    el.addEventListener("loadedmetadata", () => {
+      if (dead || api.mode === "iframe") return; clearTimeout(tm); $(".rv-wait", stage)?.remove();
+      Object.assign(api, { mode: "direct", canTime: true, time: () => el.currentTime || 0, seek: (t) => { el.currentTime = t; el.play().catch(() => {}); }, pause: () => el.pause(), play: () => el.play().catch(() => {}) });
+      rvPlayerReady();
+    }, { once: true });
+    el.addEventListener("error", useIframe, { once: true });
+    tm = setTimeout(useIframe, 9000);
+    el.src = `https://drive.google.com/uc?export=download&id=${encodeURIComponent(v.id)}`;
+    return api;
   }
   if (v.kind === "file") {
     stage.innerHTML = `<video controls playsinline preload="metadata"></video>`;
@@ -1512,7 +1605,7 @@ function makePlayer(stage, v, team) {
   }).catch(() => {
     if (dead) return;
     stage.innerHTML = `<iframe src="https://www.youtube-nocookie.com/embed/${encodeURIComponent(v.id)}?rel=0" allow="autoplay; fullscreen; encrypted-media" allowfullscreen title="Video"></iframe>`;
-    api.canTime = false; rvSyncComposer();
+    api.canTime = false; rvPlayerReady();
   });
   return api;
 }
@@ -1577,10 +1670,14 @@ function rvHead() {
   if (!canDecide) { rv.pick = ""; $$(".decide .btn", d).forEach((x) => x.classList.remove("pick")); $("#rvDecNote").hidden = $("#rvDecSend").hidden = true; }
   rvLoadPlayer();
 }
+function rvPlayerReady() { rvSyncComposer(); rvRender(); if (rv.cmp) rvCompare(rv.cmp); }
 function rvSyncComposer() {
   const timed = !!(rv.player && rv.player.canTime);
   $("#rvChip").hidden = !timed; $("#rvTime").hidden = timed;
-  $("#rvHint").textContent = timed ? "Pause on the moment, then type. Click a time to jump there." : (parseVideo(rv.url)?.kind === "drive" ? "Type the time from the video, e.g. 0:12 (optional). Video not showing? The Drive file must be shared as “Anyone with the link”." : "Add the time from the video if you can, e.g. 0:12.");
+  const isDrive = parseVideo(rv.url)?.kind === "drive";
+  $("#rvHint").textContent = timed ? "Pause on the moment, then type. Click a comment to jump back to its time."
+    : isDrive ? (rv.player && rv.player.mode === "trying" ? "Loading the video…" : "This Drive video plays in Drive's own player, so type the time, e.g. 0:12 (optional). Not showing? The file must be shared as “Anyone with the link”.")
+    : "Add the time from the video if you can, e.g. 0:12.";
   rvChip();
 }
 function rvChip() { const c = $("#rvChip"); c.textContent = rv.stampOn ? "⏱ " + fmtTC(rv.stamp) : "⏱ No time"; c.classList.toggle("off", !rv.stampOn); c.setAttribute("aria-pressed", String(rv.stampOn)); }
@@ -1599,9 +1696,10 @@ function rvRender() {
   const focused = document.activeElement && document.activeElement.id === "rvReply";
   if (focused) rv.replyText = document.activeElement.value;
   const one = (c, isReply) => {
-    const mine = c.uid === me.uid, old = !cur(c) && !isReply, canSeek = rv.player && rv.player.canTime && !old;
+    const mine = c.uid === me.uid, old = !cur(c) && !isReply, canSeek = !isReply;
     const tc = c.t == null ? "" : canSeek ? `<button class="tc" data-seek="${Number(c.t)}" type="button" title="Jump to ${fmtTC(c.t)}">${fmtTC(c.t)}</button>` : `<span class="tc">${fmtTC(c.t)}</span>`;
-    return `<div class="cm${c.done ? " done" : ""}${isReply ? " reply" : ""}" data-id="${esc(c.id)}">
+    const jump = c.t != null && !isReply;
+    return `<div class="cm${c.done ? " done" : ""}${isReply ? " reply" : ""}${jump ? " jump" : ""}${rv.active === c.id ? " active" : ""}" data-id="${esc(c.id)}"${jump ? ` data-t="${Number(c.t)}" data-v="${c.v || 1}" title="Go to ${fmtTC(c.t)}"` : ""}>
       <div class="cm-h"><span class="av">${esc(initials(c.name))}</span><b>${esc(c.name || "Someone")}</b>${c.by === "client" ? `<span class="tag">Client</span>` : ""}${old ? `<span class="tag">v${c.v || 1}</span>` : ""}<span class="cm-at">${esc(fmtTime(c.at))}</span></div>
       <div class="cm-b">${tc}<span class="cm-text">${esc(c.text)}</span></div>
       <div class="cm-a">${isReply ? "" : `<button type="button" data-reply>Reply</button><button type="button" data-done>${c.done ? "↺ Reopen" : "✓ Done"}</button>`}${mine || isAdmin() ? `<button type="button" data-del>Delete</button>` : ""}${c.done && !isReply ? `<span class="muted">Done${c.doneBy ? " by " + esc(c.doneBy) : ""}</span>` : ""}</div>
@@ -1638,7 +1736,9 @@ $("#rvComp").addEventListener("submit", (e) => {
   if (rv.player && rv.player.canTime) { rv.stampOn = true; rv.stamp = rv.player.time(); rvChip(); }
 });
 $("#rvList").addEventListener("click", (e) => {
-  const seek = e.target.closest("[data-seek]"); if (seek) { rv.player && rv.player.seek(Number(seek.dataset.seek)); return; }
+  const seek = e.target.closest("[data-seek]"); if (seek) { rvJump(seek.closest(".cm"), Number(seek.dataset.seek)); return; }
+  const card = e.target.closest(".cm[data-t]");
+  if (card && !e.target.closest("button, a, textarea, input")) { rvJump(card, Number(card.dataset.t)); return; }
   const cm = e.target.closest(".cm"); if (!cm) return;
   const top = e.target.closest(".cm:not(.reply)") || cm, id = cm.dataset.id, c = rv.comments.get(id);
   if (e.target.closest("[data-reply]")) { rv.replyTo = top.dataset.id; rv.replyText = ""; rvRender(); $("#rvReply")?.focus(); return; }
@@ -1715,6 +1815,21 @@ $("#rvSync").addEventListener("click", (e) => {
   if (k === "pause") { a.pause(); c.pause(); }
   if (k === "match") { c.seek(a.time()); a.pause(); setTimeout(() => c.pause(), 50); }
 });
+
+/* Click a comment: go to its version and time in the video. */
+function rvJump(card, t) {
+  if (!card || !isFinite(t)) return;
+  const v = Number(card.dataset.v || rv.view);
+  rv.active = card.dataset.id; $$("#rvList .cm.active").forEach((x) => x.classList.remove("active")); card.classList.add("active");
+  if (v !== rv.view && versionsOf(S.merged.get(rv.id) || {}).some((x) => x.v === v && parseVideo(x.url))) {      // a comment on another version: switch to that version first
+    rv.view = v; rvHead(); rvRender(); if (rv.cmp) rvCompare(rv.cmp);
+    const go = () => (rv.player && rv.player.canTime ? rv.player.seek(t) : rv.player && rv.player.mode === "trying" ? setTimeout(go, 300) : toast(`Go to ${fmtTC(t)} in the video.`));
+    setTimeout(go, 400); return;
+  }
+  if (rv.player && rv.player.canTime) { rv.player.seek(t); return; }
+  if (rv.player && rv.player.mode === "trying") { toast("The video is still loading…"); return; }
+  toast(`This player can't jump by itself. Go to ${fmtTC(t)} in the video.`);
+}
 
 /* ---------------- editor work log (pay sheet) ----------------
    worklog/{taskId}: one row per assigned task, kept up to date from the tasks by an admin's browser.
@@ -1922,6 +2037,77 @@ function renderMyCount(m) {
     <p class="muted" style="font-size:12.5px;margin-top:10px">Each video counts once, however many versions it took. A video counts from the day it was first sent to the client.</p>`;
   $("#wlMonth").addEventListener("change", (e) => { wlui.month = e.target.value; saveWlui(); render(); });
 }
+
+/* ---------------- loading screen ---------------- */
+const bootAt = performance.now();
+function splashMsg(t) { const m = $("#spMsg"); if (m) m.textContent = t; }
+function hideSplash() {
+  const s = $("#splash"); if (!s || s.dataset.going) return;
+  s.dataset.going = "1";
+  const wait = Math.max(0, 1300 - (performance.now() - bootAt));     // long enough to see the animation once, never longer
+  setTimeout(() => { s.classList.add("out"); setTimeout(() => { s.remove(); maybeGuide(); }, 550); }, wait);
+}
+setTimeout(hideSplash, 15000);   // never get stuck behind it
+
+/* ---------------- first-time guide ---------------- */
+const chip = (t, k) => `<span class="g-chip${k ? " " + k : ""}">${t}</span>`;
+const GUIDES = {
+  admin: [
+    { t: "Welcome to your workspace", d: "Everything for a video lives in one place: the task, the raw footage, the edit, the client's comments, the approval and the editor's pay.", ui: chip("Board") + chip("Tasks") + chip("Docs") + chip("Sheets") + chip("Work log") },
+    { t: "Invite your team and clients", d: "Open <b>People</b>. Type their name and the exact email they'll sign in with, pick <b>Editor</b> or <b>Client</b>, and press Send invite. Then send them the site link with <b>Copy link</b>.", ui: chip("People") + "→" + chip("Send invite", "p") + chip("Copy link") },
+    { t: "Create a task", d: "Press <b>+ New task</b>. Pick the editor, the client and the due date, write the brief and paste the raw footage folder. Leave the exported video empty; the editor adds it.", ui: chip("+ New task", "p") + chip("Raw footage for the editor") },
+    { t: "The editor delivers", d: "When the edit is ready, the editor pastes the export link (an Unlisted YouTube video, or a Google Drive file shared with “Anyone with the link”) and presses <b>Send to client for review</b>.", ui: chip("Exported video") + "→" + chip("Send to client for review", "p") },
+    { t: "The client reviews", d: "The client pauses on a moment and types what to change; the time is saved with the comment. Click any comment to jump to that moment. They approve, ask for a revision or reject. For a new cut, use <b>+ Add new version</b>.", ui: chip("0:12", "tc") + chip("Make the logo bigger") + chip("✓ Approve") + chip("↻ Revision") },
+    { t: "Track work and pay", d: "<b>Work log</b> counts each editor's videos, how many were on time, and what you owe. Set rates under <b>Rates</b> and tick <b>Paid</b> when you pay. Editors can't see it unless you allow it in People.", ui: chip("Work log") + chip("Rates") + chip("☑ Paid") },
+  ],
+  editor: [
+    { t: "Welcome to FW Studio", d: "The videos assigned to you show under <b>My tasks</b>, sorted by stage: To do, Editing, Client review, Revision, Approved.", ui: chip("My tasks") + chip("To do") + chip("Editing") + chip("Client review") },
+    { t: "Start a task", d: "Open a task to read the brief and the due date. The raw footage folder is under <b>Footage &amp; files</b>. Set the status to <b>Editing</b> when you start.", ui: chip("Raw footage for the editor ↗") + chip("Editing") },
+    { t: "Deliver your edit", d: "Upload the export to YouTube as <b>Unlisted</b>, or to Google Drive shared with “Anyone with the link”. Paste the link in <b>Exported video</b> and press <b>Send to client for review</b>.", ui: chip("Exported video") + "→" + chip("Send to client for review", "p") },
+    { t: "Fix revisions", d: "The client's comments have times. Click one to jump to that moment. Tick <b>✓ Done</b> as you fix each one, then deliver the new cut with <b>+ Add new version</b>.", ui: chip("0:12", "tc") + chip("✓ Done") + chip("+ Add new version", "p") },
+  ],
+  client: [
+    { t: "Welcome", d: "This is where you review your videos from FW Studio. Nothing to install; just sign in with the same email each time.", ui: "" },
+    { t: "Watch and comment", d: "Press <b>▶ Watch &amp; comment</b>. Pause where you want a change and type it. The time in the video is saved with your comment, so the editor knows exactly where.", ui: chip("▶ Watch & comment", "p") + chip("0:12", "tc") + chip("Make the logo bigger") },
+    { t: "Approve or ask for changes", d: "Happy with it? <b>Approve</b>. Want changes? <b>Revision</b>; your comments go with it. When a new version comes, you can compare it with the old one.", ui: chip("✓ Approve") + chip("↻ Revision") + chip("⇄ Compare versions") },
+    { t: "Get your video", d: "After you approve, a <b>Download final video</b> button appears on the video.", ui: chip("⬇ Download final video", "p") },
+  ],
+};
+let gi = 0, gSteps = [];
+function openGuide() {
+  if (!me) return;
+  gSteps = GUIDES[me.role] || GUIDES.editor; gi = 0; drawGuide();
+  $("#guide").classList.add("on"); setTimeout(() => $("#gNext").focus(), 0);
+}
+function closeGuide() {
+  $("#guide").classList.remove("on");
+  try { localStorage.setItem("fw-guide-" + me.uid + "-" + me.role, "1"); } catch (e) {}
+}
+function drawGuide() {
+  const s = gSteps[gi], last = gi === gSteps.length - 1;
+  $("#gStep").innerHTML = `<div class="g-num">Step ${gi + 1} of ${gSteps.length}</div><h2 id="gTitle">${s.t}</h2><p>${s.d}</p>${s.ui ? `<div class="g-ui" aria-hidden="true">${s.ui}</div>` : ""}`;
+  $("#gDots").innerHTML = gSteps.map((_, i) => `<i class="${i === gi ? "on" : ""}"></i>`).join("");
+  $("#gBack").hidden = gi === 0; $("#gSkip").hidden = last;
+  $("#gNext").textContent = last ? "Got it" : "Next";
+}
+let guideAsked = false;
+function maybeGuide() {
+  if (guideAsked || !me || !loaded || $("#splash")) return;
+  guideAsked = true;
+  let seen = false; try { seen = localStorage.getItem("fw-guide-" + me.uid + "-" + me.role) === "1"; } catch (e) {}
+  if (!seen) setTimeout(openGuide, 300);
+}
+$("#gNext").addEventListener("click", () => { if (gi < gSteps.length - 1) { gi++; drawGuide(); } else closeGuide(); });
+$("#gBack").addEventListener("click", () => { if (gi > 0) { gi--; drawGuide(); } });
+$("#gSkip").addEventListener("click", closeGuide);
+$("#helpBtn").addEventListener("click", openGuide);
+$("#guide").addEventListener("click", (e) => { if (e.target.id === "guide") closeGuide(); });
+addEventListener("keydown", (e) => {
+  if (!$("#guide").classList.contains("on")) return;
+  if (e.key === "Escape") closeGuide();
+  if (e.key === "ArrowRight") $("#gNext").click();
+  if (e.key === "ArrowLeft" && gi > 0) $("#gBack").click();
+});
 
 </script>
 </body>
