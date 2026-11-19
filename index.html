@@ -278,6 +278,12 @@ body.rv-lock { overflow: hidden; }
 .rv-tt h2 { margin: 0; font: 700 16px/1.2 var(--display); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .rv-meta { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 12.5px; }
 .rv-main { display: grid; grid-template-columns: minmax(0, 1fr) 380px; min-height: 0; }
+.rv-stages { display: grid; grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); min-height: 0; background: #000; }
+.rv-stages.cmp { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); grid-template-rows: minmax(0, 1fr) auto; gap: 2px; }
+.rv-pane { display: grid; grid-template-rows: auto minmax(0, 1fr); min-height: 0; min-width: 0; }
+.rv-plabel { display: flex; align-items: center; gap: 8px; padding: 6px 10px; background: var(--panel); border-bottom: 1px solid var(--line); font-size: 12px; color: var(--muted); }
+.rv-plabel select, .rv-sel { background: var(--panel-2); border: 1px solid var(--line-2); border-radius: 7px; padding: 5px 8px; color: var(--fg); font-size: 12.5px; max-width: 220px; }
+.rv-sync { grid-column: 1 / -1; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 8px 12px; background: var(--panel); border-top: 1px solid var(--line); font-size: 12.5px; }
 .rv-stage { position: relative; background: #000; min-height: 0; }
 .rv-stage > iframe, .rv-stage > video, .rv-stage > div:not(.rv-msg) { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; object-fit: contain; background: #000; }
 .rv-stage iframe { border: 0; }
@@ -286,6 +292,36 @@ body.rv-lock { overflow: hidden; }
 .rv-msg p { margin: 0; max-width: 44ch; color: #b5a89f; }
 .rv-side { display: flex; flex-direction: column; min-height: 0; border-left: 1px solid var(--line); background: var(--panel); }
 .rv-note { margin: 12px 14px 0; padding: 10px 12px; border-radius: 8px; background: var(--panel-2); border-left: 3px solid var(--accent); font-size: 13px; white-space: pre-wrap; }
+/* ---- work log ---- */
+.wl-tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 8px; margin-bottom: 14px; }
+.wl-tiles > div { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; display: grid; gap: 4px; min-width: 0; }
+.wl-tiles span { font: 600 11px/1 var(--body); letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+.wl-tiles b { font: 700 19px/1.15 var(--display); font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.ok { color: var(--st-approved); } .bad { color: var(--st-rejected); }
+table.list.wl { min-width: 1240px; }
+table.list.wl th { cursor: default; }
+table.list.wl tbody tr { cursor: default; }
+table.list.wl td { padding: 7px 8px; font-size: 13px; white-space: nowrap; }
+table.list.wl td.wl-title { white-space: normal; min-width: 160px; }
+table.list.wl tr.is-paid td { background: color-mix(in srgb, var(--st-approved) 5%, transparent); }
+.wl-in, .wl-date input { background: var(--panel-2); border: 1px solid var(--line-2); border-radius: 6px; padding: 5px 7px; color: var(--fg); font: inherit; font-size: 12.5px; max-width: 100%; }
+.wl-in.num { font-family: var(--mono); }
+.wl-date { display: flex; align-items: center; gap: 3px; }
+.wl-date.ovr input { border-color: var(--accent); }
+.wl-date button { background: none; border: 0; color: var(--accent-2); font-size: 14px; padding: 2px; }
+.wl-paid { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; }
+.wl-sub td { background: var(--panel-2); font-size: 12.5px !important; white-space: normal !important; }
+.wl-sub-money { margin-left: 12px; white-space: nowrap; }
+table.list.wl tfoot td { background: var(--panel-3); border-top: 1px solid var(--line-2); font-size: 13px; }
+.wl-rates { display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: center; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; margin-bottom: 14px; font-size: 13px; }
+.wl-rates > div { flex: 1 1 100%; } .wl-rates p { margin: 2px 0 0; font-size: 12.5px; }
+.wl-rates input { background: var(--panel-2); border: 1px solid var(--line-2); border-radius: 6px; padding: 5px 7px; color: var(--fg); margin-left: 4px; }
+.prow select[data-wl] { max-width: 170px; }
+.prow { flex-wrap: wrap; }
+.prow > span:not(.av):not(.role-chip):not(.muted) { flex: 1 1 140px; }
+.tabs { overflow-x: auto; max-width: 100%; scrollbar-width: none; }
+.tabs button { white-space: nowrap; }
+@media (max-width: 720px) { .bar select { flex: 1 1 140px; min-width: 0; } }
 .sec.exp { background: var(--panel); border: 1px solid var(--line-2); border-radius: 10px; padding: 14px; }
 .sec.exp h4 { color: var(--accent-2); }
 .exp-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 6px; }
@@ -326,6 +362,10 @@ button.tc:hover { background: var(--accent); color: var(--accent-ink); }
 .rv-comp-f span { font-size: 11.5px; }
 @media (max-width: 860px) {
   .rv-main { grid-template-columns: minmax(0, 1fr); grid-template-rows: 58vh auto; overflow: auto; overscroll-behavior: contain; }
+  .rv-main.cmp { grid-template-rows: 96vh auto; }
+  .rv-stages.cmp { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1fr) minmax(0, 1fr) auto; }
+  .rv-top { flex-wrap: wrap; }
+  .rv-top .spacer { display: none; }
   .rv-side { border-left: 0; border-top: 1px solid var(--line); }
   .rv-list { flex: none; overflow: visible; min-height: 90px; }
   .rv-top { padding: 8px 12px; }
@@ -381,6 +421,7 @@ button.tc:hover { background: var(--accent); color: var(--accent-ink); }
       <button role="tab" data-v="tasks" aria-selected="false">Tasks</button>
       <button role="tab" data-v="docs" aria-selected="false">Docs</button>
       <button role="tab" data-v="sheets" aria-selected="false">Sheets</button>
+      <button role="tab" data-v="worklog" aria-selected="false" id="wlTab" hidden>Work log</button>
     </nav>
     <div class="spacer"></div>
     <button class="btn ghost" id="peopleBtn" hidden>People</button>
@@ -425,10 +466,16 @@ button.tc:hover { background: var(--accent); color: var(--accent-ink); }
     <button class="btn ghost" id="rvBack" type="button">← Back</button>
     <div class="rv-tt"><h2 id="rvTitle"></h2><div class="rv-meta" id="rvMeta"></div></div>
     <div class="spacer"></div>
+    <select id="rvVer" class="rv-sel" aria-label="Version" hidden></select>
+    <button class="btn sm" id="rvCmp" type="button" hidden>⇄ Compare versions</button>
     <a class="btn sm" id="rvOpen" target="_blank" rel="noopener" hidden>Open original ↗</a>
   </div>
   <div class="rv-main">
-    <div class="rv-stage" id="rvStage"></div>
+    <div class="rv-stages" id="rvStages">
+      <div class="rv-pane"><div class="rv-plabel" id="rvLabA" hidden></div><div class="rv-stage" id="rvStage"></div></div>
+      <div class="rv-pane" id="rvPaneB" hidden><div class="rv-plabel"><span>Right</span><select id="rvVerB" aria-label="Right video version"></select></div><div class="rv-stage" id="rvStageB"></div></div>
+      <div class="rv-sync" id="rvSync" hidden><button class="btn sm" data-sync="play" type="button">▶ Play both</button><button class="btn sm" data-sync="pause" type="button">⏸ Pause both</button><button class="btn sm" data-sync="match" type="button">⇄ Match right to left time</button><span class="muted" id="rvSyncNote"></span></div>
+    </div>
     <aside class="rv-side" aria-label="Comments">
       <div class="rv-note" id="rvNote" hidden></div>
       <div class="rv-dl" id="rvDl" hidden></div>
@@ -731,7 +778,7 @@ const STATUSES = [
 const ST = Object.fromEntries(STATUSES.map((s) => [s.id, s]));
 const PRIORITY = { high: "High", normal: "Normal", low: "Low" };
 const ROLE_LABEL = { admin: "Admin", editor: "Editor", client: "Client" };
-const TASK_FIELDS = ["title", "assignee", "client", "due", "type", "priority", "brief", "notes", "sheet", "videoUrl", "rawUrl", "docUrl", "sheetUrl", "clientNote", "order", "createdAt", "updatedAt"];
+const TASK_FIELDS = ["title", "assignee", "client", "due", "type", "priority", "brief", "notes", "sheet", "assignedAt", "videoUrl", "rawUrl", "docUrl", "sheetUrl", "clientNote", "order", "createdAt", "updatedAt"];
 const MIRROR_FIELDS = ["title", "assignee", "client", "due", "type", "videoUrl", "clientNote"];   // what the client is allowed to see
 const pick = (o, keys) => Object.fromEntries(keys.filter((k) => o[k] !== undefined).map((k) => [k, o[k]]));
 
@@ -776,7 +823,8 @@ const Store = (() => {
 })();
 
 /* ---------------- state ---------------- */
-const S = { tasks: new Map(), reviews: new Map(), users: new Map(), invites: new Map(), clients: new Map(), docs: new Map(), sheets: new Map(), merged: new Map(), dl: new Map() };
+const S = { tasks: new Map(), reviews: new Map(), users: new Map(), invites: new Map(), clients: new Map(), docs: new Map(), sheets: new Map(), merged: new Map(), dl: new Map(), worklog: new Map(), wlSettings: null, wlRates: null };
+const got = new Set();          // which live lists have arrived at least once
 let me = null, view = "board", loaded = false;
 const ui = { q: "", fAssignee: "", fClient: "", sort: { key: "due", dir: 1 }, openKind: null, openId: null, subtab: "overview" };
 try { const v = localStorage.getItem("fw-ws-view"); if (v) view = v; } catch (e) {}
@@ -927,7 +975,9 @@ function setStatus(id, status, note, by) {
   const r = S.reviews.get(id); if (!r || !ST[status]) return;
   if ((r.status || "todo") === status && !note) return;
   if (by === "client" && r.status !== "review") return;
-  const history = [...(r.history || []), { state: status, note: note || "", by: by === "client" ? "client" : "team", uid: me.uid, at: now() }];
+  const entry = { state: status, note: note || "", by: by === "client" ? "client" : "team", uid: me.uid, at: now() };
+  if (status === "review" && by !== "client") entry.url = (S.tasks.get(id) || r).videoUrl || "";      // remember which export this version was
+  const history = [...(r.history || []), entry];
   const patch = { status, history, updatedAt: now() };
   S.reviews.set(id, { ...r, ...patch }); merge();
   Store.update("reviews", id, patch);
@@ -973,7 +1023,7 @@ function flushTask() {
 function newTask() {
   if (!isAdmin()) return;
   const id = uid();
-  const t = { title: "", assignee: ui.fAssignee || "", client: ui.fClient || "", due: "", type: "Reel", priority: "normal", brief: "", notes: "", sheet: { cells: {}, rows: 12, cols: 6 }, videoUrl: "", rawUrl: "", docUrl: "", sheetUrl: "", clientNote: "", order: Date.now(), createdAt: now(), updatedAt: now() };
+  const t = { title: "", assignee: ui.fAssignee || "", client: ui.fClient || "", due: "", type: "Reel", priority: "normal", brief: "", notes: "", sheet: { cells: {}, rows: 12, cols: 6 }, assignedAt: ui.fAssignee ? now() : "", videoUrl: "", rawUrl: "", docUrl: "", sheetUrl: "", clientNote: "", order: Date.now(), createdAt: now(), updatedAt: now() };
   const r = { ...pick(t, MIRROR_FIELDS), status: "todo", history: [], updatedAt: now() };
   S.tasks.set(id, t); S.reviews.set(id, r); merge();
   Store.set("tasks", id, t); Store.set("reviews", id, r);
@@ -1028,7 +1078,7 @@ function drawTask() {
       toast(url ? "Download link saved" : "Download link removed"); setTimeout(drawTask, 30);
     });
     if (admin) {
-      $("#fAs").addEventListener("change", (e) => patchTask({ assignee: e.target.value }, true));
+      $("#fAs").addEventListener("change", (e) => patchTask({ assignee: e.target.value, assignedAt: e.target.value ? now() : "" }, true));
       const addClient = () => {
         const name = $("#fClNew").value.trim(); if (!name) { $("#fClNew").focus(); return; }
         const existing = clients().find((c) => c.name.toLowerCase() === name.toLowerCase());
@@ -1111,6 +1161,7 @@ function drawPeople() {
   const members = [...S.users.entries()].map(([id, u]) => ({ id, ...u })).sort((a, b) => (a.role > b.role ? 1 : -1) || String(a.name).localeCompare(b.name));
   $("#memberList").innerHTML = members.map((u) => `<div class="prow" data-uid="${esc(u.id)}"><span class="av">${esc(initials(u.name || u.email))}</span><span>${esc(u.name || u.email)}<small>${esc(u.email)}${u.role === "client" ? " · " + esc(personName(u.clientId) || "client") : ""}</small></span>
     ${u.role === "client" ? `<span class="role-chip">Client</span>` : `<select data-role aria-label="Role" ${u.id === me.uid ? "disabled" : ""}><option value="editor" ${u.role === "editor" ? "selected" : ""}>Editor</option><option value="admin" ${u.role === "admin" ? "selected" : ""}>Admin</option></select>`}
+    ${u.role === "editor" ? `<select data-wl aria-label="Work log access for ${esc(u.name || u.email)}" title="Can this editor see the work log?"><option value="" ${!u.worklog ? "selected" : ""}>Work log: hidden</option><option value="count" ${u.worklog === "count" ? "selected" : ""}>Video count only</option><option value="own" ${u.worklog === "own" ? "selected" : ""}>Own videos + pay</option><option value="all" ${u.worklog === "all" ? "selected" : ""}>Everyone + pay</option></select>` : ""}
     ${u.id === me.uid ? `<span class="muted" style="font-size:12px">You</span>` : `<button class="btn sm ghost danger" data-rm>Remove</button>`}</div>`).join("") || `<span class="muted">Nobody yet.</span>`;
   const joined = new Set([...S.users.values()].map((u) => String(u.email || "").toLowerCase()));
   const waiting = [...S.invites.entries()].filter(([email]) => !joined.has(email));
@@ -1161,6 +1212,8 @@ $("#peopleModal").addEventListener("click", (e) => {
   }
 });
 $("#peopleModal").addEventListener("change", (e) => {
+  const wl = e.target.closest("[data-wl]");
+  if (wl) { const id = wl.closest(".prow").dataset.uid, u = S.users.get(id); if (!u) return; S.users.set(id, { ...u, worklog: wl.value }); Store.update("users", id, { worklog: wl.value }); toast({ "": "Work log hidden for this editor", count: "They can now see how many videos they made", own: "They can now see their own videos and pay", all: "They can now see everyone's work log" }[wl.value]); return; }
   const sel = e.target.closest("[data-role]"); if (!sel) return;
   const id = sel.closest(".prow").dataset.uid, u = S.users.get(id); if (!u) return;
   S.users.set(id, { ...u, role: sel.value }); Store.update("users", id, { role: sel.value }); toast("Role changed to " + ROLE_LABEL[sel.value]);
@@ -1177,6 +1230,8 @@ function render() {
   if (!me) return;
   const client = isClient();
   $("#tabs").hidden = client; $("#newBtn").hidden = !isAdmin(); $("#peopleBtn").hidden = !isAdmin();
+  $("#wlTab").hidden = !wlAccess(); $("#wlTab").textContent = wlAccess() === "count" ? "My videos" : "Work log"; if (view === "worklog" && !wlAccess()) view = "board";
+  wlSchedule();
   $$("#tabs [data-v]").forEach((b) => b.setAttribute("aria-selected", String(b.dataset.v === view)));
   $$("#tabs [data-v]").forEach((b) => { if (b.dataset.v === "board") b.textContent = isEditor() ? "My tasks" : "Board"; });
   const m = $("#main");
@@ -1184,6 +1239,7 @@ function render() {
   else if (view === "tasks") renderTasks(m);
   else if (view === "docs") renderLib(m, "docs");
   else if (view === "sheets") renderLib(m, "sheets");
+  else if (view === "worklog") renderWorklog(m);
   else renderBoard(m);
   if ($("#peopleModal").classList.contains("on")) drawPeople();
   if (rv.id) rvHead();
@@ -1191,7 +1247,7 @@ function render() {
 function onRows(col) {
   return (rows) => {
     const draft = col === "tasks" ? taskDraft : (col === fileKind ? fileDraft : null);
-    S[col] = new Map(rows);
+    S[col] = new Map(rows); got.add(col);
     if (draft && ui.openId) S[col].set(ui.openId, col === "tasks" ? draft : (({ __id, ...x }) => x)(draft));   // keep what you're typing
     if (col === "tasks" || col === "reviews") merge();
     loaded = true; render();
@@ -1281,8 +1337,8 @@ async function ensureProfile(u) {
   await ref.set(p); return p;
 }
 async function handleUser(u) {
-  closeReview(); dlWatching.clear();
-  Store.stop(); me = null; loaded = false; Object.keys(S).forEach((k) => (S[k] = new Map()));
+  closeReview(); dlWatching.clear(); got.clear(); clearTimeout(wlTimer);
+  Store.stop(); me = null; loaded = false; Object.keys(S).forEach((k) => (S[k] = new Map())); S.wlSettings = S.wlRates = null;
   if (!u) { setMode(false); showAuth("aSignin"); return; }
   const pwd = (u.providerData || []).some((p) => p.providerId === "password");
   if (pwd && !u.emailVerified) { showAuth("aVerify", { email: u.email }); return; }
@@ -1299,7 +1355,7 @@ function start(u, p) {
   const col = Store.col;
   Store.watchDoc(col("users").doc(u.uid), (d) => {          // removed or role changed while signed in
     if (!d) { Store.stop(); me = null; showAuth("aNo", { email: u.email, error: "Your access was removed." }); return; }
-    if (d.role !== me.role || d.clientId !== me.clientId) { handleUser(auth.currentUser); return; }
+    if (d.role !== me.role || d.clientId !== me.clientId || (d.worklog || "") !== (me.worklog || "")) { handleUser(auth.currentUser); return; }
     me = { uid: u.uid, ...d }; $("#meName").textContent = me.name || "";
   });
   if (me.role === "client") {
@@ -1316,6 +1372,13 @@ function start(u, p) {
       Store.watch("tasks", col("tasks").where("assignee", "==", u.uid), onRows("tasks"));
       Store.watch("reviews", col("reviews").where("assignee", "==", u.uid), onRows("reviews"));
     }
+    if (me.role === "admin") {
+      Store.watch("work log", col("worklog"), onRows("worklog"));
+      Store.watchDoc(col("settings").doc("rates"), (d) => { S.wlRates = d || { rates: {} }; got.add("rates"); render(); });
+    } else if (me.worklog === "all" || me.worklog === "own") {
+      Store.watch("work log", me.worklog === "all" ? col("worklog") : col("worklog").where("editor", "==", u.uid), onRows("worklog"));
+    }
+    if (me.role === "admin" || me.worklog === "all" || me.worklog === "own") Store.watchDoc(col("settings").doc("worklog"), (d) => { S.wlSettings = d; render(); });
     Store.watch("docs", col("docs"), onRows("docs"));
     Store.watch("sheets", col("sheets"), onRows("sheets"));
   }
@@ -1357,6 +1420,12 @@ function parseTC(str) {
   return str.split(":").reduce((a, p) => a * 60 + Number(p), 0);
 }
 const verOf = (r) => Math.max(1, ((r && r.history) || []).filter((h) => h.state === "review").length);
+// Every "send to client" stores the export link it sent, so older versions can be watched again.
+function versionsOf(t) {
+  const sent = ((t && t.history) || []).filter((h) => h.state === "review");
+  if (!sent.length) return [{ v: 1, url: (t && t.videoUrl) || "", at: "" }];
+  return sent.map((h, i) => ({ v: i + 1, url: i === sent.length - 1 ? (t.videoUrl || h.url || "") : (h.url || ""), at: h.at }));
+}
 
 let ytReady = null;
 function loadYT() {
@@ -1374,7 +1443,7 @@ function loadYT() {
 
 // Returns { canTime, time(), seek(t), pause(), destroy() }
 function makePlayer(stage, v, team) {
-  const none = { canTime: false, time: () => null, seek() {}, pause() {}, destroy() { stage.innerHTML = ""; } };
+  const none = { canTime: false, time: () => null, seek() {}, pause() {}, play() {}, destroy() { stage.innerHTML = ""; } };
   const msg = (title, body, link) => { stage.innerHTML = `<div class="rv-msg"><b>${title}</b><p>${body}</p>${link ? `<a class="btn" href="${esc(link)}" target="_blank" rel="noopener">Open the link ↗</a>` : ""}</div>`; return none; };
   if (!v) return msg("No video yet", team ? "Paste the video link in the task first." : "The team hasn't added the video yet.");
   if (v.kind === "notvideo") return msg("This link isn't a video", team ? "It's a Google Doc or Sheet. Upload the video to Google Drive, set sharing to “Anyone with the link”, then paste that link in the task." : "The team linked a document here by mistake. Let them know.", v.url);
@@ -1386,21 +1455,22 @@ function makePlayer(stage, v, team) {
   if (v.kind === "file") {
     stage.innerHTML = `<video controls playsinline preload="metadata"></video>`;
     const el = $("video", stage); el.src = v.src;
-    return { canTime: true, time: () => el.currentTime || 0, seek: (t) => { el.currentTime = t; el.play().catch(() => {}); }, pause: () => el.pause(), destroy() { el.pause(); el.removeAttribute("src"); el.load(); stage.innerHTML = ""; } };
+    return { canTime: true, time: () => el.currentTime || 0, seek: (t) => { el.currentTime = t; el.play().catch(() => {}); }, pause: () => el.pause(), play: () => el.play().catch(() => {}), destroy() { el.pause(); el.removeAttribute("src"); el.load(); stage.innerHTML = ""; } };
   }
   // YouTube: use the official player so the page can read and set the time.
-  stage.innerHTML = `<div id="rvYT"></div>`;
+  const pid = "yt" + uid(); stage.innerHTML = `<div id="${pid}"></div>`;
   let p = null, dead = false;
   const api = {
     canTime: true,
     time: () => { try { return p && p.getCurrentTime ? p.getCurrentTime() : 0; } catch (e) { return 0; } },
     seek: (t) => { try { p && p.seekTo(t, true); p && p.playVideo && p.playVideo(); } catch (e) {} },
     pause: () => { try { p && p.pauseVideo && p.pauseVideo(); } catch (e) {} },
+    play: () => { try { p && p.playVideo && p.playVideo(); } catch (e) {} },
     destroy() { dead = true; try { p && p.destroy && p.destroy(); } catch (e) {} stage.innerHTML = ""; },
   };
   loadYT().then(() => {
     if (dead) return;
-    p = new YT.Player("rvYT", { videoId: v.id, width: "100%", height: "100%", playerVars: { rel: 0, playsinline: 1, modestbranding: 1 } });
+    p = new YT.Player(pid, { videoId: v.id, width: "100%", height: "100%", playerVars: { rel: 0, playsinline: 1, modestbranding: 1 } });
   }).catch(() => {
     if (dead) return;
     stage.innerHTML = `<iframe src="https://www.youtube-nocookie.com/embed/${encodeURIComponent(v.id)}?rel=0" allow="autoplay; fullscreen; encrypted-media" allowfullscreen title="Video"></iframe>`;
@@ -1409,13 +1479,13 @@ function makePlayer(stage, v, team) {
   return api;
 }
 
-const rv = { id: null, player: null, comments: new Map(), unsub: null, tick: 0, stampOn: true, stamp: 0, filter: "current", ver: 1, replyTo: "", replyText: "", pick: "", url: "" };
+const rv = { id: null, player: null, playerB: null, view: 1, cmp: 0, urlB: "", comments: new Map(), unsub: null, tick: 0, stampOn: true, stamp: 0, filter: "current", ver: 1, replyTo: "", replyText: "", pick: "", url: "" };
 const rvEl = $("#rv");
 
 function openReview(id) {
   if (rv.id) closeReview();
   const t = S.merged.get(id); if (!t) return;
-  rv.id = id; rv.first = true; rv.comments = new Map(); rv.filter = "current"; rv.replyTo = rv.replyText = ""; rv.pick = ""; rv.stampOn = true; rv.url = "";
+  rv.id = id; rv.first = true; rv.view = verOf(t); rv.cmp = 0; rv.comments = new Map(); rv.filter = "current"; rv.replyTo = rv.replyText = ""; rv.pick = ""; rv.stampOn = true; rv.url = "";
   rvEl.hidden = false; document.body.classList.add("rv-lock");
   $("#rvText").value = ""; $("#rvTime").value = ""; $("#rvFilter").value = "current";
   rvHead(); rvLoadPlayer(); rvRender();
@@ -1423,7 +1493,7 @@ function openReview(id) {
     rv.comments = new Map(s.docs.map((d) => [d.id, d.data()]));
     if (rv.first) {        // a new version with no comments yet: show the earlier ones so fixes can be checked
       rv.first = false; const tops = [...rv.comments.values()].filter((c) => !c.parent);
-      if (tops.length && !tops.some((c) => (c.v || 1) === rv.ver)) { rv.filter = "all"; $("#rvFilter").value = "all"; }
+      if (tops.length && !tops.some((c) => (c.v || 1) === rv.view)) { rv.filter = "all"; $("#rvFilter").value = "all"; }
     }
     rvRender();
   }, (e) => { console.warn("comments", e); $("#rvList").innerHTML = `<p class="muted">Comments couldn't be loaded. Close this and try again.</p>`; });
@@ -1433,14 +1503,15 @@ function openReview(id) {
 function closeReview() {
   if (!rv.id) return;
   clearInterval(rv.tick); try { rv.unsub && rv.unsub(); } catch (e) {}
-  rv.player && rv.player.destroy(); rv.player = null; rv.unsub = null; rv.id = null;
+  rv.player && rv.player.destroy(); rv.player = null; rv.unsub = null; rv.id = null; rvCompare(0);
   rvEl.hidden = true; document.body.classList.remove("rv-lock");
 }
 function rvLoadPlayer() {
   const t = S.merged.get(rv.id) || {};
-  if (rv.player && rv.url === (t.videoUrl || "")) return;
+  const want = (versionsOf(t).find((x) => x.v === rv.view) || {}).url || "";
+  if (rv.player && rv.url === want) return;
   rv.player && rv.player.destroy();
-  rv.url = t.videoUrl || "";
+  rv.url = want;
   const v = parseVideo(rv.url);
   rv.player = makePlayer($("#rvStage"), v, !isClient());
   const open = $("#rvOpen"); const link = safeUrl(rv.url);
@@ -1449,10 +1520,17 @@ function rvLoadPlayer() {
 }
 function rvHead() {
   const t = S.merged.get(rv.id); if (!t) { closeReview(); return; }
-  rv.ver = verOf(t);
+  const prev = rv.ver; rv.ver = verOf(t);
+  if (rv.view === prev || rv.view > rv.ver) rv.view = rv.ver;          // keep following the newest version
+  const vs = versionsOf(t), sel = $("#rvVer");
+  sel.hidden = vs.length < 2 || !!rv.cmp;
+  sel.innerHTML = vs.slice().reverse().map((x) => `<option value="${x.v}" ${x.v === rv.view ? "selected" : ""}>v${x.v}${x.v === rv.ver ? " (latest)" : ""}${x.at ? " · " + esc(fmtTime(x.at)) : ""}</option>`).join("");
+  const cmpOk = vs.filter((x) => parseVideo(x.url)).length >= 2;
+  $("#rvCmp").hidden = !cmpOk; $("#rvCmp").setAttribute("aria-pressed", String(!!rv.cmp)); $("#rvCmp").textContent = rv.cmp ? "✕ Stop comparing" : "⇄ Compare versions";
+  if (rv.cmp && !cmpOk) rvCompare(0);
   const st = t.status || "todo";
   $("#rvTitle").textContent = t.title || "Untitled video";
-  $("#rvMeta").innerHTML = `<span class="tag">v${rv.ver}</span><span class="pill" data-st="${esc(st)}">${esc(ST[st]?.label || st)}</span>${t.client && !isClient() ? `<span class="muted">${esc(personName(t.client))}</span>` : ""}`;
+  $("#rvMeta").innerHTML = `<span class="tag">${rv.view === rv.ver ? "v" + rv.ver : "viewing v" + rv.view + " of " + rv.ver}</span><span class="pill" data-st="${esc(st)}">${esc(ST[st]?.label || st)}</span>${t.client && !isClient() ? `<span class="muted">${esc(personName(t.client))}</span>` : ""}`;
   const note = $("#rvNote"); note.hidden = !t.clientNote; note.textContent = t.clientNote || "";
   const dl = $("#rvDl"); dl.hidden = !(isClient() && st === "approved"); dl.innerHTML = dl.hidden ? "" : dlButton(rv.id);
   const d = $("#rvDecide");
@@ -1473,7 +1551,7 @@ function rvTick() { if (!rv.player || !rv.player.canTime || $("#rvText").value) 
 function rvRender() {
   if (!rv.id) return;
   const all = [...rv.comments.entries()].map(([id, c]) => ({ id, ...c }));
-  const tops = all.filter((c) => !c.parent), cur = (c) => (c.v || 1) === rv.ver;
+  const tops = all.filter((c) => !c.parent), cur = (c) => (c.v || 1) === rv.view;
   const counts = { current: tops.filter(cur).length, open: tops.filter((c) => cur(c) && !c.done).length, all: tops.length };
   $$("#rvFilter option").forEach((o) => { o.textContent = { current: "This version", open: "Not done yet", all: "All versions" }[o.value] + ` (${counts[o.value]})`; });
   const shown = tops.filter((c) => rv.filter === "all" || (rv.filter === "open" ? cur(c) && !c.done : cur(c)))
@@ -1500,7 +1578,7 @@ function rvRender() {
 
 function rvAdd(text, t, parent) {
   const id = uid();
-  const c = { text: text.slice(0, 2000), t: t == null ? null : Math.round(t * 10) / 10, v: rv.ver, by: isClient() ? "client" : "team", uid: me.uid, name: (me.name || me.email || "").slice(0, 80), at: now(), parent: parent || "", done: false, doneBy: "", doneAt: "" };
+  const c = { text: text.slice(0, 2000), t: t == null ? null : Math.round(t * 10) / 10, v: rv.view, by: isClient() ? "client" : "team", uid: me.uid, name: (me.name || me.email || "").slice(0, 80), at: now(), parent: parent || "", done: false, doneBy: "", doneAt: "" };
   rv.comments.set(id, c); rvRender();
   Store.set("reviews/" + rv.id + "/comments", id, c);
 }
@@ -1562,6 +1640,250 @@ $("#rvDecSend").addEventListener("click", () => {
   $("#rvDecNote").value = "";
   setStatus(rv.id, rv.pick, note, "client");
 });
+
+/* ---------------- compare two versions side by side ---------------- */
+function rvCompare(b) {
+  rv.cmp = b || 0;
+  const on = !!rv.cmp;
+  $("#rvStages").classList.toggle("cmp", on); $(".rv-main").classList.toggle("cmp", on);
+  $("#rvPaneB").hidden = !on; $("#rvSync").hidden = !on; $("#rvLabA").hidden = !on;
+  if (!on) { rv.playerB && rv.playerB.destroy(); rv.playerB = null; rv.urlB = ""; return; }
+  const t = S.merged.get(rv.id) || {}, vs = versionsOf(t).filter((x) => parseVideo(x.url));
+  const opts = (cur) => vs.slice().reverse().map((x) => `<option value="${x.v}" ${x.v === cur ? "selected" : ""}>v${x.v}${x.v === rv.ver ? " (latest)" : ""}</option>`).join("");
+  $("#rvLabA").innerHTML = `<span>Left</span><select id="rvVerA" aria-label="Left video version">${opts(rv.view)}</select>`;
+  $("#rvVerB").innerHTML = opts(rv.cmp);
+  const want = (vs.find((x) => x.v === rv.cmp) || {}).url || "";
+  if (!rv.playerB || rv.urlB !== want) { rv.playerB && rv.playerB.destroy(); rv.urlB = want; rv.playerB = makePlayer($("#rvStageB"), parseVideo(want), !isClient()); }
+  const both = rv.player && rv.player.canTime && rv.playerB && rv.playerB.canTime;
+  $$("#rvSync button").forEach((x) => (x.hidden = !both));
+  $("#rvSyncNote").textContent = both ? "" : "Google Drive videos can't be controlled from here, so play each one yourself.";
+}
+$("#rvVer").addEventListener("change", (e) => { rv.view = Number(e.target.value); rvHead(); rvRender(); if (rv.cmp) rvCompare(rv.cmp); });
+$("#rvCmp").addEventListener("click", () => {
+  if (rv.cmp) { rvCompare(0); rvHead(); return; }
+  const vs = versionsOf(S.merged.get(rv.id) || {}).filter((x) => parseVideo(x.url));
+  const other = vs.filter((x) => x.v !== rv.view).pop() || vs[0];
+  rvCompare(other ? other.v : 0); rvHead();
+  if (rv.view < rv.cmp) { const a = rv.view; rv.view = rv.cmp; rvHead(); rvRender(); rvCompare(a); }   // newer on the left
+});
+$("#rvStages").addEventListener("change", (e) => {
+  if (e.target.id === "rvVerA") { rv.view = Number(e.target.value); rvHead(); rvRender(); rvCompare(rv.cmp); }
+  if (e.target.id === "rvVerB") rvCompare(Number(e.target.value));
+});
+$("#rvSync").addEventListener("click", (e) => {
+  const b = e.target.closest("[data-sync]"); if (!b || !rv.player || !rv.playerB) return;
+  const a = rv.player, c = rv.playerB, k = b.dataset.sync;
+  if (k === "play") { a.play(); c.play(); }
+  if (k === "pause") { a.pause(); c.pause(); }
+  if (k === "match") { c.seek(a.time()); a.pause(); setTimeout(() => c.pause(), 50); }
+});
+
+/* ---------------- editor work log (pay sheet) ----------------
+   worklog/{taskId}: one row per assigned task, kept up to date from the tasks by an admin's browser.
+   worklog/{randomId} with manual: true: rows the admin adds by hand.
+   Admins edit rates, paid, notes and can override the dates. Other members see it only if an admin allows it:
+   users/{uid}.worklog = "own" (only their rows) or "all" (everything, read-only).
+   settings/worklog = { currency } (readable by anyone with access); settings/rates = { rates: {uid: n} } (admins only). */
+const WL_DATES = [["assignedAt", "oAssigned", "Assigned"], ["due", "oDue", "Due"], ["deliveredAt", "oDelivered", "Delivered"], ["approvedAt", "oApproved", "Approved"]];
+const wlui = { month: "", editor: "", paid: "", showRates: false };
+try { Object.assign(wlui, JSON.parse(localStorage.getItem("fw-wl-ui") || "{}"), { showRates: false }); } catch (e) {}
+const saveWlui = () => { try { localStorage.setItem("fw-wl-ui", JSON.stringify(wlui)); } catch (e) {} };
+const wlAccess = () => (isAdmin() ? "all" : isEditor() && ["count", "own", "all"].includes(me.worklog) ? me.worklog : "");
+const isoDay = (iso) => { if (!iso) return ""; if (/^\d{4}-\d{2}-\d{2}$/.test(iso)) return iso; const d = new Date(iso); return isNaN(d) ? "" : d.toLocaleDateString("en-CA"); };
+const cur$ = () => ((S.wlSettings && S.wlSettings.currency) || "Rs").slice(0, 6);
+const money = (n) => `${cur$()} ${Number(n || 0).toLocaleString("en-US", { maximumFractionDigits: 2 })}`;
+const eff = (r, k, o) => (r[o] !== undefined && r[o] !== null ? r[o] : r[k] || "");
+const rowRate = (r) => (typeof r.rate === "number" ? r.rate : typeof r.defRate === "number" ? r.defRate : 0);
+
+function wlAuto(id, t) {
+  const h = t.history || [];
+  const sent = h.find((x) => x.state === "review");
+  const ok = t.status === "approved" ? [...h].reverse().find((x) => x.state === "approved") : null;
+  return { task: id, editor: t.assignee || "", title: t.title || "Untitled task", client: personName(t.client) || "", type: t.type || "",
+    assignedAt: isoDay(t.assignedAt || t.createdAt), due: t.due || "", deliveredAt: sent ? isoDay(sent.at) : "", approvedAt: ok ? isoDay(ok.at) : "",
+    revisions: revCount(t), status: t.status || "todo", gone: false };
+}
+const WL_AUTO_KEYS = Object.keys(wlAuto("x", {}));
+
+// Admin only: copy task facts into the work log. Paid rows keep the rate they were paid at.
+let wlTimer = 0;
+function wlSchedule() { if (!isAdmin()) return; clearTimeout(wlTimer); wlTimer = setTimeout(wlSync, 1200); }
+function wlSync() {
+  if (!isAdmin() || !["tasks", "reviews", "worklog", "rates"].every((c) => got.has(c))) return;
+  const rates = (S.wlRates && S.wlRates.rates) || {};
+  const def = (ed) => (typeof rates[ed] === "number" ? rates[ed] : null);
+  S.merged.forEach((t, id) => {
+    const a = wlAuto(id, t), row = S.worklog.get(id);
+    if (!row) {
+      if (!a.editor) return;
+      const r = { ...a, defRate: def(a.editor), rate: null, paid: false, paidAt: "", note: "", oAssigned: null, oDue: null, oDelivered: null, oApproved: null, manual: false };
+      S.worklog.set(id, r); Store.set("worklog", id, r); return;
+    }
+    const patch = {};
+    WL_AUTO_KEYS.forEach((k) => { if (JSON.stringify(row[k] ?? "") !== JSON.stringify(a[k] ?? "")) patch[k] = a[k]; });
+    if (!row.paid && (row.defRate ?? null) !== def(a.editor)) patch.defRate = def(a.editor);
+    if (Object.keys(patch).length) { S.worklog.set(id, { ...row, ...patch }); Store.update("worklog", id, patch); }
+  });
+  S.worklog.forEach((row, id) => {
+    if (row.manual) { if (!row.paid && (row.defRate ?? null) !== def(row.editor)) { S.worklog.set(id, { ...row, defRate: def(row.editor) }); Store.update("worklog", id, { defRate: def(row.editor) }); } return; }
+    if (!S.merged.has(id) && !row.gone) { S.worklog.set(id, { ...row, gone: true }); Store.update("worklog", id, { gone: true }); }
+  });
+}
+
+function wlRows() {
+  return [...S.worklog.entries()].map(([id, r]) => ({ id, ...r })).filter((r) => r.editor)
+    .map((r) => {
+      const d = Object.fromEntries(WL_DATES.map(([k, o]) => [k, eff(r, k, o)]));
+      const late = d.deliveredAt && d.due ? Math.round((new Date(d.deliveredAt) - new Date(d.due)) / 864e5) : null;
+      const overdue = !d.deliveredAt && d.due && new Date(d.due + "T23:59:59") < new Date();
+      return { ...r, ...d, _auto: Object.fromEntries(WL_DATES.map(([k]) => [k, r[k] || ""])), amount: rowRate(r), late, overdue, editorName: personName(r.editor) || "Former member" };
+    });
+}
+function wlFiltered() {
+  return wlRows().filter((r) => (!wlui.month || (r.assignedAt || "").slice(0, 7) === wlui.month)
+    && (!wlui.editor || r.editor === wlui.editor) && (!wlui.paid || (wlui.paid === "paid" ? r.paid : !r.paid)));
+}
+function wlTotals(rows) {
+  const t = { n: rows.length, delivered: 0, ontime: 0, timed: 0, total: 0, paid: 0, unpaid: 0, revs: 0 };
+  rows.forEach((r) => { if (r.deliveredAt) t.delivered++; if (r.late !== null) { t.timed++; if (r.late <= 0) t.ontime++; } t.total += r.amount; t[r.paid ? "paid" : "unpaid"] += r.amount; t.revs += Number(r.revisions) || 0; });
+  return t;
+}
+function onTimeCell(r) {
+  if (r.late !== null) return r.late <= 0 ? `<span class="ok">On time</span>` : `<span class="bad">${r.late} day${r.late > 1 ? "s" : ""} late</span>`;
+  return r.overdue ? `<span class="bad">Overdue</span>` : `<span class="muted">—</span>`;
+}
+
+function renderWorklog(m) {
+  if (!wlAccess()) { view = "board"; renderBoard(m); return; }
+  if (wlAccess() === "count") { renderMyCount(m); return; }
+  // Redraw, then put the cursor (and anything half-typed) back where it was.
+  const a = document.activeElement, keep = a && a.closest && a.closest("#wlTable, #wlRates") && a.tagName === "INPUT"
+    ? { rid: a.closest("tr")?.dataset.id || "", f: a.dataset.f || "", rate: a.dataset.rate || "", id: a.id || "", val: a.type === "checkbox" ? null : a.value, s: (() => { try { return [a.selectionStart, a.selectionEnd]; } catch (e) { return null; } })() } : null;
+  wlRender(m);
+  if (keep) {
+    const el = keep.id ? $("#" + keep.id) : keep.rate ? $(`[data-rate="${CSS.escape(keep.rate)}"]`) : $(`#wlTable tr[data-id="${CSS.escape(keep.rid)}"] [data-f="${CSS.escape(keep.f)}"]`);
+    if (el) { if (keep.val !== null && el.value !== keep.val) el.value = keep.val; el.focus(); if (keep.s && keep.s[0] != null) try { el.setSelectionRange(keep.s[0], keep.s[1]); } catch (e) {} }
+  }
+}
+function wlRender(m) {
+  const acc = wlAccess();
+  const admin = isAdmin(), all = wlRows(), rows = wlFiltered();
+  const months = [...new Set(all.map((r) => (r.assignedAt || "").slice(0, 7)).filter(Boolean))].sort().reverse();
+  const eds = [...new Map(all.map((r) => [r.editor, r.editorName])).entries()].sort((x, y) => x[1].localeCompare(y[1]));
+  const T = wlTotals(rows);
+  const groups = [...new Set(rows.map((r) => r.editor))].map((ed) => ({ ed, name: rows.find((r) => r.editor === ed).editorName, rows: rows.filter((r) => r.editor === ed).sort((x, y) => String(x.assignedAt).localeCompare(String(y.assignedAt))) })).sort((x, y) => x.name.localeCompare(y.name));
+  const monthName = (k) => new Date(k + "-01T00:00:00").toLocaleDateString("en-GB", { month: "long", year: "numeric" });
+  const dateCell = (r, k, o) => {
+    if (!admin) return `<td class="num">${esc(fmtDate(r[k])) || '<span class="muted">—</span>'}</td>`;
+    const over = !r.manual && r[o] !== undefined && r[o] !== null;
+    return `<td class="num"><div class="wl-date${over ? " ovr" : ""}"><input type="date" data-f="${k}" value="${esc(r[k])}" aria-label="${k}"${over ? ` title="Changed by hand. Automatic value: ${esc(fmtDate(r._auto[k]) || "none")}"` : ""}>${over ? `<button type="button" data-reset="${o}" title="Go back to the automatic date">↺</button>` : ""}</div></td>`;
+  };
+  const txt = (r, f, label, w) => admin && r.manual ? `<input class="wl-in" data-f="${f}" value="${esc(r[f])}" aria-label="${label}" style="width:${w}">` : esc(r[f]) || '<span class="muted">—</span>';
+  const row = (r) => `<tr data-id="${esc(r.id)}" class="${r.paid ? "is-paid" : ""}">
+    <td class="wl-title">${admin && r.manual ? `<input class="wl-in" data-f="title" value="${esc(r.title)}" aria-label="Video" style="width:180px">` : `<b>${esc(r.title)}</b>${r.gone ? ` <span class="tag" title="The task was deleted">deleted</span>` : ""}${r.manual ? ` <span class="tag">added</span>` : ""}`}</td>
+    <td>${txt(r, "client", "Client", "120px")}</td><td>${txt(r, "type", "Type", "80px")}</td>
+    ${dateCell(r, "assignedAt", "oAssigned")}${dateCell(r, "due", "oDue")}${dateCell(r, "deliveredAt", "oDelivered")}
+    <td>${onTimeCell(r)}</td>
+    <td class="num">${admin && r.manual ? `<input class="wl-in num" type="number" min="0" data-f="revisions" value="${esc(r.revisions || 0)}" aria-label="Revisions" style="width:56px">` : esc(r.revisions || 0)}</td>
+    ${dateCell(r, "approvedAt", "oApproved")}
+    <td class="num">${admin ? `<input class="wl-in num" type="number" min="0" step="any" data-f="rate" value="${typeof r.rate === "number" ? r.rate : ""}" placeholder="${typeof r.defRate === "number" ? r.defRate : "0"}" aria-label="Rate for this video" style="width:90px">` : esc(money(r.amount))}</td>
+    <td>${admin ? `<label class="wl-paid"><input type="checkbox" data-f="paid" ${r.paid ? "checked" : ""}> ${r.paid ? "Paid" : "Unpaid"}</label>` : r.paid ? `<span class="ok">Paid</span>` : `<span class="muted">Unpaid</span>`}${r.paid && r.paidAt ? `<small class="muted" style="display:block">${esc(fmtDate(r.paidAt))}</small>` : ""}</td>
+    <td>${admin ? `<input class="wl-in" data-f="note" value="${esc(r.note)}" placeholder="Note" aria-label="Note" style="width:150px">` : esc(r.note)}</td>
+    ${admin ? `<td>${r.manual || r.gone ? `<button class="btn sm ghost danger" data-del type="button">Delete</button>` : ""}</td>` : ""}
+  </tr>`;
+  const sub = (g) => { const t = wlTotals(g.rows); return `<tr class="wl-sub"><td colspan="${admin ? 13 : 12}"><b>${esc(g.name)}</b> · ${t.n} video${t.n === 1 ? "" : "s"} · ${t.delivered} delivered${t.timed ? ` · ${Math.round((t.ontime / t.timed) * 100)}% on time` : ""} · ${t.revs} revisions <span class="wl-sub-money">Total <b>${esc(money(t.total))}</b> · Paid ${esc(money(t.paid))} · <span class="${t.unpaid ? "bad" : ""}">Unpaid ${esc(money(t.unpaid))}</span></span></td></tr>`; };
+  const rates = (S.wlRates && S.wlRates.rates) || {};
+  m.innerHTML = `<div class="bar"><h1>Editor work log</h1>
+      <select id="wlMonth" aria-label="Month"><option value="">All months</option>${months.map((k) => `<option value="${k}" ${k === wlui.month ? "selected" : ""}>${esc(monthName(k))}</option>`).join("")}</select>
+      ${acc === "all" ? `<select id="wlEd" aria-label="Editor"><option value="">All editors</option>${eds.map(([id, n]) => `<option value="${esc(id)}" ${id === wlui.editor ? "selected" : ""}>${esc(n)}</option>`).join("")}</select>` : ""}
+      <select id="wlPaid" aria-label="Paid"><option value="">Paid and unpaid</option><option value="unpaid" ${wlui.paid === "unpaid" ? "selected" : ""}>Unpaid only</option><option value="paid" ${wlui.paid === "paid" ? "selected" : ""}>Paid only</option></select>
+      <button class="btn" id="wlCsv" type="button">Download CSV</button>
+      ${admin ? `<button class="btn" id="wlRatesBtn" type="button" aria-expanded="${wlui.showRates}">Rates</button><button class="btn primary" id="wlAdd" type="button">+ Add row</button>` : ""}</div>
+    ${admin && wlui.showRates ? `<div class="wl-rates" id="wlRates"><div><b>Default rate per video</b><p class="muted">Used when a row has no rate of its own. Changing it updates unpaid videos only; paid ones keep the rate they were paid at.</p></div>
+      <label>Currency <input id="wlCur" value="${esc(cur$())}" maxlength="6" style="width:70px"></label>
+      ${team().filter((p) => S.users.get(p.id)?.role === "editor").map((p) => `<label>${esc(p.name)} <input type="number" min="0" step="any" data-rate="${esc(p.id)}" value="${typeof rates[p.id] === "number" ? rates[p.id] : ""}" placeholder="0" style="width:100px"></label>`).join("") || `<span class="muted">No editors yet.</span>`}</div>` : ""}
+    <div class="wl-tiles">
+      <div><span>Assigned</span><b>${T.n}</b></div><div><span>Made (delivered)</span><b>${T.delivered}</b></div>
+      <div><span>On time</span><b>${T.timed ? Math.round((T.ontime / T.timed) * 100) + "%" : "—"}</b></div><div><span>Revisions</span><b>${T.revs}</b></div>
+      <div><span>Total</span><b>${esc(money(T.total))}</b></div><div><span>Paid</span><b class="ok">${esc(money(T.paid))}</b></div><div><span>Unpaid</span><b class="${T.unpaid ? "bad" : ""}">${esc(money(T.unpaid))}</b></div>
+    </div>
+    ${rows.length ? `<div class="tablewrap"><table class="list wl" id="wlTable"><thead><tr><th>Video</th><th>Client</th><th>Type</th><th>Assigned</th><th>Due</th><th>Delivered</th><th>On time</th><th>Rev.</th><th>Approved</th><th>Rate</th><th>Paid</th><th>Note</th>${admin ? "<th></th>" : ""}</tr></thead>
+      <tbody>${groups.map((g) => sub(g) + g.rows.map(row).join("")).join("")}</tbody>
+      <tfoot><tr><td colspan="${admin ? 13 : 12}"><b>All${wlui.month ? " in " + esc(monthName(wlui.month)) : ""}</b> · ${T.n} videos · ${T.delivered} delivered <span class="wl-sub-money">Total <b>${esc(money(T.total))}</b> · Paid ${esc(money(T.paid))} · Unpaid <b>${esc(money(T.unpaid))}</b></span></td></tr></tfoot></table></div>`
+      : `<div class="empty"><b>${got.has("worklog") ? "Nothing here yet" : "Loading…"}</b>${got.has("worklog") ? (all.length ? "No rows match these filters." : admin ? "Rows appear here by themselves when you assign tasks to editors." : "Your videos will show up here.") : ""}</div>`}
+    ${admin ? `<p class="muted" style="font-size:12.5px;margin-top:10px">Each video counts once, however many versions it went through; revisions are shown separately. Video, client, dates and revisions fill in from the tasks. Assigned = when the editor got the task, Delivered = first time it was sent to the client, Approved = when the client approved it. Change any date by hand; ↺ puts back the automatic one.</p>` : ""}`;
+  $("#wlMonth").addEventListener("change", (e) => { wlui.month = e.target.value; saveWlui(); render(); });
+  $("#wlEd")?.addEventListener("change", (e) => { wlui.editor = e.target.value; saveWlui(); render(); });
+  $("#wlPaid").addEventListener("change", (e) => { wlui.paid = e.target.value; saveWlui(); render(); });
+  $("#wlCsv").addEventListener("click", () => wlCsv(rows, groups));
+  if (!admin) return;
+  $("#wlRatesBtn").addEventListener("click", () => { wlui.showRates = !wlui.showRates; render(); });
+  $("#wlAdd").addEventListener("click", wlAddRow);
+  $("#wlRates")?.addEventListener("change", (e) => {
+    if (e.target.id === "wlCur") { const c = e.target.value.trim() || "Rs"; S.wlSettings = { ...(S.wlSettings || {}), currency: c }; Store.set("settings", "worklog", { currency: c }); }
+    const ed = e.target.dataset.rate;
+    if (ed) { const v = e.target.value === "" ? null : Math.max(0, Number(e.target.value)); const r = { ...((S.wlRates && S.wlRates.rates) || {}) }; if (v === null) delete r[ed]; else r[ed] = v; S.wlRates = { rates: r }; Store.set("settings", "rates", { rates: r }); wlSync(); }
+    toast("Saved"); render();
+  });
+}
+function wlAddRow() {
+  const id = uid(), ed = wlui.editor || (team().find((p) => S.users.get(p.id)?.role === "editor") || {}).id || me.uid;
+  const r = { manual: true, task: "", editor: ed, title: "New video", client: "", type: "", assignedAt: new Date().toLocaleDateString("en-CA"), due: "", deliveredAt: "", approvedAt: "", revisions: 0, status: "", gone: false,
+    defRate: typeof (S.wlRates?.rates || {})[ed] === "number" ? S.wlRates.rates[ed] : null, rate: null, paid: false, paidAt: "", note: "", oAssigned: null, oDue: null, oDelivered: null, oApproved: null };
+  S.worklog.set(id, r); Store.set("worklog", id, r); wlui.month = ""; render();
+  setTimeout(() => { const i = $(`tr[data-id="${id}"] [data-f="title"]`); i && (i.focus(), i.select()); }, 30);
+}
+function wlSave(id, patch) { const r = S.worklog.get(id); if (!r) return; S.worklog.set(id, { ...r, ...patch }); Store.update("worklog", id, patch); }
+$("#main").addEventListener("change", (e) => {
+  const tr = e.target.closest("#wlTable tr[data-id]"); if (!tr || !isAdmin()) return;
+  const id = tr.dataset.id, r = S.worklog.get(id), f = e.target.dataset.f; if (!r || !f) return;
+  const v = e.target.value;
+  if (f === "paid") wlSave(id, { paid: e.target.checked, paidAt: e.target.checked ? new Date().toLocaleDateString("en-CA") : "" });
+  else if (f === "rate") wlSave(id, { rate: v === "" ? null : Math.max(0, Number(v)) });
+  else if (f === "revisions") wlSave(id, { revisions: Math.max(0, Math.round(Number(v) || 0)) });
+  else { const dk = WL_DATES.find(([k]) => k === f);
+    if (dk && !r.manual) { const [k, o] = dk; wlSave(id, { [o]: v === (r[k] || "") ? null : v }); }
+    else wlSave(id, { [f]: v.slice(0, 200) }); }
+  render();
+});
+$("#main").addEventListener("click", (e) => {
+  if (!isAdmin()) return;
+  const rs = e.target.closest("#wlTable [data-reset]"); if (rs) { wlSave(rs.closest("tr").dataset.id, { [rs.dataset.reset]: null }); render(); return; }
+  const del = e.target.closest("#wlTable [data-del]"); if (!del) return;
+  if (del.dataset.armed !== "1") { del.dataset.armed = "1"; del.textContent = "Click again"; setTimeout(() => { if (del.isConnected) { del.dataset.armed = ""; del.textContent = "Delete"; } }, 3000); return; }
+  const id = del.closest("tr").dataset.id; S.worklog.delete(id); Store.remove("worklog", id); render();
+});
+function wlCsv(rows, groups) {
+  const q = (x) => { x = String(x ?? ""); return /[",\n]/.test(x) ? `"${x.replace(/"/g, '""')}"` : x; };
+  const head = ["Editor", "Video", "Client", "Type", "Assigned", "Due", "Delivered", "On time", "Revisions", "Approved", `Rate (${cur$()})`, "Paid", "Paid on", "Note"];
+  const lines = [head];
+  groups.forEach((g) => g.rows.forEach((r) => lines.push([r.editorName, r.title, r.client, r.type, r.assignedAt, r.due, r.deliveredAt, r.late === null ? (r.overdue ? "Overdue" : "") : r.late <= 0 ? "Yes" : `${r.late} days late`, r.revisions || 0, r.approvedAt, r.amount, r.paid ? "Yes" : "No", r.paidAt || "", r.note || ""])));
+  const T = wlTotals(rows); lines.push([], ["Total", `${T.n} videos`, "", "", "", "", `${T.delivered} delivered`, "", T.revs, "", T.total, `Paid ${T.paid}`, `Unpaid ${T.unpaid}`, ""]);
+  const blob = new Blob(["﻿" + lines.map((l) => l.map(q).join(",")).join("\r\n")], { type: "text/csv;charset=utf-8" });
+  const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = `work-log${wlui.month ? "-" + wlui.month : ""}.csv`; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+}
+
+/* An editor with "video count only" access: how many videos they've made, worked out from their own tasks. No pay. */
+function renderMyCount(m) {
+  const mine = [...S.merged.entries()].map(([id, t]) => {
+    const h = t.history || [], sent = h.find((x) => x.state === "review");
+    return { id, title: t.title || "Untitled task", client: personName(t.client), made: sent ? isoDay(sent.at) : "", status: t.status || "todo", revs: revCount(t) };
+  });
+  const months = [...new Set(mine.map((r) => r.made.slice(0, 7)).filter(Boolean))].sort().reverse();
+  const mm = months.includes(wlui.month) ? wlui.month : "";
+  const made = mine.filter((r) => r.made && (!mm || r.made.slice(0, 7) === mm)).sort((a, b) => b.made.localeCompare(a.made));
+  const monthName = (k) => new Date(k + "-01T00:00:00").toLocaleDateString("en-GB", { month: "long", year: "numeric" });
+  const n = (f) => made.filter(f).length;
+  m.innerHTML = `<div class="bar"><h1>My videos</h1><select id="wlMonth" aria-label="Month"><option value="">All months</option>${months.map((k) => `<option value="${k}" ${k === mm ? "selected" : ""}>${esc(monthName(k))}</option>`).join("")}</select></div>
+    <div class="wl-tiles"><div><span>Videos made</span><b>${made.length}</b></div><div><span>Approved</span><b class="ok">${n((r) => r.status === "approved")}</b></div>
+      <div><span>With the client</span><b>${n((r) => r.status === "review")}</b></div><div><span>Revisions asked</span><b>${made.reduce((a, r) => a + r.revs, 0)}</b></div>
+      <div><span>Still to deliver</span><b>${mine.filter((r) => !r.made).length}</b></div></div>
+    ${made.length ? `<div class="tablewrap"><table class="list wl" style="min-width:560px"><thead><tr><th>Video</th><th>Client</th><th>Made on</th><th>Revisions</th><th>Status</th></tr></thead><tbody>
+      ${made.map((r) => `<tr><td class="wl-title"><b>${esc(r.title)}</b></td><td>${esc(r.client) || '<span class="muted">—</span>'}</td><td class="num">${esc(fmtDate(r.made))}</td><td class="num">${r.revs}</td><td><span class="pill" data-st="${esc(r.status)}">${esc(ST[r.status]?.label || r.status)}</span></td></tr>`).join("")}</tbody></table></div>`
+      : `<div class="empty"><b>${loaded ? "No videos yet" : "Loading…"}</b>${loaded ? "A video counts here once it's first sent to the client." : ""}</div>`}
+    <p class="muted" style="font-size:12.5px;margin-top:10px">Each video counts once, however many versions it took. A video counts from the day it was first sent to the client.</p>`;
+  $("#wlMonth").addEventListener("change", (e) => { wlui.month = e.target.value; saveWlui(); render(); });
+}
 
 </script>
 </body>
