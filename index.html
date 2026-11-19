@@ -270,6 +270,62 @@ table.list tr:last-child td { border-bottom: 0; }
 .prow select { background: var(--panel); border: 1px solid var(--line-2); border-radius: 7px; padding: 4px 6px; color: var(--fg); }
 .copyrow { display: flex; gap: 8px; align-items: center; background: var(--panel-2); border-radius: 8px; padding: 8px 10px; font-size: 12.5px; }
 .copyrow code { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--mono); user-select: all; }
+/* ---- video review ---- */
+body.rv-lock { overflow: hidden; }
+.rv { position: fixed; inset: 0; z-index: 60; background: var(--bg); display: grid; grid-template-rows: auto minmax(0, 1fr); padding: env(safe-area-inset-top, 0px) env(safe-area-inset-right, 0px) env(safe-area-inset-bottom, 0px) env(safe-area-inset-left, 0px); }
+.rv-top { display: flex; align-items: center; gap: 12px; padding: 10px 16px; border-bottom: 1px solid var(--line); min-width: 0; }
+.rv-tt { min-width: 0; display: grid; gap: 3px; }
+.rv-tt h2 { margin: 0; font: 700 16px/1.2 var(--display); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rv-meta { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 12.5px; }
+.rv-main { display: grid; grid-template-columns: minmax(0, 1fr) 380px; min-height: 0; }
+.rv-stage { position: relative; background: #000; min-height: 0; }
+.rv-stage > iframe, .rv-stage > video, .rv-stage > div:not(.rv-msg) { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; object-fit: contain; background: #000; }
+.rv-stage iframe { border: 0; }
+.rv-msg { position: absolute; inset: 0; display: grid; place-content: center; justify-items: center; gap: 10px; padding: 24px; text-align: center; color: #e8e0da; }
+.rv-msg b { font: 700 17px/1.2 var(--display); }
+.rv-msg p { margin: 0; max-width: 44ch; color: #b5a89f; }
+.rv-side { display: flex; flex-direction: column; min-height: 0; border-left: 1px solid var(--line); background: var(--panel); }
+.rv-note { margin: 12px 14px 0; padding: 10px 12px; border-radius: 8px; background: var(--panel-2); border-left: 3px solid var(--accent); font-size: 13px; white-space: pre-wrap; }
+.rv-dl { display: grid; gap: 6px; padding: 12px 14px 0; }
+.rv-decide { display: grid; gap: 8px; padding: 12px 14px; border-bottom: 1px solid var(--line); }
+.rv-decide textarea, .cm-rbox textarea, .rv-comp textarea, .rv-comp input { width: 100%; background: var(--panel-2); border: 1px solid var(--line-2); border-radius: 8px; padding: 8px 10px; color: var(--fg); font: inherit; resize: vertical; }
+.rv-bar { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 10px 14px; border-bottom: 1px solid var(--line); }
+.rv-bar select { background: var(--panel-2); border: 1px solid var(--line-2); border-radius: 7px; padding: 5px 8px; color: var(--fg); }
+.rv-list { flex: 1; min-height: 0; overflow: auto; padding: 6px 0; background: var(--panel); }
+.rv-empty { display: grid; gap: 4px; padding: 28px 18px; text-align: center; color: var(--muted); }
+.rv-empty b { color: var(--fg); }
+.cm { padding: 10px 14px; border-bottom: 1px solid var(--line); display: grid; gap: 6px; }
+.cm.reply { border: 0; padding: 8px 0 0 14px; margin-left: 4px; border-left: 2px solid var(--line-2); }
+.cm-h { display: flex; align-items: center; gap: 7px; font-size: 13px; min-width: 0; }
+.cm-h b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cm-h .av { flex: none; width: 24px; height: 24px; font-size: 10px; }
+.cm-at { margin-left: auto; color: var(--faint); font-size: 11.5px; white-space: nowrap; }
+.cm-b { display: flex; gap: 8px; align-items: baseline; min-width: 0; }
+.cm-text { white-space: pre-wrap; overflow-wrap: anywhere; min-width: 0; font-size: 13.5px; line-height: 1.45; }
+.tc { flex: none; font: 600 11.5px/1 var(--mono); padding: 4px 6px; border-radius: 5px; background: var(--accent-soft); color: var(--accent-2); border: 0; }
+button.tc { cursor: pointer; }
+button.tc:hover { background: var(--accent); color: var(--accent-ink); }
+.cm-a { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; font-size: 12px; }
+.cm-a button { background: none; border: 0; padding: 0; color: var(--muted); font-weight: 600; font-size: 12px; }
+.cm-a button:hover { color: var(--fg); }
+.cm.done > .cm-b .cm-text { color: var(--muted); text-decoration: line-through; text-decoration-color: var(--faint); }
+.cm.done > .cm-h .av { background: color-mix(in srgb, var(--st-approved) 25%, transparent); }
+.cm-rbox { display: grid; gap: 6px; }
+.cm-rbox > div { display: flex; justify-content: flex-end; gap: 6px; }
+.rv-comp { display: grid; gap: 8px; padding: 12px 14px; border-top: 1px solid var(--line); background: var(--panel); }
+.rv-comp-row { display: flex; gap: 8px; align-items: center; }
+.rv-comp input { width: 120px; font-family: var(--mono); }
+.tc-chip { font: 600 12px/1 var(--mono); padding: 6px 9px; border-radius: 6px; border: 1px solid var(--accent); background: var(--accent-soft); color: var(--accent-2); }
+.tc-chip.off { border-color: var(--line-2); background: none; color: var(--muted); }
+.rv-comp-f { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+.rv-comp-f span { font-size: 11.5px; }
+@media (max-width: 860px) {
+  .rv-main { grid-template-columns: minmax(0, 1fr); grid-template-rows: 58vh auto; overflow: auto; overscroll-behavior: contain; }
+  .rv-side { border-left: 0; border-top: 1px solid var(--line); }
+  .rv-list { flex: none; overflow: visible; min-height: 90px; }
+  .rv-top { padding: 8px 12px; }
+}
+@media (max-width: 860px) and (max-height: 500px) { .rv-main { grid-template-rows: 80vh auto; } }
 @media (max-width: 720px) { .acct .who { display: none; } }
 </style>
 </head>
@@ -358,6 +414,35 @@ table.list tr:last-child td { border-bottom: 0; }
     <div style="display:flex;justify-content:flex-end"><button class="btn" id="pmClose">Done</button></div>
   </div>
 </div>
+
+<section class="rv" id="rv" role="dialog" aria-modal="true" aria-labelledby="rvTitle" hidden>
+  <div class="rv-top">
+    <button class="btn ghost" id="rvBack" type="button">← Back</button>
+    <div class="rv-tt"><h2 id="rvTitle"></h2><div class="rv-meta" id="rvMeta"></div></div>
+    <div class="spacer"></div>
+    <a class="btn sm" id="rvOpen" target="_blank" rel="noopener" hidden>Open original ↗</a>
+  </div>
+  <div class="rv-main">
+    <div class="rv-stage" id="rvStage"></div>
+    <aside class="rv-side" aria-label="Comments">
+      <div class="rv-note" id="rvNote" hidden></div>
+      <div class="rv-dl" id="rvDl" hidden></div>
+      <div class="rv-decide" id="rvDecide" hidden>
+        <div class="muted" style="font-size:13px">Done watching? Tell the team:</div>
+        <div class="decide"><button class="btn" data-d="approved" type="button">✓ Approve</button><button class="btn" data-d="revision" type="button">↻ Revision</button><button class="btn" data-d="rejected" type="button">✕ Reject</button></div>
+        <textarea id="rvDecNote" rows="2" hidden aria-label="Note for the team"></textarea>
+        <button class="btn primary" id="rvDecSend" type="button" hidden>Send</button>
+      </div>
+      <div class="rv-bar"><b>Comments</b><select id="rvFilter" aria-label="Which comments"><option value="current">This version</option><option value="open">Not done yet</option><option value="all">All versions</option></select></div>
+      <div class="rv-list" id="rvList"></div>
+      <form class="rv-comp" id="rvComp" novalidate>
+        <div class="rv-comp-row"><button class="tc-chip" id="rvChip" type="button" title="Attach the current video time (click to turn off)"></button><input id="rvTime" placeholder="Time 0:12" inputmode="numeric" aria-label="Time in the video" hidden></div>
+        <textarea id="rvText" rows="2" placeholder="Leave a comment…" aria-label="Comment" maxlength="2000"></textarea>
+        <div class="rv-comp-f"><span class="muted" id="rvHint"></span><button class="btn primary sm">Send</button></div>
+      </form>
+    </aside>
+  </div>
+</section>
 
 <div class="toast" id="toast" role="status"></div>
 
@@ -686,7 +771,7 @@ const Store = (() => {
 })();
 
 /* ---------------- state ---------------- */
-const S = { tasks: new Map(), reviews: new Map(), users: new Map(), invites: new Map(), clients: new Map(), docs: new Map(), sheets: new Map(), merged: new Map() };
+const S = { tasks: new Map(), reviews: new Map(), users: new Map(), invites: new Map(), clients: new Map(), docs: new Map(), sheets: new Map(), merged: new Map(), dl: new Map() };
 let me = null, view = "board", loaded = false;
 const ui = { q: "", fAssignee: "", fClient: "", sort: { key: "due", dir: 1 }, openKind: null, openId: null, subtab: "overview" };
 try { const v = localStorage.getItem("fw-ws-view"); if (v) view = v; } catch (e) {}
@@ -781,9 +866,23 @@ function renderLib(m, kind) {
   });
   $$(".file", m).forEach((f) => f.addEventListener("click", () => openFile(kind, f.dataset.id)));
 }
+function dlButton(id) {
+  const d = S.dl.get(id), url = d && safeUrl(d.url);
+  return url ? `<a class="btn primary" href="${esc(url)}" target="_blank" rel="noopener">⬇ Download final video</a>`
+    : `<div class="muted" style="font-size:12.5px">${d ? "Approved. The team will add the download link here soon." : "Approved."}</div>`;
+}
+const dlWatching = new Set();
+function watchDownloads(list) {        // clients can only read a download link once the video is approved
+  list.filter((t) => t.status !== "approved").forEach((t) => dlWatching.delete(t.id));
+  list.filter((t) => t.status === "approved" && !dlWatching.has(t.id)).forEach((t) => {
+    dlWatching.add(t.id);
+    Store.watchDoc(Store.col("downloads").doc(t.id), (d) => { S.dl.set(t.id, d || {}); render(); });
+  });
+}
 function renderClient(m) {
   const name = personName(me.clientId);
   const mine = [...S.merged.entries()].map(([id, t]) => ({ id, ...t }));
+  watchDownloads(mine);
   const group = (title, st, items, decide) => items.length ? `<section class="cv-group"><h2><span class="pill" data-st="${st}">${title}</span><span class="muted mono" style="font-size:12px">${items.length}</span></h2><div class="cv-cards">${items.map((t) => clientCard(t, decide)).join("")}</div></section>` : "";
   const by = (s) => mine.filter((t) => s.includes(t.status || "todo"));
   m.innerHTML = `<div class="cv-head"><span class="muted">Hi ${esc((me.name || "").split(" ")[0] || "there")}</span><h1>${esc(name || "Your")} videos</h1>
@@ -792,6 +891,7 @@ function renderClient(m) {
       : `<div class="empty"><b>${loaded ? "Nothing here yet" : "Loading…"}</b>${loaded ? "When the team sends you a video to review, it shows up here." : ""}</div>`);
   $$(".cv-card", m).forEach((card) => {
     const id = card.dataset.id; let pick = "";
+    $("[data-rv]", card)?.addEventListener("click", () => openReview(id));
     $$(".decide .btn", card).forEach((b) => b.addEventListener("click", () => {
       pick = b.dataset.d; $$(".decide .btn", card).forEach((x) => x.classList.toggle("pick", x === b));
       const ta = $("textarea", card); ta.hidden = false; ta.placeholder = pick === "approved" ? "Optional: a note for the team" : pick === "revision" ? "What should we change? Add timestamps if you can, e.g. 0:12 make the text bigger" : "Why doesn't this work for you?"; ta.focus();
@@ -808,10 +908,11 @@ function clientCard(t, decide) {
   const v = safeUrl(t.videoUrl), last = (t.history || []).slice(-1)[0];
   return `<article class="cv-card" data-id="${esc(t.id)}"><h3>${esc(t.title || "Untitled video")}</h3>
     <div class="meta">${t.type ? `<span class="tag">${esc(t.type)}</span>` : ""}${t.due ? `<span>Due ${esc(fmtDate(t.due))}</span>` : ""}${revCount(t) ? `<span class="tag rev">Revision ${revCount(t)}</span>` : ""}</div>
-    ${v ? `<a class="btn" href="${esc(v)}" target="_blank" rel="noopener">▶ Watch video</a>` : `<span class="muted">The video link will appear here.</span>`}
+    ${v ? `<button class="btn" data-rv type="button">▶ Watch &amp; comment</button>` : `<span class="muted">The video will appear here.</span>`}
     ${t.clientNote ? `<div class="msg">${esc(t.clientNote)}</div>` : ""}
     ${decide ? `<div class="decide"><button class="btn" data-d="approved">✓ Approve</button><button class="btn" data-d="revision">↻ Revision</button><button class="btn" data-d="rejected">✕ Reject</button></div>
       <textarea hidden aria-label="Note for the team"></textarea><button class="btn primary send" hidden>Send</button>`
+      : t.status === "approved" ? dlButton(t.id)
       : last ? `<div class="muted" style="font-size:12.5px">Last update: ${esc(ST[last.state]?.label || last.state)} · ${esc(fmtTime(last.at))}</div>` : ""}
   </article>`;
 }
@@ -835,7 +936,7 @@ let liveEditor = null, liveGrid = null;
 function openDrawer(wide) { drawer.classList.toggle("wide", !!wide); drawer.classList.add("on"); scrim.classList.add("on"); drawer.setAttribute("aria-hidden", "false"); }
 function closeDrawer() { flushTask(); flushFile(); drawer.classList.remove("on"); scrim.classList.remove("on"); drawer.setAttribute("aria-hidden", "true"); ui.openKind = ui.openId = null; liveEditor = liveGrid = null; setTimeout(() => { if (!ui.openKind) drawer.innerHTML = ""; }, 300); }
 scrim.addEventListener("click", closeDrawer);
-addEventListener("keydown", (e) => { if (e.key === "Escape" && drawer.classList.contains("on") && !e.target.closest(".sh-grid td.edit, .rt-link")) closeDrawer(); });
+addEventListener("keydown", (e) => { if (e.key === "Escape" && !rv.id && drawer.classList.contains("on") && !e.target.closest(".sh-grid td.edit, .rt-link")) closeDrawer(); });
 
 let taskDraft = null, taskTimer = 0;
 function patchTask(patch, quick) {
@@ -893,12 +994,23 @@ function drawTask() {
     <div class="sec"><h4>Links</h4><div class="fields">
       ${[["fVid", "videoUrl", "Video (Drive, YouTube, Frame.io…)", "https://drive.google.com/…"], ["fDoc", "docUrl", "Google Doc", "https://docs.google.com/document/…"], ["fSh", "sheetUrl", "Google Sheet", "https://docs.google.com/spreadsheets/…"]].map(([fid, k, l, ph]) => `
       <div class="f full"><label for="${fid}">${l}</label><div class="linkrow"><input id="${fid}" data-k="${k}" value="${esc(t[k])}" placeholder="${ph}" inputmode="url">${safeUrl(t[k]) ? `<a class="btn" href="${esc(safeUrl(t[k]))}" target="_blank" rel="noopener">Open ↗</a>` : ""}</div></div>`).join("")}
+      ${safeUrl(t.videoUrl) ? `<div class="f full"><button class="btn" id="openRv" type="button">▶ Watch &amp; see comments</button></div>` : ""}
+      <div class="f full"><label for="fFin">Final file for the client to download</label><div class="linkrow"><input id="fFin" placeholder="${S.dl.has(id) ? "https://drive.google.com/… (the full-quality file)" : "Loading…"}" inputmode="url" value="${esc((S.dl.get(id) || {}).url || "")}">${safeUrl((S.dl.get(id) || {}).url) ? `<a class="btn" href="${esc(safeUrl(S.dl.get(id).url))}" target="_blank" rel="noopener">Open ↗</a>` : ""}</div>
+        <small class="muted" style="font-size:12px">The client only gets this link after the video is approved.</small></div>
     </div></div>
     <div class="sec"><h4>Message for the client</h4><div class="f"><textarea id="fCn" placeholder="Shown to the client next to the video, e.g. Here's the first cut. Music is a placeholder.">${esc(t.clientNote)}</textarea></div></div>
     <div class="sec" style="display:flex;flex-wrap:wrap;gap:8px;justify-content:space-between">
       <button class="btn primary" id="toReview" ${t.status === "review" ? "disabled" : ""}>Send to client for review</button>
       ${admin ? `<button class="btn ghost danger" id="delTask">Delete task</button>` : ""}</div>`;
     $("#fSt").addEventListener("change", (e) => { flushTask(); setStatus(id, e.target.value, "", "team"); });
+    $("#openRv")?.addEventListener("click", () => { flushTask(); openReview(id); });
+    if (!S.dl.has(id)) Store.col("downloads").doc(id).get().then((s) => { S.dl.set(id, s.exists ? s.data() : {}); if (ui.openKind === "task" && ui.openId === id && ui.subtab === "overview" && document.activeElement?.id !== "fFin") drawTask(); }).catch(() => S.dl.set(id, {}));
+    $("#fFin").addEventListener("change", (e) => {
+      const url = e.target.value.trim();
+      if (url && !safeUrl(url)) { toast("Paste a full link starting with https://"); return; }
+      const d = { url, updatedAt: now() }; S.dl.set(id, d); Store.set("downloads", id, d);
+      toast(url ? "Download link saved" : "Download link removed"); setTimeout(drawTask, 30);
+    });
     if (admin) {
       $("#fAs").addEventListener("change", (e) => patchTask({ assignee: e.target.value }, true));
       const addClient = () => {
@@ -941,11 +1053,13 @@ function drawTask() {
   } else {
     const h = [...(t.history || [])].reverse();
     body.innerHTML = `<div class="review"><div class="now"><span class="muted">Current status</span><span class="pill" data-st="${t.status || "todo"}">${ST[t.status || "todo"].label}</span><span class="tag rev">Revisions: ${revCount(t)}</span></div>
+      ${safeUrl(t.videoUrl) ? `<button class="btn" id="openRv2" type="button" style="justify-self:start">▶ Watch &amp; see comments</button>` : ""}
       <div class="muted" style="font-size:13px">Record a client decision yourself (for example one that came by WhatsApp):</div>
       <div class="decide"><button class="btn" data-d="approved">✓ Approved</button><button class="btn" data-d="revision">↻ Revision</button><button class="btn" data-d="rejected">✕ Rejected</button></div>
       <div class="f"><textarea id="decNote" placeholder="Feedback or notes (optional)"></textarea></div></div>
       <div class="sec"><h4>History</h4>${h.length ? `<div class="history">${h.map((x) => `<div class="h-item"><span class="pill" data-st="${esc(x.state)}">${esc(ST[x.state]?.label || x.state)}</span><div><div class="t">${x.by === "client" ? "By the client" : "By " + esc(personName(x.uid) || "the team")} · ${esc(fmtTime(x.at))}</div>${x.note ? `<p>${esc(x.note)}</p>` : ""}</div></div>`).join("")}</div>` : `<p class="muted">No changes yet. Status changes and client decisions show up here.</p>`}</div>`;
     $$(".decide .btn", body).forEach((b) => b.addEventListener("click", () => setStatus(id, b.dataset.d, $("#decNote").value.trim(), "team")));
+    $("#openRv2")?.addEventListener("click", () => openReview(id));
   }
 }
 
@@ -1054,6 +1168,7 @@ function render() {
   else if (view === "sheets") renderLib(m, "sheets");
   else renderBoard(m);
   if ($("#peopleModal").classList.contains("on")) drawPeople();
+  if (rv.id) rvHead();
 }
 function onRows(col) {
   return (rows) => {
@@ -1148,6 +1263,7 @@ async function ensureProfile(u) {
   await ref.set(p); return p;
 }
 async function handleUser(u) {
+  closeReview(); dlWatching.clear();
   Store.stop(); me = null; loaded = false; Object.keys(S).forEach((k) => (S[k] = new Map()));
   if (!u) { setMode(false); showAuth("aSignin"); return; }
   const pwd = (u.providerData || []).some((p) => p.providerId === "password");
@@ -1189,6 +1305,245 @@ function start(u, p) {
 }
 showAuth("aLoading");
 auth.onAuthStateChanged((u) => handleUser(u));
+
+/* ---------------- video review: player + timestamped comments ----------------
+   Comments live in reviews/{taskId}/comments/{commentId}, so whoever can see the video can see its comments.
+   Each comment: { text, t (seconds or null), v (version), by: "client"|"team", uid, name, at, parent, done, doneBy, doneAt } */
+function parseVideo(raw) {
+  const url = safeUrl(raw); if (!url) return null;
+  let u; try { u = new URL(url); } catch (e) { return null; }
+  const h = u.hostname.replace(/^(www|m)\./, "");
+  const okId = (x) => (x && /^[\w-]{6,64}$/.test(x) ? x : "");
+  if (h === "youtu.be") { const id = okId(u.pathname.split("/")[1]); if (id) return { kind: "yt", id, url }; }
+  if (h === "youtube.com" || h === "youtube-nocookie.com") {
+    const id = okId(u.searchParams.get("v") || (u.pathname.match(/^\/(?:shorts|embed|live)\/([^/?#]+)/) || [])[1]);
+    if (id) return { kind: "yt", id, url };
+  }
+  if (h === "drive.google.com") {
+    const id = okId((u.pathname.match(/\/file\/d\/([^/?#]+)/) || [])[1] || u.searchParams.get("id"));
+    if (id) return { kind: "drive", id, url };
+  }
+  if (h === "docs.google.com") return { kind: "notvideo", url };
+  if (h.endsWith("dropbox.com")) { u.searchParams.delete("dl"); u.searchParams.set("raw", "1"); return { kind: "file", src: u.toString(), url }; }
+  if (/\.(mp4|m4v|mov|webm)$/i.test(u.pathname)) return { kind: "file", src: url, url };
+  return { kind: "link", url };
+}
+function fmtTC(s) {
+  s = Math.max(0, Math.floor(Number(s) || 0));
+  const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), x = String(s % 60).padStart(2, "0");
+  return h ? `${h}:${String(m).padStart(2, "0")}:${x}` : `${m}:${x}`;
+}
+function parseTC(str) {
+  str = String(str || "").trim(); if (!str) return null;
+  if (!/^\d{1,3}(:\d{1,2}){0,2}$/.test(str)) return NaN;
+  return str.split(":").reduce((a, p) => a * 60 + Number(p), 0);
+}
+const verOf = (r) => Math.max(1, ((r && r.history) || []).filter((h) => h.state === "review").length);
+
+let ytReady = null;
+function loadYT() {
+  if (window.YT && window.YT.Player) return Promise.resolve();
+  if (!ytReady) ytReady = new Promise((res, rej) => {
+    const prev = window.onYouTubeIframeAPIReady;
+    window.onYouTubeIframeAPIReady = () => { try { prev && prev(); } catch (e) {} res(); };
+    const s = document.createElement("script"); s.src = "https://www.youtube.com/iframe_api"; s.async = true;
+    s.onerror = () => { ytReady = null; rej(new Error("YouTube player didn't load")); };
+    document.head.appendChild(s);
+    setTimeout(() => rej(new Error("timeout")), 12000);
+  });
+  return ytReady;
+}
+
+// Returns { canTime, time(), seek(t), pause(), destroy() }
+function makePlayer(stage, v, team) {
+  const none = { canTime: false, time: () => null, seek() {}, pause() {}, destroy() { stage.innerHTML = ""; } };
+  const msg = (title, body, link) => { stage.innerHTML = `<div class="rv-msg"><b>${title}</b><p>${body}</p>${link ? `<a class="btn" href="${esc(link)}" target="_blank" rel="noopener">Open the link ↗</a>` : ""}</div>`; return none; };
+  if (!v) return msg("No video yet", team ? "Paste the video link in the task first." : "The team hasn't added the video yet.");
+  if (v.kind === "notvideo") return msg("This link isn't a video", team ? "It's a Google Doc or Sheet. Upload the video to Google Drive, set sharing to “Anyone with the link”, then paste that link in the task." : "The team linked a document here by mistake. Let them know.", v.url);
+  if (v.kind === "link") return msg("This video opens on another site", "It can't play inside the workspace. Open it, then come back here to leave your comments.", v.url);
+  if (v.kind === "drive") {
+    stage.innerHTML = `<iframe src="https://drive.google.com/file/d/${encodeURIComponent(v.id)}/preview" allow="autoplay; fullscreen" allowfullscreen title="Video"></iframe>`;
+    return none;
+  }
+  if (v.kind === "file") {
+    stage.innerHTML = `<video controls playsinline preload="metadata"></video>`;
+    const el = $("video", stage); el.src = v.src;
+    return { canTime: true, time: () => el.currentTime || 0, seek: (t) => { el.currentTime = t; el.play().catch(() => {}); }, pause: () => el.pause(), destroy() { el.pause(); el.removeAttribute("src"); el.load(); stage.innerHTML = ""; } };
+  }
+  // YouTube: use the official player so the page can read and set the time.
+  stage.innerHTML = `<div id="rvYT"></div>`;
+  let p = null, dead = false;
+  const api = {
+    canTime: true,
+    time: () => { try { return p && p.getCurrentTime ? p.getCurrentTime() : 0; } catch (e) { return 0; } },
+    seek: (t) => { try { p && p.seekTo(t, true); p && p.playVideo && p.playVideo(); } catch (e) {} },
+    pause: () => { try { p && p.pauseVideo && p.pauseVideo(); } catch (e) {} },
+    destroy() { dead = true; try { p && p.destroy && p.destroy(); } catch (e) {} stage.innerHTML = ""; },
+  };
+  loadYT().then(() => {
+    if (dead) return;
+    p = new YT.Player("rvYT", { videoId: v.id, width: "100%", height: "100%", playerVars: { rel: 0, playsinline: 1, modestbranding: 1 } });
+  }).catch(() => {
+    if (dead) return;
+    stage.innerHTML = `<iframe src="https://www.youtube-nocookie.com/embed/${encodeURIComponent(v.id)}?rel=0" allow="autoplay; fullscreen; encrypted-media" allowfullscreen title="Video"></iframe>`;
+    api.canTime = false; rvSyncComposer();
+  });
+  return api;
+}
+
+const rv = { id: null, player: null, comments: new Map(), unsub: null, tick: 0, stampOn: true, stamp: 0, filter: "current", ver: 1, replyTo: "", replyText: "", pick: "", url: "" };
+const rvEl = $("#rv");
+
+function openReview(id) {
+  if (rv.id) closeReview();
+  const t = S.merged.get(id); if (!t) return;
+  rv.id = id; rv.first = true; rv.comments = new Map(); rv.filter = "current"; rv.replyTo = rv.replyText = ""; rv.pick = ""; rv.stampOn = true; rv.url = "";
+  rvEl.hidden = false; document.body.classList.add("rv-lock");
+  $("#rvText").value = ""; $("#rvTime").value = ""; $("#rvFilter").value = "current";
+  rvHead(); rvLoadPlayer(); rvRender();
+  rv.unsub = fs.collection("reviews/" + id + "/comments").onSnapshot((s) => {
+    rv.comments = new Map(s.docs.map((d) => [d.id, d.data()]));
+    if (rv.first) {        // a new version with no comments yet: show the earlier ones so fixes can be checked
+      rv.first = false; const tops = [...rv.comments.values()].filter((c) => !c.parent);
+      if (tops.length && !tops.some((c) => (c.v || 1) === rv.ver)) { rv.filter = "all"; $("#rvFilter").value = "all"; }
+    }
+    rvRender();
+  }, (e) => { console.warn("comments", e); $("#rvList").innerHTML = `<p class="muted">Comments couldn't be loaded. Close this and try again.</p>`; });
+  rv.tick = setInterval(rvTick, 250);
+  setTimeout(() => $("#rvBack").focus(), 0);
+}
+function closeReview() {
+  if (!rv.id) return;
+  clearInterval(rv.tick); try { rv.unsub && rv.unsub(); } catch (e) {}
+  rv.player && rv.player.destroy(); rv.player = null; rv.unsub = null; rv.id = null;
+  rvEl.hidden = true; document.body.classList.remove("rv-lock");
+}
+function rvLoadPlayer() {
+  const t = S.merged.get(rv.id) || {};
+  if (rv.player && rv.url === (t.videoUrl || "")) return;
+  rv.player && rv.player.destroy();
+  rv.url = t.videoUrl || "";
+  const v = parseVideo(rv.url);
+  rv.player = makePlayer($("#rvStage"), v, !isClient());
+  const open = $("#rvOpen"); const link = safeUrl(rv.url);
+  open.hidden = !link || (v && v.kind !== "drive" && v.kind !== "yt"); if (link) open.href = link;
+  rvSyncComposer();
+}
+function rvHead() {
+  const t = S.merged.get(rv.id); if (!t) { closeReview(); return; }
+  rv.ver = verOf(t);
+  const st = t.status || "todo";
+  $("#rvTitle").textContent = t.title || "Untitled video";
+  $("#rvMeta").innerHTML = `<span class="tag">v${rv.ver}</span><span class="pill" data-st="${esc(st)}">${esc(ST[st]?.label || st)}</span>${t.client && !isClient() ? `<span class="muted">${esc(personName(t.client))}</span>` : ""}`;
+  const note = $("#rvNote"); note.hidden = !t.clientNote; note.textContent = t.clientNote || "";
+  const dl = $("#rvDl"); dl.hidden = !(isClient() && st === "approved"); dl.innerHTML = dl.hidden ? "" : dlButton(rv.id);
+  const d = $("#rvDecide");
+  const canDecide = isClient() && st === "review";
+  d.hidden = !canDecide;
+  if (!canDecide) { rv.pick = ""; $$(".decide .btn", d).forEach((x) => x.classList.remove("pick")); $("#rvDecNote").hidden = $("#rvDecSend").hidden = true; }
+  rvLoadPlayer();
+}
+function rvSyncComposer() {
+  const timed = !!(rv.player && rv.player.canTime);
+  $("#rvChip").hidden = !timed; $("#rvTime").hidden = timed;
+  $("#rvHint").textContent = timed ? "Pause on the moment, then type. Click a time to jump there." : (parseVideo(rv.url)?.kind === "drive" ? "Type the time from the video, e.g. 0:12 (optional)." : "Add the time from the video if you can, e.g. 0:12.");
+  rvChip();
+}
+function rvChip() { const c = $("#rvChip"); c.textContent = rv.stampOn ? "⏱ " + fmtTC(rv.stamp) : "⏱ No time"; c.classList.toggle("off", !rv.stampOn); c.setAttribute("aria-pressed", String(rv.stampOn)); }
+function rvTick() { if (!rv.player || !rv.player.canTime || $("#rvText").value) return; const t = rv.player.time(); if (Math.floor(t) !== Math.floor(rv.stamp)) { rv.stamp = t; rvChip(); } }
+
+function rvRender() {
+  if (!rv.id) return;
+  const all = [...rv.comments.entries()].map(([id, c]) => ({ id, ...c }));
+  const tops = all.filter((c) => !c.parent), cur = (c) => (c.v || 1) === rv.ver;
+  const counts = { current: tops.filter(cur).length, open: tops.filter((c) => cur(c) && !c.done).length, all: tops.length };
+  $$("#rvFilter option").forEach((o) => { o.textContent = { current: "This version", open: "Not done yet", all: "All versions" }[o.value] + ` (${counts[o.value]})`; });
+  const shown = tops.filter((c) => rv.filter === "all" || (rv.filter === "open" ? cur(c) && !c.done : cur(c)))
+    .sort((a, b) => (b.v || 1) - (a.v || 1) || (a.t == null) - (b.t == null) || (a.t || 0) - (b.t || 0) || String(a.at).localeCompare(String(b.at)));
+  const replies = (pid) => all.filter((c) => c.parent === pid).sort((a, b) => String(a.at).localeCompare(String(b.at)));
+  const list = $("#rvList");
+  const focused = document.activeElement && document.activeElement.id === "rvReply";
+  if (focused) rv.replyText = document.activeElement.value;
+  const one = (c, isReply) => {
+    const mine = c.uid === me.uid, old = !cur(c) && !isReply, canSeek = rv.player && rv.player.canTime && !old;
+    const tc = c.t == null ? "" : canSeek ? `<button class="tc" data-seek="${Number(c.t)}" type="button" title="Jump to ${fmtTC(c.t)}">${fmtTC(c.t)}</button>` : `<span class="tc">${fmtTC(c.t)}</span>`;
+    return `<div class="cm${c.done ? " done" : ""}${isReply ? " reply" : ""}" data-id="${esc(c.id)}">
+      <div class="cm-h"><span class="av">${esc(initials(c.name))}</span><b>${esc(c.name || "Someone")}</b>${c.by === "client" ? `<span class="tag">Client</span>` : ""}${old ? `<span class="tag">v${c.v || 1}</span>` : ""}<span class="cm-at">${esc(fmtTime(c.at))}</span></div>
+      <div class="cm-b">${tc}<span class="cm-text">${esc(c.text)}</span></div>
+      <div class="cm-a">${isReply ? "" : `<button type="button" data-reply>Reply</button><button type="button" data-done>${c.done ? "↺ Reopen" : "✓ Done"}</button>`}${mine || isAdmin() ? `<button type="button" data-del>Delete</button>` : ""}${c.done && !isReply ? `<span class="muted">Done${c.doneBy ? " by " + esc(c.doneBy) : ""}</span>` : ""}</div>
+      ${isReply ? "" : replies(c.id).map((r) => one(r, true)).join("")}
+      ${!isReply && rv.replyTo === c.id ? `<div class="cm-rbox"><textarea id="rvReply" rows="2" placeholder="Write a reply…" aria-label="Reply">${esc(rv.replyText)}</textarea><div><button class="btn sm ghost" type="button" data-rcancel>Cancel</button><button class="btn sm primary" type="button" data-rsend>Reply</button></div></div>` : ""}
+    </div>`;
+  };
+  list.innerHTML = shown.length ? shown.map((c) => one(c, false)).join("")
+    : `<div class="rv-empty"><b>${counts.all && rv.filter !== "all" ? (rv.filter === "open" ? "Everything is done" : "No comments on this version yet") : "No comments yet"}</b><span>${isClient() ? "Play the video, pause where you want a change, and write it below." : "Comments from the client and the team show up here."}</span></div>`;
+  if (focused || rv.replyTo) { const r = $("#rvReply"); if (r && focused) { r.focus(); r.setSelectionRange(r.value.length, r.value.length); } }
+}
+
+function rvAdd(text, t, parent) {
+  const id = uid();
+  const c = { text: text.slice(0, 2000), t: t == null ? null : Math.round(t * 10) / 10, v: rv.ver, by: isClient() ? "client" : "team", uid: me.uid, name: (me.name || me.email || "").slice(0, 80), at: now(), parent: parent || "", done: false, doneBy: "", doneAt: "" };
+  rv.comments.set(id, c); rvRender();
+  Store.set("reviews/" + rv.id + "/comments", id, c);
+}
+
+$("#rvBack").addEventListener("click", closeReview);
+addEventListener("keydown", (e) => { if (e.key === "Escape" && rv.id && !e.target.closest("textarea, input")) closeReview(); });
+$("#rvFilter").addEventListener("change", (e) => { rv.filter = e.target.value; rvRender(); });
+$("#rvChip").addEventListener("click", () => { rv.stampOn = !rv.stampOn; rvChip(); });
+$("#rvText").addEventListener("input", (e) => { if (e.target.value.length === 1 && rv.player && rv.player.canTime) { rv.stamp = rv.player.time(); rv.player.pause(); rvChip(); } });
+$("#rvText").addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.shiftKey && !e.isComposing) { e.preventDefault(); $("#rvComp").requestSubmit(); } });
+$("#rvComp").addEventListener("submit", (e) => {
+  e.preventDefault();
+  const text = $("#rvText").value.trim(); if (!text) { $("#rvText").focus(); return; }
+  let t = null;
+  if (rv.player && rv.player.canTime) t = rv.stampOn ? rv.stamp : null;
+  else { t = parseTC($("#rvTime").value); if (Number.isNaN(t)) { toast("Write the time like 0:12 or 1:05:30."); $("#rvTime").focus(); return; } }
+  rvAdd(text, t, "");
+  $("#rvText").value = ""; $("#rvTime").value = "";
+  if (rv.player && rv.player.canTime) { rv.stampOn = true; rv.stamp = rv.player.time(); rvChip(); }
+});
+$("#rvList").addEventListener("click", (e) => {
+  const seek = e.target.closest("[data-seek]"); if (seek) { rv.player && rv.player.seek(Number(seek.dataset.seek)); return; }
+  const cm = e.target.closest(".cm"); if (!cm) return;
+  const top = e.target.closest(".cm:not(.reply)") || cm, id = cm.dataset.id, c = rv.comments.get(id);
+  if (e.target.closest("[data-reply]")) { rv.replyTo = top.dataset.id; rv.replyText = ""; rvRender(); $("#rvReply")?.focus(); return; }
+  if (e.target.closest("[data-rcancel]")) { rv.replyTo = rv.replyText = ""; rvRender(); return; }
+  if (e.target.closest("[data-rsend]")) {
+    const txt = ($("#rvReply")?.value || "").trim(); if (!txt) { $("#rvReply")?.focus(); return; }
+    const pid = rv.replyTo; rv.replyTo = rv.replyText = ""; rvAdd(txt, null, pid); return;
+  }
+  if (!c) return;
+  if (e.target.closest("[data-done]")) {
+    const patch = c.done ? { done: false, doneBy: "", doneAt: "" } : { done: true, doneBy: (me.name || "").split(" ")[0] || "", doneAt: now() };
+    rv.comments.set(id, { ...c, ...patch }); rvRender(); Store.update("reviews/" + rv.id + "/comments", id, patch); return;
+  }
+  const del = e.target.closest("[data-del]");
+  if (del) {
+    if (del.dataset.armed !== "1") { del.dataset.armed = "1"; del.textContent = "Click again to delete"; setTimeout(() => { if (del.isConnected) { del.dataset.armed = ""; del.textContent = "Delete"; } }, 3000); return; }
+    const kids = [...rv.comments.entries()].filter(([, x]) => x.parent === id).map(([k]) => k);
+    [id, ...(isAdmin() || kids.every((k) => rv.comments.get(k).uid === me.uid) ? kids : [])].forEach((k) => { rv.comments.delete(k); Store.remove("reviews/" + rv.id + "/comments", k); });
+    rvRender();
+  }
+});
+$("#rvList").addEventListener("keydown", (e) => { if (e.target.id === "rvReply" && e.key === "Enter" && !e.shiftKey && !e.isComposing) { e.preventDefault(); $("[data-rsend]", $("#rvList"))?.click(); } });
+$("#rvList").addEventListener("input", (e) => { if (e.target.id === "rvReply") rv.replyText = e.target.value; });
+$$("#rvDecide .decide .btn").forEach((b) => b.addEventListener("click", () => {
+  rv.pick = b.dataset.d; $$("#rvDecide .decide .btn").forEach((x) => x.classList.toggle("pick", x === b));
+  const open = [...rv.comments.values()].filter((c) => !c.parent && (c.v || 1) === rv.ver && !c.done).length;
+  const ta = $("#rvDecNote"); ta.hidden = false;
+  ta.placeholder = rv.pick === "approved" ? "Optional: a note for the team" : rv.pick === "revision" ? (open ? `Optional: anything to add to your ${open} comment${open > 1 ? "s" : ""}` : "What should we change? Or leave comments on the video first.") : "Why doesn't this work for you?";
+  const s = $("#rvDecSend"); s.hidden = false; s.textContent = rv.pick === "approved" ? "Approve video" : rv.pick === "revision" ? "Send revision request" : "Reject video";
+  ta.focus();
+}));
+$("#rvDecSend").addEventListener("click", () => {
+  const open = [...rv.comments.values()].filter((c) => !c.parent && (c.v || 1) === rv.ver && !c.done).length;
+  let note = $("#rvDecNote").value.trim();
+  if (rv.pick === "revision" && !note) { if (!open) { toast("Leave a comment on the video or write what to change."); $("#rvText").focus(); return; } note = `See ${open} comment${open > 1 ? "s" : ""} on the video.`; }
+  if (rv.pick === "rejected" && !note) { toast("Please tell the team why."); $("#rvDecNote").focus(); return; }
+  $("#rvDecNote").value = "";
+  setStatus(rv.id, rv.pick, note, "client");
+});
 
 </script>
 </body>

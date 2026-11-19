@@ -80,6 +80,42 @@ service cloud.firestore {
             && request.resource.data.history[0:resource.data.history.size()] == resource.data.history
             && request.resource.data.history[resource.data.history.size()].by == "client"
             && request.resource.data.history[resource.data.history.size()].state == request.resource.data.status);
+
+      // Comments on the video: anyone who can see the video can read them and add their own.
+      match /comments/{commentId} {
+        function rev() { return get(/databases/$(database)/documents/reviews/$(taskId)).data; }
+        function canSee() {
+          return isAdmin()
+            || (isEditor() && rev().assignee == request.auth.uid)
+            || (isClient() && rev().client == me().clientId);
+        }
+        allow read: if canSee();
+        allow create: if canSee()
+          && request.resource.data.keys().hasOnly(["text", "t", "v", "by", "uid", "name", "at", "parent", "done", "doneBy", "doneAt"])
+          && request.resource.data.uid == request.auth.uid
+          && ((isClient() && request.resource.data.by == "client") || (isTeam() && request.resource.data.by == "team"))
+          && request.resource.data.text is string
+          && request.resource.data.text.size() > 0 && request.resource.data.text.size() <= 2000
+          && request.resource.data.done == false;
+        // Anyone on the video can tick a comment done; only the author can change its text.
+        allow update: if canSee()
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["done", "doneBy", "doneAt", "text"])
+          && (request.resource.data.text == resource.data.text || resource.data.uid == request.auth.uid);
+        allow delete: if isAdmin() || (canSee() && resource.data.uid == request.auth.uid);
+      }
+    }
+
+    // The final file link. The team can always see and set it; the client can only read it
+    // once their video is approved.
+    match /downloads/{taskId} {
+      function rv() { return get(/databases/$(database)/documents/reviews/$(taskId)).data; }
+      allow read: if isAdmin()
+        || (isEditor() && rv().assignee == request.auth.uid)
+        || (isClient() && rv().client == me().clientId && rv().status == "approved");
+      allow create, update: if (isAdmin() || (isEditor() && rv().assignee == request.auth.uid))
+        && request.resource.data.keys().hasOnly(["url", "updatedAt"])
+        && request.resource.data.url is string && request.resource.data.url.size() <= 2000;
+      allow delete: if isAdmin();
     }
 
     // Team-only documents and spreadsheets.
