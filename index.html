@@ -286,6 +286,11 @@ body.rv-lock { overflow: hidden; }
 .rv-msg p { margin: 0; max-width: 44ch; color: #b5a89f; }
 .rv-side { display: flex; flex-direction: column; min-height: 0; border-left: 1px solid var(--line); background: var(--panel); }
 .rv-note { margin: 12px 14px 0; padding: 10px 12px; border-radius: 8px; background: var(--panel-2); border-left: 3px solid var(--accent); font-size: 13px; white-space: pre-wrap; }
+.sec.exp { background: var(--panel); border: 1px solid var(--line-2); border-radius: 10px; padding: 14px; }
+.sec.exp h4 { color: var(--accent-2); }
+.exp-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 6px; }
+.warn { margin-top: 6px; font-size: 12.5px; color: var(--st-revision); }
+.exp-tag { color: var(--accent-2); background: var(--accent-soft); }
 .rv-dl { display: grid; gap: 6px; padding: 12px 14px 0; }
 .rv-decide { display: grid; gap: 8px; padding: 12px 14px; border-bottom: 1px solid var(--line); }
 .rv-decide textarea, .cm-rbox textarea, .rv-comp textarea, .rv-comp input { width: 100%; background: var(--panel-2); border: 1px solid var(--line-2); border-radius: 8px; padding: 8px 10px; color: var(--fg); font: inherit; resize: vertical; }
@@ -726,7 +731,7 @@ const STATUSES = [
 const ST = Object.fromEntries(STATUSES.map((s) => [s.id, s]));
 const PRIORITY = { high: "High", normal: "Normal", low: "Low" };
 const ROLE_LABEL = { admin: "Admin", editor: "Editor", client: "Client" };
-const TASK_FIELDS = ["title", "assignee", "client", "due", "type", "priority", "brief", "notes", "sheet", "videoUrl", "docUrl", "sheetUrl", "clientNote", "order", "createdAt", "updatedAt"];
+const TASK_FIELDS = ["title", "assignee", "client", "due", "type", "priority", "brief", "notes", "sheet", "videoUrl", "rawUrl", "docUrl", "sheetUrl", "clientNote", "order", "createdAt", "updatedAt"];
 const MIRROR_FIELDS = ["title", "assignee", "client", "due", "type", "videoUrl", "clientNote"];   // what the client is allowed to see
 const pick = (o, keys) => Object.fromEntries(keys.filter((k) => o[k] !== undefined).map((k) => [k, o[k]]));
 
@@ -812,7 +817,7 @@ function cardHTML(t) {
   const a = personName(t.assignee), c = personName(t.client), rv = revCount(t);
   return `<button class="card" draggable="true" data-id="${esc(t.id)}">
     <h3>${esc(t.title || "Untitled task")}</h3>
-    <div class="meta">${c ? `<span>${esc(c)}</span>` : ""}${t.type ? `<span class="tag">${esc(t.type)}</span>` : ""}${t.priority === "high" ? `<span class="tag" style="color:var(--st-rejected)">High</span>` : ""}${rv ? `<span class="tag rev">Rev ${rv}</span>` : ""}</div>
+    <div class="meta">${c ? `<span>${esc(c)}</span>` : ""}${t.type ? `<span class="tag">${esc(t.type)}</span>` : ""}${t.priority === "high" ? `<span class="tag" style="color:var(--st-rejected)">High</span>` : ""}${rv ? `<span class="tag rev">Rev ${rv}</span>` : ""}${parseVideo(t.videoUrl) && parseVideo(t.videoUrl).kind !== "notvideo" ? `<span class="tag exp-tag" title="Exported video added">▶ Export</span>` : ""}</div>
     <div class="meta">${a ? `<span class="who"><span class="av">${esc(initials(a))}</span>${esc(a)}</span>` : `<span class="muted">Unassigned</span>`}${t.due ? `<span class="due ${isLate(t) ? "late" : ""}">Due ${esc(fmtDate(t.due))}</span>` : ""}</div>
   </button>`;
 }
@@ -938,6 +943,18 @@ function closeDrawer() { flushTask(); flushFile(); drawer.classList.remove("on")
 scrim.addEventListener("click", closeDrawer);
 addEventListener("keydown", (e) => { if (e.key === "Escape" && !rv.id && drawer.classList.contains("on") && !e.target.closest(".sh-grid td.edit, .rt-link")) closeDrawer(); });
 
+function exportBox(t, id) {
+  const v = parseVideo(t.videoUrl), url = safeUrl(t.videoUrl), dl = S.dl.get(id) || {};
+  const kind = !v ? "" : v.kind === "yt" ? "YouTube · time stamps on comments" : v.kind === "drive" ? "Google Drive" : v.kind === "file" ? "Video file · time stamps on comments" : v.kind === "notvideo" ? "" : "Opens on another site";
+  return `<div class="fields">
+    <div class="f full"><label for="fVid">Exported video the client watches</label><div class="linkrow"><input id="fVid" data-k="videoUrl" value="${esc(t.videoUrl)}" placeholder="Unlisted YouTube or Google Drive video link" inputmode="url">${url ? `<a class="btn" href="${esc(url)}" target="_blank" rel="noopener">Open ↗</a>` : ""}</div>
+      ${v && v.kind === "notvideo" ? `<div class="warn">This is a Google Doc or Sheet, not a video. <button class="linkbtn" id="mvDoc" type="button">Move it to the Google Doc field</button></div>`
+        : url ? `<div class="exp-row"><button class="btn primary" id="openRv" type="button">▶ Watch video &amp; comments</button><span class="muted" style="font-size:12px">${esc(kind)}</span></div>`
+        : `<small class="muted" style="font-size:12px">Paste the export here when it's ready. For Drive, set sharing to “Anyone with the link”.</small>`}</div>
+    <div class="f full"><label for="fFin">Final file for the client to download</label><div class="linkrow"><input id="fFin" placeholder="${S.dl.has(id) ? "https://drive.google.com/… (the full-quality file)" : "Loading…"}" inputmode="url" value="${esc(dl.url || "")}">${safeUrl(dl.url) ? `<a class="btn" href="${esc(safeUrl(dl.url))}" target="_blank" rel="noopener">Open ↗</a>` : ""}</div>
+      <small class="muted" style="font-size:12px">The client only gets this link after the video is approved.</small></div>
+  </div>`;
+}
 let taskDraft = null, taskTimer = 0;
 function patchTask(patch, quick) {
   const id = ui.openId; const base = taskDraft || S.tasks.get(id); if (!base) return;
@@ -956,7 +973,7 @@ function flushTask() {
 function newTask() {
   if (!isAdmin()) return;
   const id = uid();
-  const t = { title: "", assignee: ui.fAssignee || "", client: ui.fClient || "", due: "", type: "Reel", priority: "normal", brief: "", notes: "", sheet: { cells: {}, rows: 12, cols: 6 }, videoUrl: "", docUrl: "", sheetUrl: "", clientNote: "", order: Date.now(), createdAt: now(), updatedAt: now() };
+  const t = { title: "", assignee: ui.fAssignee || "", client: ui.fClient || "", due: "", type: "Reel", priority: "normal", brief: "", notes: "", sheet: { cells: {}, rows: 12, cols: 6 }, videoUrl: "", rawUrl: "", docUrl: "", sheetUrl: "", clientNote: "", order: Date.now(), createdAt: now(), updatedAt: now() };
   const r = { ...pick(t, MIRROR_FIELDS), status: "todo", history: [], updatedAt: now() };
   S.tasks.set(id, t); S.reviews.set(id, r); merge();
   Store.set("tasks", id, t); Store.set("reviews", id, r);
@@ -991,12 +1008,10 @@ function drawTask() {
       <div class="f"><label for="fPr">Priority</label><select id="fPr">${Object.entries(PRIORITY).map(([k, l]) => `<option value="${k}" ${k === (t.priority || "normal") ? "selected" : ""}>${l}</option>`).join("")}</select></div>
       <div class="f full"><label for="fBr">Brief for the editor</label><textarea id="fBr" placeholder="Style, length, music, captions, reference videos…">${esc(t.brief)}</textarea></div>
     </div>
-    <div class="sec"><h4>Links</h4><div class="fields">
-      ${[["fVid", "videoUrl", "Video (Drive, YouTube, Frame.io…)", "https://drive.google.com/…"], ["fDoc", "docUrl", "Google Doc", "https://docs.google.com/document/…"], ["fSh", "sheetUrl", "Google Sheet", "https://docs.google.com/spreadsheets/…"]].map(([fid, k, l, ph]) => `
+    <div class="sec exp"><h4>Exported video</h4>${exportBox(t, id)}</div>
+    <div class="sec"><h4>Files &amp; links <span class="muted" style="font:500 12px var(--body)">· team only</span></h4><div class="fields">
+      ${[["fRaw", "rawUrl", "Raw footage / project files", "https://drive.google.com/drive/folders/…"], ["fDoc", "docUrl", "Google Doc", "https://docs.google.com/document/…"], ["fSh", "sheetUrl", "Google Sheet", "https://docs.google.com/spreadsheets/…"]].map(([fid, k, l, ph]) => `
       <div class="f full"><label for="${fid}">${l}</label><div class="linkrow"><input id="${fid}" data-k="${k}" value="${esc(t[k])}" placeholder="${ph}" inputmode="url">${safeUrl(t[k]) ? `<a class="btn" href="${esc(safeUrl(t[k]))}" target="_blank" rel="noopener">Open ↗</a>` : ""}</div></div>`).join("")}
-      ${safeUrl(t.videoUrl) ? `<div class="f full"><button class="btn" id="openRv" type="button">▶ Watch &amp; see comments</button></div>` : ""}
-      <div class="f full"><label for="fFin">Final file for the client to download</label><div class="linkrow"><input id="fFin" placeholder="${S.dl.has(id) ? "https://drive.google.com/… (the full-quality file)" : "Loading…"}" inputmode="url" value="${esc((S.dl.get(id) || {}).url || "")}">${safeUrl((S.dl.get(id) || {}).url) ? `<a class="btn" href="${esc(safeUrl(S.dl.get(id).url))}" target="_blank" rel="noopener">Open ↗</a>` : ""}</div>
-        <small class="muted" style="font-size:12px">The client only gets this link after the video is approved.</small></div>
     </div></div>
     <div class="sec"><h4>Message for the client</h4><div class="f"><textarea id="fCn" placeholder="Shown to the client next to the video, e.g. Here's the first cut. Music is a placeholder.">${esc(t.clientNote)}</textarea></div></div>
     <div class="sec" style="display:flex;flex-wrap:wrap;gap:8px;justify-content:space-between">
@@ -1004,6 +1019,7 @@ function drawTask() {
       ${admin ? `<button class="btn ghost danger" id="delTask">Delete task</button>` : ""}</div>`;
     $("#fSt").addEventListener("change", (e) => { flushTask(); setStatus(id, e.target.value, "", "team"); });
     $("#openRv")?.addEventListener("click", () => { flushTask(); openReview(id); });
+    $("#mvDoc")?.addEventListener("click", () => { const cur = S.tasks.get(id) || {}; patchTask(cur.docUrl ? { rawUrl: cur.rawUrl || cur.videoUrl, videoUrl: "" } : { docUrl: cur.videoUrl, videoUrl: "" }, true); setTimeout(drawTask, 30); toast("Moved. Now paste the exported video link."); });
     if (!S.dl.has(id)) Store.col("downloads").doc(id).get().then((s) => { S.dl.set(id, s.exists ? s.data() : {}); if (ui.openKind === "task" && ui.openId === id && ui.subtab === "overview" && document.activeElement?.id !== "fFin") drawTask(); }).catch(() => S.dl.set(id, {}));
     $("#fFin").addEventListener("change", (e) => {
       const url = e.target.value.trim();
@@ -1036,7 +1052,9 @@ function drawTask() {
     $("#toReview").addEventListener("click", () => {
       flushTask(); const cur = S.merged.get(id);
       if (!cur.client) { toast("Pick a client first."); return; }
-      if (!safeUrl(cur.videoUrl)) { toast("Add the video link first."); $("#fVid").focus(); return; }
+      const pv = parseVideo(cur.videoUrl);
+      if (!pv) { toast("Add the exported video link first."); $("#fVid").focus(); return; }
+      if (pv.kind === "notvideo") { toast("That link is a document, not a video."); $("#fVid").focus(); return; }
       setStatus(id, "review", "", "team");
     });
     const del = $("#delTask"); let armed = false;
