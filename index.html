@@ -280,7 +280,8 @@ body.rv-lock { overflow: hidden; }
 .rv-main { display: grid; grid-template-columns: minmax(0, 1fr) 380px; min-height: 0; }
 .rv-stages { display: grid; grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); min-height: 0; background: #000; }
 .rv-stages.cmp { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); grid-template-rows: minmax(0, 1fr) auto; gap: 2px; }
-.rv-pane { display: grid; grid-template-rows: auto minmax(0, 1fr); min-height: 0; min-width: 0; }
+.rv-pane { display: flex; flex-direction: column; min-height: 0; min-width: 0; }
+.rv-pane > .rv-stage { flex: 1 1 auto; }
 .rv-plabel { display: flex; align-items: center; gap: 8px; padding: 6px 10px; background: var(--panel); border-bottom: 1px solid var(--line); font-size: 12px; color: var(--muted); }
 .rv-plabel select, .rv-sel { background: var(--panel-2); border: 1px solid var(--line-2); border-radius: 7px; padding: 5px 8px; color: var(--fg); font-size: 12.5px; max-width: 220px; }
 .rv-sync { grid-column: 1 / -1; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 8px 12px; background: var(--panel); border-top: 1px solid var(--line); font-size: 12.5px; }
@@ -324,6 +325,13 @@ table.list.wl tfoot td { background: var(--panel-3); border-top: 1px solid var(-
 @media (max-width: 720px) { .bar select { flex: 1 1 140px; min-width: 0; } }
 .sec.exp { background: var(--panel); border: 1px solid var(--line-2); border-radius: 10px; padding: 14px; }
 .sec.exp h4 { color: var(--accent-2); }
+.vlist { display: grid; gap: 6px; }
+.vrow { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; background: var(--panel-2); border-radius: 8px; padding: 7px 10px; font-size: 12.5px; min-width: 0; }
+.vrow a.vlink { flex: 1 1 160px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); }
+.vrow .now { color: var(--accent-2); font-weight: 600; }
+.nv-box { display: grid; gap: 8px; background: var(--panel-2); border: 1px dashed var(--line-2); border-radius: 10px; padding: 12px; }
+.nv-box input, .nv-box textarea { width: 100%; background: var(--panel); border: 1px solid var(--line-2); border-radius: 8px; padding: 8px 10px; color: var(--fg); font: inherit; }
+.nv-box > div { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
 .exp-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 6px; }
 .warn { margin-top: 6px; font-size: 12.5px; color: var(--st-revision); }
 .exp-tag { color: var(--accent-2); background: var(--accent-soft); }
@@ -995,9 +1003,15 @@ addEventListener("keydown", (e) => { if (e.key === "Escape" && !rv.id && drawer.
 
 function exportBox(t, id) {
   const v = parseVideo(t.videoUrl), url = safeUrl(t.videoUrl), dl = S.dl.get(id) || {};
+  const m = S.merged.get(id) || t, sent = (m.history || []).some((h) => h.state === "review"), vs = sent ? versionsOf(m) : [], next = vs.length + 1;
   const kind = !v ? "" : v.kind === "yt" ? "YouTube · time stamps on comments" : v.kind === "drive" ? "Google Drive" : v.kind === "file" ? "Video file · time stamps on comments" : v.kind === "notvideo" ? "" : "Opens on another site";
   return `<div class="fields">
-    <div class="f full"><label for="fVid">Exported video the client watches</label><div class="linkrow"><input id="fVid" data-k="videoUrl" value="${esc(t.videoUrl)}" placeholder="Unlisted YouTube or Google Drive video link" inputmode="url">${url ? `<a class="btn" href="${esc(url)}" target="_blank" rel="noopener">Open ↗</a>` : ""}</div>
+    ${vs.length ? `<div class="f full"><label>Versions sent to the client</label><div class="vlist">${vs.slice().reverse().map((x) => `<div class="vrow"><span class="tag">v${x.v}</span>${x.v === vs.length ? `<span class="now">Latest</span>` : ""}<span class="muted">${esc(fmtTime(x.at))}</span>${safeUrl(x.url) ? `<a class="vlink" href="${esc(safeUrl(x.url))}" target="_blank" rel="noopener" title="${esc(x.url)}">${esc(x.url.replace(/^https?:\/\/(www\.)?/, ""))}</a><button class="btn sm" data-watchv="${x.v}" type="button">▶ Watch</button>` : `<span class="muted vlink">Link not saved for this version</span>`}</div>`).join("")}</div>
+      <div id="nvWrap"><button class="btn" id="nvOpen" type="button">+ Add new version (v${next})</button>
+        <div class="nv-box" id="nvBox" hidden><label for="nvUrl" style="font-weight:600">Link to v${next}</label><input id="nvUrl" placeholder="Unlisted YouTube or Google Drive link of the new export" inputmode="url">
+          <textarea id="nvNote" rows="2" placeholder="What changed? (optional, the client sees this)" maxlength="500"></textarea>
+          <div><button class="btn ghost" id="nvCancel" type="button">Cancel</button><button class="btn primary" id="nvSend" type="button">Add v${next} &amp; send to client</button></div></div></div></div>` : ""}
+    <div class="f full"><label for="fVid">${vs.length ? `Link of the latest version (v${vs.length})` : "Exported video the client watches"}</label><div class="linkrow"><input id="fVid" data-k="videoUrl" value="${esc(t.videoUrl)}" placeholder="Unlisted YouTube or Google Drive video link" inputmode="url">${url ? `<a class="btn" href="${esc(url)}" target="_blank" rel="noopener">Open ↗</a>` : ""}</div>
       ${v && v.kind === "notvideo" ? `<div class="warn">This is a Google Doc or Sheet, not a video. <button class="linkbtn" id="mvDoc" type="button">Move it to the Google Doc field</button></div>`
         : url ? `<div class="exp-row"><button class="btn primary" id="openRv" type="button">▶ Watch video &amp; comments</button><span class="muted" style="font-size:12px">${esc(kind)}</span></div>`
         : `<small class="muted" style="font-size:12px">Paste the export here when it's ready. For Drive, set sharing to “Anyone with the link”.</small>`}</div>
@@ -1006,6 +1020,21 @@ function exportBox(t, id) {
   </div>`;
 }
 let taskDraft = null, taskTimer = 0;
+// A new export: the old link stays with its version, the new link becomes the latest version and goes to the client.
+function addVersion(id, url, note) {
+  const r = S.reviews.get(id), t = S.tasks.get(id); if (!r || !t) return;
+  flushTask();
+  const history = (r.history || []).map((h) => ({ ...h }));
+  const last = history.map((h) => h.state).lastIndexOf("review");
+  if (last >= 0 && !history[last].url) history[last].url = t.videoUrl || r.videoUrl || "";
+  history.push({ state: "review", note: note || "", by: "team", uid: me.uid, at: now(), url });
+  const v = history.filter((h) => h.state === "review").length;
+  const tp = { videoUrl: url, updatedAt: now() }; if (note) tp.clientNote = note;
+  S.tasks.set(id, { ...t, ...tp }); Store.update("tasks", id, tp);
+  const rp = { ...tp, status: "review", history };
+  S.reviews.set(id, { ...r, ...rp }); merge(); Store.update("reviews", id, rp);
+  toast(`v${v} sent to the client`); render(); if (ui.openKind === "task" && ui.openId === id) drawTask();
+}
 function patchTask(patch, quick) {
   const id = ui.openId; const base = taskDraft || S.tasks.get(id); if (!base) return;
   taskDraft = { ...base, ...patch, updatedAt: now() }; S.tasks.set(id, taskDraft); merge();
@@ -1069,6 +1098,15 @@ function drawTask() {
       ${admin ? `<button class="btn ghost danger" id="delTask">Delete task</button>` : ""}</div>`;
     $("#fSt").addEventListener("change", (e) => { flushTask(); setStatus(id, e.target.value, "", "team"); });
     $("#openRv")?.addEventListener("click", () => { flushTask(); openReview(id); });
+    $$("[data-watchv]", body).forEach((b) => b.addEventListener("click", () => { flushTask(); openReview(id, Number(b.dataset.watchv)); }));
+    $("#nvOpen")?.addEventListener("click", () => { $("#nvBox").hidden = false; $("#nvOpen").hidden = true; $("#nvUrl").focus(); });
+    $("#nvCancel")?.addEventListener("click", () => { $("#nvBox").hidden = true; $("#nvOpen").hidden = false; });
+    $("#nvSend")?.addEventListener("click", () => {
+      const url = $("#nvUrl").value.trim(), pv = parseVideo(url);
+      if (!pv) { toast("Paste the full link of the new export."); $("#nvUrl").focus(); return; }
+      if (pv.kind === "notvideo") { toast("That link is a document, not a video."); $("#nvUrl").focus(); return; }
+      addVersion(id, url, $("#nvNote").value.trim());
+    });
     $("#mvDoc")?.addEventListener("click", () => { const cur = S.tasks.get(id) || {}; patchTask(cur.docUrl ? { rawUrl: cur.rawUrl || cur.videoUrl, videoUrl: "" } : { docUrl: cur.videoUrl, videoUrl: "" }, true); setTimeout(drawTask, 30); toast("Moved. Now paste the exported video link."); });
     if (!S.dl.has(id)) Store.col("downloads").doc(id).get().then((s) => { S.dl.set(id, s.exists ? s.data() : {}); if (ui.openKind === "task" && ui.openId === id && ui.subtab === "overview" && document.activeElement?.id !== "fFin") drawTask(); }).catch(() => S.dl.set(id, {}));
     $("#fFin").addEventListener("change", (e) => {
@@ -1482,10 +1520,10 @@ function makePlayer(stage, v, team) {
 const rv = { id: null, player: null, playerB: null, view: 1, cmp: 0, urlB: "", comments: new Map(), unsub: null, tick: 0, stampOn: true, stamp: 0, filter: "current", ver: 1, replyTo: "", replyText: "", pick: "", url: "" };
 const rvEl = $("#rv");
 
-function openReview(id) {
+function openReview(id, ver) {
   if (rv.id) closeReview();
   const t = S.merged.get(id); if (!t) return;
-  rv.id = id; rv.first = true; rv.view = verOf(t); rv.cmp = 0; rv.comments = new Map(); rv.filter = "current"; rv.replyTo = rv.replyText = ""; rv.pick = ""; rv.stampOn = true; rv.url = "";
+  rv.id = id; rv.first = true; rv.ver = verOf(t); rv.view = ver && ver <= rv.ver ? ver : rv.ver; rv.cmp = 0; rv.comments = new Map(); rv.filter = "current"; rv.replyTo = rv.replyText = ""; rv.pick = ""; rv.stampOn = true; rv.url = "";
   rvEl.hidden = false; document.body.classList.add("rv-lock");
   $("#rvText").value = ""; $("#rvTime").value = ""; $("#rvFilter").value = "current";
   rvHead(); rvLoadPlayer(); rvRender();
@@ -1542,7 +1580,7 @@ function rvHead() {
 function rvSyncComposer() {
   const timed = !!(rv.player && rv.player.canTime);
   $("#rvChip").hidden = !timed; $("#rvTime").hidden = timed;
-  $("#rvHint").textContent = timed ? "Pause on the moment, then type. Click a time to jump there." : (parseVideo(rv.url)?.kind === "drive" ? "Type the time from the video, e.g. 0:12 (optional)." : "Add the time from the video if you can, e.g. 0:12.");
+  $("#rvHint").textContent = timed ? "Pause on the moment, then type. Click a time to jump there." : (parseVideo(rv.url)?.kind === "drive" ? "Type the time from the video, e.g. 0:12 (optional). Video not showing? The Drive file must be shared as “Anyone with the link”." : "Add the time from the video if you can, e.g. 0:12.");
   rvChip();
 }
 function rvChip() { const c = $("#rvChip"); c.textContent = rv.stampOn ? "⏱ " + fmtTC(rv.stamp) : "⏱ No time"; c.classList.toggle("off", !rv.stampOn); c.setAttribute("aria-pressed", String(rv.stampOn)); }
