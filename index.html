@@ -883,7 +883,8 @@ function drawTask() {
     body.innerHTML = `<div class="fields">
       <div class="f"><label for="fSt">Status</label><select id="fSt">${STATUSES.map((s) => `<option value="${s.id}" ${s.id === (t.status || "todo") ? "selected" : ""}>${s.label}</option>`).join("")}</select></div>
       <div class="f"><label for="fAs">Editor</label><select id="fAs" ${admin ? "" : "disabled"}>${opt(team(), t.assignee, "Unassigned")}</select></div>
-      <div class="f"><label for="fCl">Client</label><select id="fCl" ${admin ? "" : "disabled"}>${opt(clients(), t.client, "No client")}</select></div>
+      <div class="f"><label for="fCl">Client</label><select id="fCl" ${admin ? "" : "disabled"}>${opt(clients(), t.client, "No client")}${admin ? `<option value="__new">+ Add a new client…</option>` : ""}</select>
+        ${admin ? `<div class="linkrow" id="fClNewRow" hidden style="margin-top:6px"><input id="fClNew" placeholder="Type the client or brand name" maxlength="60" aria-label="New client name"><button class="btn primary" id="fClAdd" type="button">Add</button></div>` : ""}</div>
       <div class="f"><label for="fDue">Due date</label><input type="date" id="fDue" value="${esc(t.due)}"></div>
       <div class="f"><label for="fTy">Type</label><select id="fTy">${["Reel", "Short", "YouTube video", "Podcast", "Ad", "Thumbnail", "Other"].map((x) => `<option ${x === t.type ? "selected" : ""}>${x}</option>`).join("")}</select></div>
       <div class="f"><label for="fPr">Priority</label><select id="fPr">${Object.entries(PRIORITY).map(([k, l]) => `<option value="${k}" ${k === (t.priority || "normal") ? "selected" : ""}>${l}</option>`).join("")}</select></div>
@@ -900,7 +901,19 @@ function drawTask() {
     $("#fSt").addEventListener("change", (e) => { flushTask(); setStatus(id, e.target.value, "", "team"); });
     if (admin) {
       $("#fAs").addEventListener("change", (e) => patchTask({ assignee: e.target.value }, true));
-      $("#fCl").addEventListener("change", (e) => patchTask({ client: e.target.value }, true));
+      const addClient = () => {
+        const name = $("#fClNew").value.trim(); if (!name) { $("#fClNew").focus(); return; }
+        const existing = clients().find((c) => c.name.toLowerCase() === name.toLowerCase());
+        let cid = existing ? existing.id : uid();
+        if (!existing) { const c = { name: name.slice(0, 60), createdAt: now() }; S.clients.set(cid, c); Store.set("clients", cid, c); }
+        patchTask({ client: cid }, true); drawTask();
+      };
+      $("#fCl").addEventListener("change", (e) => {
+        if (e.target.value === "__new") { $("#fClNewRow").hidden = false; $("#fClNew").focus(); return; }
+        $("#fClNewRow").hidden = true; patchTask({ client: e.target.value }, true);
+      });
+      $("#fClAdd").addEventListener("click", addClient);
+      $("#fClNew").addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); addClient(); } });
     }
     $("#fDue").addEventListener("change", (e) => patchTask({ due: e.target.value }, true));
     $("#fTy").addEventListener("change", (e) => patchTask({ type: e.target.value }, true));
