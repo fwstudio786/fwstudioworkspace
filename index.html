@@ -363,6 +363,8 @@ body.rv-lock { overflow: hidden; }
 .frow .flabel { justify-self: start; width: min(320px, 100%); background: transparent; border: 1px dashed transparent; border-radius: 6px; padding: 2px 6px; margin-left: -6px; color: var(--muted); font: 600 11.5px/1.4 var(--body); letter-spacing: .06em; text-transform: uppercase; }
 .frow .flabel:hover, .frow .flabel:focus { border-color: var(--line-2); color: var(--fg); outline: none; }
 .fdel { padding-inline: 10px; }
+#fBr { field-sizing: content; min-height: 90px; max-height: 420px; }
+.frow.fresh .furl { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); transition: box-shadow .3s; }
 .frow .furl { width: 100%; background: var(--panel); border: 1px solid var(--line-2); border-radius: 8px; padding: 8px 10px; color: var(--fg); }
 .drawer .sec > .flist { margin-top: 2px; }
 .fadd { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-top: 10px; font-size: 12.5px; }
@@ -1302,6 +1304,9 @@ function drawTask() {
     $("#fTy").addEventListener("change", (e) => patchTask({ type: e.target.value }, true));
     $("#fPr").addEventListener("change", (e) => patchTask({ priority: e.target.value }, true));
     $("#fBr").addEventListener("input", (e) => patchTask({ brief: e.target.value }));
+    // links written in the brief ("Raw : https://…") go into Footage & links by themselves
+    $("#fBr").addEventListener("paste", () => setTimeout(() => briefLinks(id, true), 0));
+    $("#fBr").addEventListener("change", () => briefLinks(id, false));
     $("#fCn").addEventListener("input", (e) => patchTask({ clientNote: e.target.value }));
   } else if (ui.subtab === "exports") {
     body.innerHTML = exportsTab(t, id) + taskActions(t, id);
@@ -2167,6 +2172,64 @@ function filesBox(t) {
     <div class="flist">${rows}</div>
     <div class="fadd"><span class="muted">Add:</span>${["Raw footage for the editor", "Reference", "Music"].map((l) => `<button class="btn sm" data-fadd="${esc(l)}" type="button">+ ${esc(l === "Raw footage for the editor" ? "Raw footage" : l)}</button>`).join("")}<button class="btn sm" data-fadd="" type="button">+ Other link</button></div>
     <datalist id="fPresets">${FILE_PRESETS.map((x) => `<option value="${esc(x)}">`).join("")}</datalist></div>`;
+}
+/* ---------------- links written inside the brief ----------------
+   "Raw : https://…", "Reference - https://…", a label on the line above, or just a bare link. */
+function guessLabel(url) {
+  let u; try { u = new URL(url); } catch (e) { return "Link"; }
+  const h = u.hostname.replace(/^www\./, ""), p = u.pathname;
+  if (h === "drive.google.com") return /\/folders\//.test(p) ? "Drive folder" : "Drive file";
+  if (h === "docs.google.com") return /\/spreadsheets\//.test(p) ? "Google Sheet" : /\/presentation\//.test(p) ? "Google Slides" : /\/forms\//.test(p) ? "Google Form" : "Google Doc";
+  if (/(^|\.)youtube\.com$|^youtu\.be$/.test(h)) return "Reference video";
+  if (/clickup\.com$/.test(h)) return "ClickUp task";
+  if (/frame\.io$/.test(h)) return "Frame.io";
+  if (/dropbox\.com$/.test(h)) return "Dropbox";
+  if (/wetransfer\.com$|we\.tl$/.test(h)) return "WeTransfer";
+  if (/instagram\.com$/.test(h)) return "Instagram reference";
+  if (/tiktok\.com$/.test(h)) return "TikTok reference";
+  return h;
+}
+function linksFromText(text) {
+  const out = [], lines = String(text || "").split(/\r?\n/);
+  lines.forEach((line, i) => {
+    const re = /https?:\/\/[^\s<>"'\])]+/g; let m, first = true;
+    while ((m = re.exec(line))) {
+      const url = m[0].replace(/[.,;:!?]+$/, "");
+      let label = first ? line.slice(0, m.index).replace(/[\s:：\-–—|=>•*·]+$/, "").replace(/^[\s\-–—•*·\d.)]+/, "").trim() : "";
+      if (!label && first) { const prev = (lines[i - 1] || "").trim(); if (prev && prev.length <= 40 && /[:：]$/.test(prev) && !/https?:\/\//.test(prev)) label = prev.replace(/[:：]+$/, "").trim(); }
+      if (label.length > 40 || /https?:/.test(label)) label = "";
+      label = label ? label.charAt(0).toUpperCase() + label.slice(1) : guessLabel(url);
+      out.push({ label: label.slice(0, 60), url }); first = false;
+    }
+  });
+  return out;
+}
+// "Brief : Reynolds … - Google Docs" (a copied Docs chip shows only the title): there's no address to add.
+const titleOnlyLines = (text) => String(text || "").split(/\r?\n/).filter((l) => !/https?:\/\//.test(l) && /\s[-–]\s(Google (Docs|Sheets|Slides|Drive)|Dropbox|ClickUp)\s*$/i.test(l)).map((l) => (l.split(/[:：]/)[0] || l).trim().slice(0, 30));
+function briefLinks(id, pasted) {
+  const t = { ...(S.merged.get(id) || {}), ...(S.tasks.get(id) || {}), ...(taskDraft || {}) };
+  const found = linksFromText(t.brief); if (!found.length) { const miss = titleOnlyLines(t.brief); if (pasted && miss.length) toast(`“${miss[0]}” has no web address, only its title. In Google Docs use Share → Copy link, then paste that.`); return; }
+  const norm = (u) => String(u || "").trim().replace(/\/+$/, "").replace(/[?&]usp=[a-z_]+$/i, "");
+  const files = filesOf(t).map((f) => ({ ...f })), have = new Set(files.map((f) => norm(f.url)).filter(Boolean));
+  let added = 0;
+  found.forEach(({ label, url }) => {
+    if (have.has(norm(url))) return;
+    const l = label.toLowerCase(), key = l.split(/\s+/)[0];
+    const empty = files.find((f) => !f.url && (f.label.toLowerCase() === l || f.label.toLowerCase().startsWith(key)));   // fill a matching empty row first
+    if (empty) { empty.url = url; if (!empty.label) empty.label = label; } else files.push({ id: uid(), label, url });
+    have.add(norm(url)); added++;
+  });
+  if (!added) return;
+  const clean = files.filter((f) => f.url || f.label !== "Raw footage for the editor" || files.filter((x) => x.url).length === 0);   // drop the empty starter row once real links are in
+  const a = document.activeElement, keep = a && a.id === "fBr" ? [a.selectionStart, a.selectionEnd] : null;
+  patchTask({ files: clean }, true);
+  setTimeout(() => {
+    drawTask();
+    if (keep) { const b = $("#fBr"); if (b) { b.focus(); try { b.setSelectionRange(keep[0], keep[1]); } catch (e) {} } }
+    $$(".frow").slice(-added).forEach((r) => { r.classList.add("fresh"); setTimeout(() => r.classList.remove("fresh"), 1600); });
+    const miss = titleOnlyLines(t.brief);
+    toast(`Added ${added} link${added > 1 ? "s" : ""} from the brief to Footage & links${miss.length ? `. “${miss[0]}” had no web address, only its title.` : ""}`);
+  }, 30);
 }
 function bindFiles(body, id) {
   const read = () => $$(".frow", body).map((r) => ({ id: r.dataset.fid, label: $(".flabel", r).value.trim().slice(0, 60), url: $(".furl", r).value.trim() }));
