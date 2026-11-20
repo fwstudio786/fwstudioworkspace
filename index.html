@@ -1305,7 +1305,16 @@ function drawTask() {
     $("#fPr").addEventListener("change", (e) => patchTask({ priority: e.target.value }, true));
     $("#fBr").addEventListener("input", (e) => patchTask({ brief: e.target.value }));
     // links written in the brief ("Raw : https://…") go into Footage & links by themselves
-    $("#fBr").addEventListener("paste", () => setTimeout(() => briefLinks(id, true), 0));
+    $("#fBr").addEventListener("paste", (e) => {
+      // Google Docs / Drive chips paste as their title only; the real address is in the copied HTML
+      const html = e.clipboardData && e.clipboardData.getData("text/html");
+      const txt = html && /<a\s[^>]*href=["']?https?:/i.test(html) ? clipText(html) : "";
+      if (txt) {
+        e.preventDefault(); const b = e.target;
+        b.setRangeText(txt, b.selectionStart, b.selectionEnd, "end"); b.dispatchEvent(new Event("input", { bubbles: true }));
+      }
+      setTimeout(() => briefLinks(id, true), 0);
+    });
     $("#fBr").addEventListener("change", () => briefLinks(id, false));
     $("#fCn").addEventListener("input", (e) => patchTask({ clientNote: e.target.value }));
   } else if (ui.subtab === "exports") {
@@ -2189,6 +2198,21 @@ function guessLabel(url) {
   if (/tiktok\.com$/.test(h)) return "TikTok reference";
   return h;
 }
+// Copied rich text -> plain text, with each link's address written after its title.
+function clipText(html) {
+  const doc = new DOMParser().parseFromString(html, "text/html");          // inert: nothing in it runs
+  doc.querySelectorAll("a[href]").forEach((a) => { const h = (a.getAttribute("href") || "").trim(); if (/^https?:\/\//i.test(h) && !a.textContent.includes(h)) a.textContent = (a.textContent.trim() ? a.textContent.trim() + " " : "") + h; });
+  const BLOCK = /^(P|DIV|LI|H[1-6]|TR|UL|OL|TABLE|BLOCKQUOTE|SECTION|ARTICLE)$/;
+  let out = "";
+  const walk = (n) => { for (const c of n.childNodes) {
+    if (c.nodeType === 3) out += c.nodeValue.replace(/[\s\u00a0]+/g, " ");
+    else if (c.nodeType === 1 && !/^(SCRIPT|STYLE|META|TITLE)$/.test(c.tagName)) {
+      if (c.tagName === "BR") { out += "\n"; continue; }
+      const blk = BLOCK.test(c.tagName); if (blk && out && !out.endsWith("\n")) out += "\n"; walk(c); if (blk && !out.endsWith("\n")) out += "\n";
+    } } };
+  walk(doc.body);
+  return out.split("\n").map((l) => l.trim()).join("\n").replace(/\n{3,}/g, "\n\n").trim();
+}
 function linksFromText(text) {
   const out = [], lines = String(text || "").split(/\r?\n/);
   lines.forEach((line, i) => {
@@ -2196,6 +2220,7 @@ function linksFromText(text) {
     while ((m = re.exec(line))) {
       const url = m[0].replace(/[.,;:!?]+$/, "");
       let label = first ? line.slice(0, m.index).replace(/[\s:：\-–—|=>•*·]+$/, "").replace(/^[\s\-–—•*·\d.)]+/, "").trim() : "";
+      if (label && /[:：]/.test(label)) label = label.split(/[:：]/)[0].trim();
       if (!label && first) { const prev = (lines[i - 1] || "").trim(); if (prev && prev.length <= 40 && /[:：]$/.test(prev) && !/https?:\/\//.test(prev)) label = prev.replace(/[:：]+$/, "").trim(); }
       if (label.length > 40 || /https?:/.test(label)) label = "";
       label = label ? label.charAt(0).toUpperCase() + label.slice(1) : guessLabel(url);
@@ -2211,6 +2236,7 @@ function briefLinks(id, pasted) {
   const found = linksFromText(t.brief); if (!found.length) { const miss = titleOnlyLines(t.brief); if (pasted && miss.length) toast(`“${miss[0]}” has no web address, only its title. In Google Docs use Share → Copy link, then paste that.`); return; }
   const norm = (u) => String(u || "").trim().replace(/\/+$/, "").replace(/[?&]usp=[a-z_]+$/i, "");
   const files = filesOf(t).map((f) => ({ ...f })), have = new Set(files.map((f) => norm(f.url)).filter(Boolean));
+  videosOf(t).forEach((v) => v.versions.forEach((x) => have.add(norm(x.url))));      // already an export: nothing to add
   let added = 0;
   found.forEach(({ label, url }) => {
     if (have.has(norm(url))) return;
@@ -2219,17 +2245,36 @@ function briefLinks(id, pasted) {
     if (empty) { empty.url = url; if (!empty.label) empty.label = label; } else files.push({ id: uid(), label, url });
     have.add(norm(url)); added++;
   });
-  if (!added) return;
   const clean = files.filter((f) => f.url || f.label !== "Raw footage for the editor" || files.filter((x) => x.url).length === 0);   // drop the empty starter row once real links are in
+  const brief = stripLinks(t.brief, have, norm), moved = brief !== t.brief;
+  if (!added && !moved) return;
   const a = document.activeElement, keep = a && a.id === "fBr" ? [a.selectionStart, a.selectionEnd] : null;
-  patchTask({ files: clean }, true);
+  patchTask(moved ? { files: clean, brief } : { files: clean }, true);
   setTimeout(() => {
     drawTask();
-    if (keep) { const b = $("#fBr"); if (b) { b.focus(); try { b.setSelectionRange(keep[0], keep[1]); } catch (e) {} } }
+    if (keep) { const b = $("#fBr"); if (b) { b.focus(); const end = moved ? b.value.length : keep[1]; try { b.setSelectionRange(moved ? end : keep[0], end); } catch (e) {} } }
     $$(".frow").slice(-added).forEach((r) => { r.classList.add("fresh"); setTimeout(() => r.classList.remove("fresh"), 1600); });
     const miss = titleOnlyLines(t.brief);
-    toast(`Added ${added} link${added > 1 ? "s" : ""} from the brief to Footage & links${miss.length ? `. “${miss[0]}” had no web address, only its title.` : ""}`);
+    toast(added ? `Moved ${added} link${added > 1 ? "s" : ""} from the brief into Footage & links${miss.length ? `. “${miss[0]}” had no web address, only its title.` : ""}` : "Links already in Footage & links or Exports were taken out of the brief");
   }, 30);
+}
+// Take links that now live in Footage & links / Exports out of the brief, with their "Label :" lines.
+function stripLinks(text, known, norm) {
+  const lines = String(text || "").split(/\r?\n/), out = [];
+  const urlRe = /https?:\/\/[^\s<>"'\])]+/g;
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i], urls = (line.match(urlRe) || []).map((u) => u.replace(/[.,;:!?]+$/, ""));
+    if (!urls.length) {
+      const next = lines[i + 1] || "", nu = next.match(urlRe) || [];      // a "Music:" line whose link sits on the next line
+      if (/^[^:：]{1,40}[:：]\s*$/.test(line.trim()) && nu.length && next.replace(urlRe, "").trim() === "" && nu.every((u) => known.has(norm(u.replace(/[.,;:!?]+$/, ""))))) continue;
+      out.push(line); continue;
+    }
+    if (!urls.every((u) => known.has(norm(u)))) { out.push(line); continue; }
+    const after = line.slice(line.lastIndexOf(urls[urls.length - 1]) + urls[urls.length - 1].length).replace(/^[.,;:!?)\]]+/, "").trim();
+    if (!after) continue;                                                  // "Label : link" -> gone
+    out.push(line.replace(urlRe, "").replace(/\s{2,}/g, " ").trim());       // link inside a sentence: keep the words
+  }
+  return out.join("\n").replace(/\n{3,}/g, "\n\n").replace(/\s+$/, "");
 }
 function bindFiles(body, id) {
   const read = () => $$(".frow", body).map((r) => ({ id: r.dataset.fid, label: $(".flabel", r).value.trim().slice(0, 60), url: $(".furl", r).value.trim() }));
