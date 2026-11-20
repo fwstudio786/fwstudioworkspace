@@ -404,8 +404,8 @@ tr.not-counted td { opacity: .55; }
 :root { --st-qc: #f5c84c; --st-intrev: #ff8a3d; --st-revision: #ff6b6b; --st-rejected: #e0457b; --st-cancelled: #7c818c; }
 [data-st="unassigned"][data-st] { --c: #f472b6; } [data-st="todo"][data-st] { --c: #22d3ee; } [data-st="qc"] { --c: var(--st-qc); } [data-st="intrev"] { --c: var(--st-intrev); } [data-st="cancelled"] { --c: var(--st-cancelled); }
 [data-st="revision"] { --c: var(--st-revision); } [data-st="rejected"] { --c: var(--st-rejected); }
-.board { grid-auto-columns: minmax(210px, 1fr); align-items: stretch; height: calc(100vh - 200px); height: calc(100dvh - 200px); min-height: 340px; padding-bottom: 10px; }
-.board .col { min-height: 0; max-height: 100%; } .board .cards { overflow-y: auto; min-height: 0; align-content: start; }
+.board { grid-auto-columns: minmax(210px, 1fr); align-items: start; overflow: auto; padding-bottom: 4px; }
+body.boardview main { padding-bottom: 0; }
 .col[data-st="cancelled"] .card { opacity: .7; }
 /* ---- work log ---- */
 .wl-tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 8px; margin-bottom: 14px; }
@@ -949,7 +949,7 @@ function makeEditor(host, html, onChange, opts = {}) {
 const STATUSES = [
   { id: "todo", label: "Assigned" }, { id: "editing", label: "Editing" }, { id: "qc", label: "Internal QC" }, { id: "intrev", label: "Internal revisions" },
   { id: "review", label: "Client review" }, { id: "revision", label: "Client revisions" }, { id: "approved", label: "Approved" },
-  { id: "rejected", label: "Rejected", rare: true }, { id: "cancelled", label: "Cancelled" },
+  { id: "rejected", label: "Rejected", rare: true }, { id: "cancelled", label: "Cancelled", rare: true },
 ];
 const CLOSED = ["approved", "rejected", "cancelled"];
 // What a client sees: the team's internal stages all read as "Being edited".
@@ -1065,6 +1065,9 @@ function dropOn(id, col) {
   if (!t.assignee && col !== "cancelled") { toast("Pick an editor first. It moves to Assigned and shows to the editor."); openTask(id); return; }
   setStatus(id, col, "", "team");
 }
+// The board reaches the bottom of the window, so its side scroll bar sits at the bottom; the columns still grow with their cards.
+function fitBoard() { const b = $("#board"); document.body.classList.toggle("boardview", !!b); if (!b) return; b.style.height = Math.max(300, innerHeight - b.getBoundingClientRect().top - 6) + "px"; }
+addEventListener("resize", () => { if (view === "board") fitBoard(); });
 function renderBoard(m) {
   const list = filteredTasks();
   m.innerHTML = filterBar(isEditor() ? "My tasks" : "Board") + (S.merged.size ? `<div class="board" id="board">${(isEditor() ? STATUSES : [ST.unassigned, ...STATUSES]).filter((s) => !s.rare || list.some((t) => t.status === s.id)).map((s) => {
@@ -1072,7 +1075,7 @@ function renderBoard(m) {
     return `<section class="col" data-st="${s.id}" aria-label="${s.label}"><div class="col-h"><span class="pill" data-st="${s.id}">${s.label}</span><span class="n">${items.length}</span></div>
       <div class="cards">${items.map(cardHTML).join("")}</div></section>`;
   }).join("")}</div>` : emptyState());
-  bindFilters();
+  bindFilters(); fitBoard();
   $$(".card", m).forEach((c) => {
     c.addEventListener("click", () => openTask(c.dataset.id));
     c.addEventListener("dragstart", (e) => { e.dataTransfer.setData("text/plain", c.dataset.id); c.classList.add("dragging"); });
@@ -1285,7 +1288,7 @@ function drawTask() {
   liveEditor = liveGrid = null;
   if (ui.subtab === "overview") {
     body.innerHTML = `<div class="fields">
-      <div class="f"><label for="fSt">Status</label><select id="fSt">${!t.assignee && boardCol(t) === "unassigned" ? `<option value="unassigned" selected>Unassigned</option>` : ""}${STATUSES.map((s) => `<option value="${s.id}" ${s.id === (t.status || "todo") && boardCol(t) !== "unassigned" ? "selected" : ""}>${s.label}</option>`).join("")}</select></div>
+      <div class="f"><label for="fSt">Status</label><select id="fSt">${!t.assignee && boardCol(t) === "unassigned" ? `<option value="unassigned" selected>Unassigned</option>` : ""}${STATUSES.filter((s) => !s.rare || s.id === t.status).map((s) => `<option value="${s.id}" ${s.id === (t.status || "todo") && boardCol(t) !== "unassigned" ? "selected" : ""}>${s.label}</option>`).join("")}</select></div>
       <div class="f"><label for="fAs">Editor</label><select id="fAs" ${admin ? "" : "disabled"}>${opt(team(), t.assignee, "Unassigned")}</select></div>
       <div class="f"><label for="fCl">Client</label><select id="fCl" ${admin ? "" : "disabled"}>${opt(clients(), t.client, "No client")}${admin ? `<option value="__new">+ Add a new client…</option>` : ""}</select>
         ${admin ? `<div class="linkrow" id="fClNewRow" hidden style="margin-top:6px"><input id="fClNew" placeholder="Type the client or brand name" maxlength="60" aria-label="New client name"><button class="btn primary" id="fClAdd" type="button">Add</button></div>` : ""}</div>
@@ -1559,6 +1562,7 @@ function render() {
   else if (view === "ratings") renderRatings(m);
   else if (view === "business") renderFinance(m);
   else if (view === "activity") renderActivity(m);
+  if (view !== "board" || client) document.body.classList.remove("boardview");
   else renderBoard(m);
   if (keep) { const n = document.getElementById(keep.id); if (n) { n.focus(); try { n.setSelectionRange(keep.s, keep.e); } catch (e) {} } }
   if ($("#peopleModal").classList.contains("on")) drawPeople();
