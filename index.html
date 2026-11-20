@@ -407,14 +407,14 @@ tr.not-counted td { opacity: .55; }
 .board { grid-auto-columns: minmax(210px, 1fr); align-items: start; overflow: auto; padding-bottom: 4px; }
 body.boardview main { padding-bottom: 0; }
 .board .col { transition: border-color .15s, background-color .15s, box-shadow .15s; }
-.board .col.drop { border: 2px dashed var(--c, var(--accent)); background: color-mix(in srgb, var(--panel) 82%, var(--c, var(--accent)) 14%); }
+.board .col.drop { border: 1px solid var(--accent); background: color-mix(in srgb, var(--panel) 80%, var(--accent) 6%); box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 35%, transparent); }
 .card.dragging { opacity: .45; }
 .card.landed { animation: landed 1.1s cubic-bezier(.2, .8, .2, 1); }
-@keyframes landed { 0% { transform: translateY(-14px) scale(.94); opacity: 0; box-shadow: 0 0 0 2px var(--c, var(--accent)); } 35% { transform: none; opacity: 1; box-shadow: 0 0 0 2px var(--c, var(--accent)), 0 0 24px color-mix(in srgb, var(--c, var(--accent)) 45%, transparent); } 100% { box-shadow: 0 0 0 0 transparent; } }
+@keyframes landed { 0% { transform: translateY(-14px) scale(.94); opacity: 0; box-shadow: 0 0 0 2px var(--accent); } 35% { transform: none; opacity: 1; box-shadow: 0 0 0 2px var(--accent), 0 0 24px color-mix(in srgb, var(--accent) 45%, transparent); } 100% { box-shadow: 0 0 0 0 transparent; } }
 .board .col.got { animation: got 1.1s ease-out; }
-@keyframes got { 0% { box-shadow: 0 0 0 2px var(--c, var(--accent)); } 100% { box-shadow: 0 0 0 0 transparent; } }
+@keyframes got { 0% { box-shadow: 0 0 0 2px var(--accent); } 100% { box-shadow: 0 0 0 0 transparent; } }
 @media (prefers-reduced-motion: reduce) { .card.landed, .board .col.got { animation: none; } }
-.board .col.drop .cards::after { content: "Drop here"; display: grid; place-items: center; min-height: 64px; border-radius: 10px; border: 1px dashed var(--c, var(--accent)); color: var(--c, var(--accent)); font-weight: 600; font-size: 13px; }
+.board .col.drop .cards::after { content: "Drop here"; display: grid; place-items: center; min-height: 64px; border-radius: 10px; border: 1px dashed var(--accent); color: var(--accent); font-weight: 600; font-size: 13px; }
 .col[data-st="cancelled"] .card { opacity: .7; }
 /* ---- work log ---- */
 .wl-tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 8px; margin-bottom: 14px; }
