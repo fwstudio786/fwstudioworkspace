@@ -375,6 +375,25 @@ body.rv-lock { overflow: hidden; }
 .viewer { position: fixed; inset: 0; z-index: 66; background: var(--bg); display: grid; grid-template-rows: auto minmax(0, 1fr); padding: env(safe-area-inset-top, 0px) env(safe-area-inset-right, 0px) env(safe-area-inset-bottom, 0px) env(safe-area-inset-left, 0px); }
 .viewer[hidden] { display: none; }
 .bar input[type="search"] { min-width: 0; }
+/* ---- ratings ---- */
+.rt-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 260px), 1fr)); gap: 10px; margin-bottom: 14px; }
+.rt-card { text-align: left; display: grid; gap: 10px; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 14px; color: var(--fg); font: inherit; min-width: 0; }
+.rt-card:hover { border-color: var(--line-2); } .rt-card.on { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent) inset; }
+.rt-top { display: flex; align-items: center; gap: 8px; font-size: 15px; } .rt-top .av { width: 30px; height: 30px; flex: none; }
+.rt-stars { display: flex; align-items: center; gap: 8px; }
+.stars i { font-style: normal; font-size: 20px; color: var(--line-2); letter-spacing: 1px; }
+.stars i.on { color: #ffc23d; } .stars i.half { background: linear-gradient(90deg, #ffc23d 50%, var(--line-2) 50%); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.score { font: 700 20px/1 var(--display); }
+.rt-card dl { margin: 0; display: grid; grid-template-columns: 1fr 1fr; gap: 8px 12px; }
+.rt-card dt { font: 600 10.5px/1.2 var(--body); text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
+.rt-card dd { margin: 2px 0 0; font-weight: 700; font-variant-numeric: tabular-nums; }
+.rt-card dd small { display: block; font-weight: 500; color: var(--muted); font-size: 11.5px; }
+/* ---- business ---- */
+.fi-pl.gain { border-color: color-mix(in srgb, var(--st-approved) 50%, var(--line)); } .fi-pl.loss { border-color: color-mix(in srgb, var(--st-rejected) 60%, var(--line)); }
+.fi-pl.gain b { color: var(--st-approved); } .fi-pl.loss b { color: var(--st-rejected); }
+.fi-sums { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 420px), 1fr)); gap: 14px; margin-bottom: 14px; }
+.fi-sum { min-width: 0; } .fi-sum h3, .fi-h { margin: 0 0 8px; font: 700 15px/1.2 var(--display); }
+tr.not-counted td { opacity: .55; }
 /* ---- stages ---- */
 :root { --st-qc: #f5c84c; --st-intrev: #ff8a3d; --st-revision: #ff6b6b; --st-rejected: #e0457b; --st-cancelled: #7c818c; }
 [data-st="qc"] { --c: var(--st-qc); } [data-st="intrev"] { --c: var(--st-intrev); } [data-st="cancelled"] { --c: var(--st-cancelled); }
@@ -552,6 +571,8 @@ button.tc:hover { background: var(--accent); color: var(--accent-ink); }
       <button role="tab" data-v="docs" aria-selected="false">Docs</button>
       <button role="tab" data-v="sheets" aria-selected="false">Sheets</button>
       <button role="tab" data-v="worklog" aria-selected="false" id="wlTab" hidden>Work log</button>
+      <button role="tab" data-v="ratings" aria-selected="false" id="rtTab" hidden>Ratings</button>
+      <button role="tab" data-v="business" aria-selected="false" id="fiTab" hidden>Business</button>
     </nav>
     <div class="spacer"></div>
     <button class="btn ghost" id="peopleBtn" hidden>People</button>
@@ -974,7 +995,7 @@ const Store = (() => {
 })();
 
 /* ---------------- state ---------------- */
-const S = { tasks: new Map(), reviews: new Map(), users: new Map(), invites: new Map(), clients: new Map(), docs: new Map(), sheets: new Map(), merged: new Map(), dl: new Map(), links: new Map(), worklog: new Map(), wlSettings: null, wlRates: null };
+const S = { tasks: new Map(), reviews: new Map(), users: new Map(), invites: new Map(), clients: new Map(), docs: new Map(), sheets: new Map(), merged: new Map(), dl: new Map(), links: new Map(), worklog: new Map(), wlSettings: null, wlRates: null, finance: new Map(), fiSettings: null };
 const got = new Set();          // which live lists have arrived at least once
 let me = null, view = "board", loaded = false;
 const ui = { draftId: null, q: "", fAssignee: "", fClient: "", sort: { key: "due", dir: 1 }, openKind: null, openId: null, subtab: "overview" };
@@ -1343,6 +1364,8 @@ function drawPeople() {
   $("#memberList").innerHTML = members.map((u) => `<div class="prow" data-uid="${esc(u.id)}"><span class="av">${esc(initials(u.name || u.email))}</span><span>${esc(u.name || u.email)}<small>${u.role === "guest" ? "Opened the share link · " + esc(personName(u.clientId) || "client") : esc(u.email) + (u.role === "client" ? " · " + esc(personName(u.clientId) || "client") : "")}</small></span>
     ${u.role === "client" || u.role === "guest" ? `<span class="role-chip">${u.role === "guest" ? "Guest" : "Client"}</span>` : `<select data-role aria-label="Role" ${u.id === me.uid ? "disabled" : ""}><option value="editor" ${u.role === "editor" ? "selected" : ""}>Editor</option><option value="admin" ${u.role === "admin" ? "selected" : ""}>Admin</option></select>`}
     ${u.role === "editor" ? `<select data-wl aria-label="Work log access for ${esc(u.name || u.email)}" title="Can this editor see the work log?"><option value="" ${!u.worklog ? "selected" : ""}>Work log: hidden</option><option value="count" ${u.worklog === "count" ? "selected" : ""}>Video count only</option><option value="own" ${u.worklog === "own" ? "selected" : ""}>Own videos + pay</option><option value="all" ${u.worklog === "all" ? "selected" : ""}>Everyone + pay</option></select>` : ""}
+    ${u.role === "editor" ? `<select data-acc="rating" aria-label="Rating access for ${esc(u.name || u.email)}"><option value="" ${!u.rating ? "selected" : ""}>Rating: hidden</option><option value="own" ${u.rating === "own" ? "selected" : ""}>Rating: sees own</option></select>
+      <select data-acc="finance" aria-label="Business sheet access for ${esc(u.name || u.email)}"><option value="" ${!u.finance ? "selected" : ""}>Business: hidden</option><option value="view" ${u.finance === "view" ? "selected" : ""}>Business: can view</option></select>` : ""}
     ${u.id === me.uid ? `<span class="muted" style="font-size:12px">You</span>` : `<button class="btn sm ghost danger" data-rm>Remove</button>`}</div>`).join("") || `<span class="muted">Nobody yet.</span>`;
   const joined = new Set([...S.users.values()].map((u) => String(u.email || "").toLowerCase()));
   const waiting = [...S.invites.entries()].filter(([email]) => !joined.has(email));
@@ -1411,6 +1434,9 @@ $("#peopleModal").addEventListener("click", (e) => {
   }
 });
 $("#peopleModal").addEventListener("change", (e) => {
+  const ac = e.target.closest("[data-acc]");
+  if (ac) { const id = ac.closest(".prow").dataset.uid, u = S.users.get(id), k = ac.dataset.acc; if (!u) return; S.users.set(id, { ...u, [k]: ac.value }); Store.update("users", id, { [k]: ac.value });
+    toast(k === "rating" ? (ac.value ? "They can now see their own rating" : "Rating hidden for this editor") : (ac.value ? "They can now see the business sheet" : "Business sheet hidden for this editor")); return; }
   const wl = e.target.closest("[data-wl]");
   if (wl) { const id = wl.closest(".prow").dataset.uid, u = S.users.get(id); if (!u) return; S.users.set(id, { ...u, worklog: wl.value }); Store.update("users", id, { worklog: wl.value }); toast({ "": "Work log hidden for this editor", count: "They can now see how many videos they made", own: "They can now see their own videos and pay", all: "They can now see everyone's work log" }[wl.value]); return; }
   const sel = e.target.closest("[data-role]"); if (!sel) return;
@@ -1431,7 +1457,10 @@ function render() {
   const client = isClient();
   $("#tabs").hidden = client; $("#newBtn").hidden = !isAdmin(); $("#peopleBtn").hidden = !isAdmin();
   $("#wlTab").hidden = !wlAccess(); $("#wlTab").textContent = wlAccess() === "count" ? "My videos" : "Work log"; if (view === "worklog" && !wlAccess()) view = "board";
-  wlSchedule();
+  wlSchedule(); fiSchedule();
+  $("#rtTab").hidden = !rtAccess(); $("#rtTab").textContent = rtAccess() === "own" ? "My rating" : "Ratings";
+  $("#fiTab").hidden = !fiAccess();
+  if ((view === "ratings" && !rtAccess()) || (view === "business" && !fiAccess())) view = "board";
   $$("#tabs [data-v]").forEach((b) => b.setAttribute("aria-selected", String(b.dataset.v === view)));
   $$("#tabs [data-v]").forEach((b) => { if (b.dataset.v === "board") b.textContent = isEditor() ? "My tasks" : "Board"; });
   const m = $("#main");
@@ -1441,6 +1470,8 @@ function render() {
   else if (view === "docs") renderLib(m, "docs");
   else if (view === "sheets") renderLib(m, "sheets");
   else if (view === "worklog") renderWorklog(m);
+  else if (view === "ratings") renderRatings(m);
+  else if (view === "business") renderFinance(m);
   else renderBoard(m);
   if (keep) { const n = document.getElementById(keep.id); if (n) { n.focus(); try { n.setSelectionRange(keep.s, keep.e); } catch (e) {} } }
   if ($("#peopleModal").classList.contains("on")) drawPeople();
@@ -1574,8 +1605,8 @@ async function guestProfile(u) {
   return p;
 }
 async function handleUser(u) {
-  closeReview(); closeViewer(); $("#toast").classList.remove("on"); dlWatching.clear(); got.clear(); clearTimeout(wlTimer); guideAsked = false; $("#guide").classList.remove("on");
-  Store.stop(); me = null; loaded = false; Object.keys(S).forEach((k) => (S[k] = new Map())); S.wlSettings = S.wlRates = null;
+  closeReview(); closeViewer(); clearTimeout(fiTimer); fiTimer = 0; $("#toast").classList.remove("on"); dlWatching.clear(); got.clear(); clearTimeout(wlTimer); wlTimer = 0; guideAsked = false; $("#guide").classList.remove("on");
+  Store.stop(); me = null; loaded = false; Object.keys(S).forEach((k) => (S[k] = new Map())); S.wlSettings = S.wlRates = S.fiSettings = null; rtCache.clear();
   if (!u) { setMode(false); if (LINK && !wantTeamSignin) showGuest(); else showAuth("aSignin"); return; }
   if (u.isAnonymous) {
     showAuth("aLoading"); splashMsg("Opening your videos…");
@@ -1601,7 +1632,7 @@ function start(u, p) {
   const col = Store.col;
   Store.watchDoc(col("users").doc(u.uid), (d) => {          // removed or role changed while signed in
     if (!d) { Store.stop(); me = null; showAuth("aNo", { email: u.email, error: "Your access was removed." }); return; }
-    if (d.role !== me.role || d.clientId !== me.clientId || (d.worklog || "") !== (me.worklog || "")) { handleUser(auth.currentUser); return; }
+    if (d.role !== me.role || d.clientId !== me.clientId || ["worklog", "rating", "finance"].some((k) => (d[k] || "") !== (me[k] || ""))) { handleUser(auth.currentUser); return; }
     me = { uid: u.uid, ...d }; $("#meName").textContent = me.name || "";
   });
   if (me.role === "guest") Store.watchDoc(col("links").doc(me.linkToken || "-"), (l) => { if (!l || !l.active) auth.signOut(); });   // link turned off: out you go
@@ -1627,6 +1658,10 @@ function start(u, p) {
       Store.watch("work log", me.worklog === "all" ? col("worklog") : col("worklog").where("editor", "==", u.uid), onRows("worklog"));
     }
     if (me.role === "admin" || me.worklog === "all" || me.worklog === "own") Store.watchDoc(col("settings").doc("worklog"), (d) => { S.wlSettings = d; render(); });
+    if (me.role === "admin" || me.finance === "view") {
+      Store.watch("business", col("finance"), onRows("finance"));
+      Store.watchDoc(col("settings").doc("finance"), (d) => { S.fiSettings = d; got.add("finset"); render(); });
+    }
     Store.watch("docs", col("docs"), onRows("docs"));
     Store.watch("sheets", col("sheets"), onRows("sheets"));
   }
@@ -2273,7 +2308,7 @@ const WL_AUTO_KEYS = Object.keys(wlAuto("x", {}));
 
 // Admin only: copy task facts into the work log. Paid rows keep the rate they were paid at.
 let wlTimer = 0;
-function wlSchedule() { if (!isAdmin()) return; clearTimeout(wlTimer); wlTimer = setTimeout(wlSync, 1200); }
+function wlSchedule() { if (!isAdmin() || wlTimer) return; wlTimer = setTimeout(() => { wlTimer = 0; wlSync(); }, 1000); }
 function wlSync() {
   if (!isAdmin() || !["tasks", "reviews", "worklog", "rates"].every((c) => got.has(c))) return;
   const rates = (S.wlRates && S.wlRates.rates) || {};
@@ -2414,7 +2449,7 @@ $("#main").addEventListener("change", (e) => {
   else { const dk = WL_DATES.find(([k]) => k === f);
     if (dk && !r.manual) { const [k, o] = dk; wlSave(id, { [o]: v === (r[k] || "") ? null : v }); }
     else wlSave(id, { [f]: v.slice(0, 200) }); }
-  render();
+  setTimeout(render, 0);
 });
 $("#main").addEventListener("click", (e) => {
   if (!isAdmin()) return;
@@ -2457,6 +2492,257 @@ function renderMyCount(m) {
   $("#wlMonth").addEventListener("change", (e) => { wlui.month = e.target.value; saveWlui(); render(); });
 }
 
+/* ---------------- editor ratings ----------------
+   Worked out in the browser from the tasks, their history and their comments. Nothing extra is stored.
+   Revisions = client revision requests + internal revisions (QC sending it back).
+   Mistakes  = comments pointing something out (not replies, not the editor's own comments), from the client or the team.
+   Rating    = 5, minus 0.8 for each revision per video and 0.15 for each mistake per video, never below 1.
+   Admins see everyone. An editor sees only their own rating, and only if an admin allows it (users/{uid}.rating = "own"). */
+const rtAccess = () => (isAdmin() ? "all" : isEditor() && me.rating === "own" ? "own" : "");
+const rtui = { month: "", editor: "", q: "" };
+const rtCache = new Map();          // taskId -> { at, list }
+let rtLoading = false, rtLoadedAt = 0;
+const RT_REV = 0.8, RT_MIS = 0.15;
+const rtScore = (videos, revs, mis) => (videos ? Math.max(1, Math.min(5, 5 - (revs / videos) * RT_REV - (mis / videos) * RT_MIS)) : null);
+function stars(score) {
+  if (score == null) return `<span class="muted">No videos yet</span>`;
+  const full = Math.round(score * 2) / 2;
+  return `<span class="stars" aria-label="${score.toFixed(1)} out of 5">${[1, 2, 3, 4, 5].map((i) => `<i class="${full >= i ? "on" : full >= i - 0.5 ? "half" : ""}">★</i>`).join("")}</span><b class="score">${score.toFixed(1)}</b>`;
+}
+async function rtLoad(force) {
+  if (rtLoading) return;
+  const ids = [...S.merged.keys()].filter((id) => id !== ui.draftId);
+  const todo = ids.filter((id) => force || !rtCache.has(id) || Date.now() - rtCache.get(id).at > 60000);
+  if (!todo.length) return;
+  rtLoading = true; render();
+  let i = 0;
+  const worker = async () => {
+    while (i < todo.length) {
+      const id = todo[i++];
+      try { const s = await Store.col("reviews/" + id + "/comments").get(); rtCache.set(id, { at: Date.now(), list: s.docs.map((d) => d.data()) }); }
+      catch (e) { rtCache.set(id, { at: Date.now(), list: [] }); }
+    }
+  };
+  await Promise.all([1, 2, 3, 4, 5, 6].map(worker));
+  rtLoading = false; rtLoadedAt = Date.now(); if (view === "ratings") render();
+}
+function rtRows() {
+  const acc = rtAccess();
+  return [...S.merged.entries()].filter(([id, t]) => id !== ui.draftId && t.assignee && (acc === "all" || t.assignee === me.uid)).map(([id, t]) => {
+    const h = t.history || [], sent = h.find((x) => x.state === "review");
+    const vids = videosOf(t).filter((v) => v.versions.length);
+    const comments = (rtCache.get(id) || { list: [] }).list.filter((c) => !c.parent && c.uid !== t.assignee);
+    const firstVid = videosOf(t)[0].id;
+    const perVideo = vids.map((v) => ({ name: v.name, versions: v.versions.length, mistakes: comments.filter((c) => (c.vid || firstVid) === v.id).length }));
+    const cRev = h.filter((x) => x.state === "revision").length, iRev = h.filter((x) => x.state === "intrev").length;
+    const cMis = comments.filter((c) => c.by === "client").length, tMis = comments.length - cMis;
+    return { id, title: t.title || "Untitled task", editor: t.assignee, editorName: personName(t.assignee) || "Former member", client: personName(t.client),
+      delivered: sent ? isoDay(sent.at) : "", status: t.status || "todo", videos: Math.max(1, vids.length), sentOnce: !!sent,
+      cRev, iRev, revs: cRev + iRev, cMis, tMis, mis: cMis + tMis, perVideo, firstTime: t.status === "approved" && cRev === 0, approved: t.status === "approved" };
+  }).filter((r) => r.sentOnce || r.iRev || r.mis);       // only work that reached review counts
+}
+function rtTotals(rows) {
+  const t = { videos: 0, revs: 0, cRev: 0, iRev: 0, mis: 0, cMis: 0, tMis: 0, approved: 0, firstTime: 0, jobs: rows.length };
+  rows.forEach((r) => { ["videos", "revs", "cRev", "iRev", "mis", "cMis", "tMis"].forEach((k) => (t[k] += r[k])); if (r.approved) t.approved++; if (r.firstTime) t.firstTime++; });
+  t.score = rtScore(t.videos, t.revs, t.mis);
+  return t;
+}
+function renderRatings(m) {
+  const acc = rtAccess(); if (!acc) { view = "board"; renderBoard(m); return; }
+  rtLoad(false);
+  const all = rtRows();
+  const months = [...new Set(all.map((r) => r.delivered.slice(0, 7)).filter(Boolean))].sort().reverse();
+  const q = rtui.q.trim().toLowerCase();
+  const rows = all.filter((r) => (!rtui.month || r.delivered.slice(0, 7) === rtui.month) && (!rtui.editor || r.editor === rtui.editor) && (!q || (r.title + " " + r.client + " " + r.editorName).toLowerCase().includes(q)));
+  const monthName = (k) => new Date(k + "-01T00:00:00").toLocaleDateString("en-GB", { month: "long", year: "numeric" });
+  const eds = [...new Set(rows.map((r) => r.editor))].map((ed) => { const rr = rows.filter((r) => r.editor === ed); return { ed, name: rr[0].editorName, t: rtTotals(rr) }; })
+    .sort((a, b) => (b.t.score || 0) - (a.t.score || 0) || a.name.localeCompare(b.name));
+  const allEds = [...new Map(all.map((r) => [r.editor, r.editorName])).entries()];
+  const per = (n, d) => (d ? (n / d).toFixed(1) : "0");
+  const card = (e) => `<button class="rt-card${rtui.editor === e.ed ? " on" : ""}" data-ed="${esc(e.ed)}" type="button">
+      <div class="rt-top"><span class="av">${esc(initials(e.name))}</span><b>${esc(e.name)}</b></div>
+      <div class="rt-stars">${stars(e.t.score)}</div>
+      <dl><div><dt>Videos</dt><dd>${e.t.videos}</dd></div><div><dt>Revisions</dt><dd>${e.t.revs}<small>${e.t.cRev} client · ${e.t.iRev} internal</small></dd></div>
+        <div><dt>Mistakes</dt><dd>${e.t.mis}<small>${e.t.cMis} client · ${e.t.tMis} team</small></dd></div>
+        <div><dt>Per video</dt><dd>${per(e.t.revs, e.t.videos)} rev · ${per(e.t.mis, e.t.videos)} mistakes</dd></div>
+        <div><dt>Approved first time</dt><dd>${e.t.approved ? Math.round((e.t.firstTime / e.t.approved) * 100) + "%" : "—"}<small>${e.t.firstTime} of ${e.t.approved} approved</small></dd></div></dl></button>`;
+  m.innerHTML = `<div class="bar"><h1>${acc === "own" ? "My rating" : "Editor ratings"}</h1>
+      <input type="search" id="rtq" placeholder="Search videos or clients" value="${esc(rtui.q)}" aria-label="Search ratings">
+      <select id="rtMonth" aria-label="Month"><option value="">All time</option>${months.map((k) => `<option value="${k}" ${k === rtui.month ? "selected" : ""}>${esc(monthName(k))}</option>`).join("")}</select>
+      ${acc === "all" ? `<select id="rtEd" aria-label="Editor"><option value="">All editors</option>${allEds.map(([id, n]) => `<option value="${esc(id)}" ${id === rtui.editor ? "selected" : ""}>${esc(n)}</option>`).join("")}</select>` : ""}
+      <button class="btn" id="rtRefresh" type="button">${rtLoading ? "Counting comments…" : "↻ Refresh"}</button></div>
+    ${eds.length ? `<div class="rt-cards">${eds.map(card).join("")}</div>` : ""}
+    ${rows.length ? `<div class="tablewrap"><table class="list wl" style="min-width:900px"><thead><tr>${acc === "all" ? "<th>Editor</th>" : ""}<th>Video</th><th>Client</th><th>Delivered</th><th>Videos</th><th>Client revisions</th><th>Internal revisions</th><th>Client mistakes</th><th>Team mistakes</th><th>Status</th></tr></thead><tbody>
+      ${rows.sort((a, b) => String(b.delivered).localeCompare(String(a.delivered))).map((r) => `<tr>${acc === "all" ? `<td>${esc(r.editorName)}</td>` : ""}<td class="wl-title"><b>${esc(r.title)}</b>${r.perVideo.length > 1 ? `<small class="muted" style="display:block">${r.perVideo.map((v) => `${esc(v.name)}: ${v.mistakes} mistake${v.mistakes === 1 ? "" : "s"}, v${v.versions}`).join(" · ")}</small>` : ""}</td>
+        <td>${esc(r.client) || '<span class="muted">—</span>'}</td><td class="num">${esc(fmtDate(r.delivered)) || '<span class="muted">—</span>'}</td><td class="num">${r.videos}</td>
+        <td class="num ${r.cRev ? "bad" : ""}">${r.cRev}</td><td class="num">${r.iRev}</td><td class="num ${r.cMis ? "bad" : ""}">${r.cMis}</td><td class="num">${r.tMis}</td>
+        <td><span class="pill" data-st="${esc(r.status)}">${esc(ST[r.status]?.label || r.status)}</span>${r.firstTime ? ` <span class="ok" title="Approved without any client revision">✓ first time</span>` : ""}</td></tr>`).join("")}</tbody></table></div>`
+      : `<div class="empty"><b>${loaded ? "No rated videos yet" : "Loading…"}</b>${loaded ? "Videos count here once they've been sent to the client or through internal QC." : ""}</div>`}
+    <p class="muted" style="font-size:12.5px;margin-top:10px">How it's worked out: every editor starts at 5 stars. Each revision per video takes off ${RT_REV}, each mistake per video takes off ${RT_MIS}, and it never goes below 1. Revisions = client revision requests + internal revisions. Mistakes = comments on the video from the client or the team (replies and the editor's own comments don't count).</p>`;
+  $("#rtq").addEventListener("input", (e) => { rtui.q = e.target.value; render(); });
+  $("#rtMonth").addEventListener("change", (e) => { rtui.month = e.target.value; render(); });
+  $("#rtEd")?.addEventListener("change", (e) => { rtui.editor = e.target.value; render(); });
+  $("#rtRefresh").addEventListener("click", () => rtLoad(true));
+  $$(".rt-card", m).forEach((c) => c.addEventListener("click", () => { if (acc !== "all") return; rtui.editor = rtui.editor === c.dataset.ed ? "" : c.dataset.ed; render(); }));
+}
+
+/* ---------------- business sheet: what clients pay, what editors cost, profit ----------------
+   finance/{taskId}: one row per task, kept up to date by an admin's browser (like the work log).
+   finance/{randomId} with manual: true: income or costs the admin adds by hand.
+   settings/finance = { currency, clientRates: { clientId: price per video } }.
+   Admins see and edit it. An admin can let a team member view it (users/{uid}.finance = "view"). */
+const fiAccess = () => (isAdmin() ? "edit" : isEditor() && me.finance === "view" ? "view" : "");
+const fiui = { month: "", client: "", q: "", showRates: false };
+const fiCur = () => ((S.fiSettings && S.fiSettings.currency) || (S.wlSettings && S.wlSettings.currency) || "Rs").slice(0, 6);
+const fiMoney = (n) => `${n < 0 ? "−" : ""}${fiCur()} ${Math.abs(Number(n || 0)).toLocaleString("en-US", { maximumFractionDigits: 2 })}`;
+const fiNum = (v) => (typeof v === "number" && isFinite(v) ? v : null);
+
+function fiAuto(id, t) {
+  const h = t.history || [], sent = h.find((x) => x.state === "review"), ok = t.status === "approved" ? [...h].reverse().find((x) => x.state === "approved") : null;
+  const w = S.worklog.get(id);
+  const cost = w ? (typeof w.rate === "number" ? w.rate : typeof w.defRate === "number" ? w.defRate : 0) * Math.max(1, Number(w.count) || 1) : 0;
+  return { task: id, client: t.client || "", clientName: personName(t.client) || "", editor: t.assignee || "", editorName: personName(t.assignee) || "",
+    title: t.title || "Untitled task", count: Math.max(1, videosOf(t).filter((v) => v.versions.length).length),
+    given: isoDay(t.assignedAt || t.createdAt), delivered: sent ? isoDay(sent.at) : "", approvedAt: ok ? isoDay(ok.at) : "", status: t.status || "todo", cost, gone: false };
+}
+const FI_AUTO_KEYS = Object.keys(fiAuto("x", {}));
+let fiTimer = 0;
+function fiSchedule() { if (!isAdmin() || fiTimer) return; fiTimer = setTimeout(() => { fiTimer = 0; fiSync(); }, 1200); }
+function fiSync() {
+  if (!isAdmin() || !["tasks", "reviews", "finance", "worklog", "finset"].every((c) => got.has(c))) return;
+  const prices = (S.fiSettings && S.fiSettings.clientRates) || {};
+  const def = (c) => (typeof prices[c] === "number" ? prices[c] : null);
+  S.merged.forEach((t, id) => {
+    if (id === ui.draftId) return;
+    const a = fiAuto(id, t), row = S.finance.get(id);
+    if (!row) {
+      if (!a.client && !a.editor) return;
+      const r = { ...a, manual: false, defRate: def(a.client), rate: null, oCount: null, oCost: null, clientPaid: false, paidAt: "", note: "" };
+      S.finance.set(id, r); Store.set("finance", id, r); return;
+    }
+    const patch = {};
+    FI_AUTO_KEYS.forEach((k) => { if (JSON.stringify(row[k] ?? "") !== JSON.stringify(a[k] ?? "")) patch[k] = a[k]; });
+    if (!row.clientPaid && (row.defRate ?? null) !== def(a.client)) patch.defRate = def(a.client);
+    if (Object.keys(patch).length) { S.finance.set(id, { ...row, ...patch }); Store.update("finance", id, patch); }
+  });
+  S.finance.forEach((row, id) => { if (!row.manual && !S.merged.has(id) && !row.gone) { S.finance.set(id, { ...row, gone: true }); Store.update("finance", id, { gone: true }); } });
+}
+function fiRows() {
+  return [...S.finance.entries()].map(([id, r]) => {
+    const count = fiNum(r.oCount) ?? Math.max(1, Number(r.count) || 1);
+    const price = fiNum(r.rate) ?? fiNum(r.defRate) ?? 0, revenue = price * count;
+    const cost = fiNum(r.oCost) ?? (Number(r.cost) || 0);
+    // rows typed by hand: match the typed client / editor name to a real one so the summaries add up
+    const cKey = r.client || (r.clientName ? (clients().find((c) => c.name.toLowerCase() === r.clientName.trim().toLowerCase()) || {}).id || "n:" + r.clientName.trim().toLowerCase() : "");
+    const eKey = r.editor || (r.editorName ? (team().find((p) => p.name.toLowerCase() === r.editorName.trim().toLowerCase()) || {}).id || "n:" + r.editorName.trim().toLowerCase() : "");
+    return { id, ...r, cKey, eKey, count, price, revenue, costNow: cost, profit: revenue - cost, done: !!r.delivered || r.status === "approved", counted: r.status !== "cancelled" && !r.gone };
+  });
+}
+function fiTotals(rows) {
+  const t = { given: 0, done: 0, revenue: 0, cost: 0, profit: 0, received: 0, owed: 0 };
+  rows.filter((r) => r.counted).forEach((r) => { t.given += r.count; if (r.done) t.done += r.count; t.revenue += r.revenue; t.cost += r.costNow; t.profit += r.profit; if (r.clientPaid) t.received += r.revenue; else t.owed += r.revenue; });
+  return t;
+}
+function renderFinance(m) {
+  const acc = fiAccess(); if (!acc) { view = "board"; renderBoard(m); return; }
+  const a = document.activeElement, keep = a && a.closest && a.closest("#fiTable, #fiRates") && a.tagName === "INPUT" && a.type !== "checkbox"
+    ? { rid: a.closest("tr")?.dataset.id || "", f: a.dataset.f || "", rate: a.dataset.price || "", id: a.id || "", val: a.value, s: (() => { try { return [a.selectionStart, a.selectionEnd]; } catch (e) { return null; } })() } : null;
+  fiRender(m, acc);
+  if (keep) {
+    const el = keep.id ? $("#" + keep.id) : keep.rate ? $(`[data-price="${CSS.escape(keep.rate)}"]`) : $(`#fiTable tr[data-id="${CSS.escape(keep.rid)}"] [data-f="${CSS.escape(keep.f)}"]`);
+    if (el) { if (el.value !== keep.val) el.value = keep.val; el.focus(); if (keep.s && keep.s[0] != null) try { el.setSelectionRange(keep.s[0], keep.s[1]); } catch (e) {} }
+  }
+}
+function fiRender(m, acc) {
+  const edit = acc === "edit", all = fiRows(), q = fiui.q.trim().toLowerCase();
+  const months = [...new Set(all.map((r) => (r.given || "").slice(0, 7)).filter(Boolean))].sort().reverse();
+  const rows = all.filter((r) => (!fiui.month || (r.given || "").slice(0, 7) === fiui.month) && (!fiui.client || r.cKey === fiui.client)
+    && (!q || [r.title, r.clientName, r.editorName, r.note].join(" ").toLowerCase().includes(q)));
+  const T = fiTotals(rows);
+  const monthName = (k) => new Date(k + "-01T00:00:00").toLocaleDateString("en-GB", { month: "long", year: "numeric" });
+  const groupBy = (key, name) => [...new Set(rows.filter((r) => r.counted).map((r) => r[key] || "—"))].map((k) => { const rr = rows.filter((r) => r.counted && (r[key] || "—") === k); return { k, name: rr[0][name] || (k === "—" ? "Not set" : "Former"), t: fiTotals(rr) }; }).sort((x, y) => y.t.revenue - x.t.revenue || x.name.localeCompare(y.name));
+  const byClient = groupBy("cKey", "clientName"), byEditor = groupBy("eKey", "editorName");
+  const prices = (S.fiSettings && S.fiSettings.clientRates) || {};
+  const pl = (n) => `<b class="${n < 0 ? "bad" : n > 0 ? "ok" : ""}">${esc(fiMoney(n))}</b>`;
+  const numIn = (r, f, val, ph, label, w) => edit ? `<input class="wl-in num" type="number" min="0" step="any" data-f="${f}" value="${val ?? ""}" placeholder="${ph ?? ""}" aria-label="${label}" style="width:${w}">` : esc(val ?? ph ?? "");
+  const txtIn = (r, f, label, w) => edit && r.manual ? `<input class="wl-in" data-f="${f}" value="${esc(r[f] || "")}" aria-label="${label}" style="width:${w}">` : esc(r[f] || "") || '<span class="muted">—</span>';
+  const row = (r) => `<tr data-id="${esc(r.id)}" class="${r.clientPaid ? "is-paid" : ""}${r.counted ? "" : " not-counted"}">
+    <td class="wl-title">${edit && r.manual ? `<input class="wl-in" data-f="title" value="${esc(r.title)}" aria-label="What" style="width:170px">` : `<b>${esc(r.title)}</b>`}${r.manual ? ` <span class="tag">added</span>` : ""}${r.status === "cancelled" ? ` <span class="tag" title="Cancelled tasks aren't counted">cancelled</span>` : ""}${r.gone ? ` <span class="tag">deleted</span>` : ""}</td>
+    <td>${txtIn(r, "clientName", "Client", "120px")}</td><td>${txtIn(r, "editorName", "Editor", "110px")}</td>
+    <td class="num">${esc(fmtDate(r.given)) || '<span class="muted">—</span>'}</td><td class="num">${r.delivered ? esc(fmtDate(r.delivered)) : '<span class="muted">Not yet</span>'}</td>
+    <td class="num">${edit ? numIn(r, "oCount", fiNum(r.oCount), r.manual ? "1" : String(Math.max(1, Number(r.count) || 1)), "Videos", "58px") : r.count}</td>
+    <td class="num">${edit ? numIn(r, "rate", fiNum(r.rate), fiNum(r.defRate) ?? "0", "Client price per video", "90px") : esc(fiMoney(r.price))}</td>
+    <td class="num">${esc(fiMoney(r.revenue))}</td>
+    <td class="num">${edit ? numIn(r, "oCost", fiNum(r.oCost), String(Number(r.cost) || 0), "Editor cost", "90px") : esc(fiMoney(r.costNow))}</td>
+    <td class="num">${pl(r.profit)}</td>
+    <td>${edit ? `<label class="wl-paid"><input type="checkbox" data-f="clientPaid" ${r.clientPaid ? "checked" : ""}> ${r.clientPaid ? "Received" : "Not yet"}</label>` : r.clientPaid ? `<span class="ok">Received</span>` : `<span class="muted">Not yet</span>`}</td>
+    <td>${edit ? `<input class="wl-in" data-f="note" value="${esc(r.note || "")}" placeholder="Note" aria-label="Note" style="width:140px">` : esc(r.note || "")}</td>
+    ${edit ? `<td>${r.manual || r.gone ? `<button class="btn sm ghost danger" data-del type="button">Delete</button>` : ""}</td>` : ""}</tr>`;
+  const sumTable = (title, list, cols) => list.length ? `<div class="fi-sum"><h3>${title}</h3><div class="tablewrap"><table class="list wl" style="min-width:640px"><thead><tr>${cols.map((c) => `<th>${c}</th>`).join("")}</tr></thead><tbody>${list.map((g) => `<tr><td><b>${esc(g.name)}</b></td><td class="num">${g.t.given}</td><td class="num">${g.t.done}</td><td class="num">${esc(fiMoney(g.t.revenue))}</td><td class="num">${esc(fiMoney(g.t.cost))}</td><td class="num">${pl(g.t.profit)}</td></tr>`).join("")}</tbody></table></div></div>` : "";
+  m.innerHTML = `<div class="bar"><h1>Business</h1>
+      <input type="search" id="fiq" placeholder="Search videos, clients, editors" value="${esc(fiui.q)}" aria-label="Search the business sheet">
+      <select id="fiMonth" aria-label="Month"><option value="">All months</option>${months.map((k) => `<option value="${k}" ${k === fiui.month ? "selected" : ""}>${esc(monthName(k))}</option>`).join("")}</select>
+      <select id="fiClient" aria-label="Client"><option value="">All clients</option>${clients().map((c) => `<option value="${esc(c.id)}" ${c.id === fiui.client ? "selected" : ""}>${esc(c.name)}</option>`).join("")}</select>
+      <button class="btn" id="fiCsv" type="button">Download CSV</button>
+      ${edit ? `<button class="btn" id="fiRatesBtn" type="button" aria-expanded="${fiui.showRates}">Client prices</button><button class="btn primary" id="fiAdd" type="button">+ Add row</button>` : ""}</div>
+    ${edit && fiui.showRates ? `<div class="wl-rates" id="fiRates"><div><b>What each client pays per video</b><p class="muted">Used when a row has no price of its own. Changing it updates rows not yet marked as received.</p></div>
+      <label>Currency <input id="fiCurIn" value="${esc(fiCur())}" maxlength="6" style="width:70px"></label>
+      ${clients().map((c) => `<label>${esc(c.name)} <input type="number" min="0" step="any" data-price="${esc(c.id)}" value="${typeof prices[c.id] === "number" ? prices[c.id] : ""}" placeholder="0" style="width:100px"></label>`).join("") || `<span class="muted">No clients yet.</span>`}</div>` : ""}
+    <div class="wl-tiles">
+      <div><span>Videos given</span><b>${T.given}</b></div><div><span>Videos done</span><b>${T.done}</b></div>
+      <div><span>Clients pay</span><b>${esc(fiMoney(T.revenue))}</b></div><div><span>Paid to editors</span><b>${esc(fiMoney(T.cost))}</b></div>
+      <div class="fi-pl ${T.profit < 0 ? "loss" : "gain"}"><span>${T.profit < 0 ? "Loss" : "Profit"}</span><b>${esc(fiMoney(T.profit))}</b></div>
+      <div><span>Received</span><b class="ok">${esc(fiMoney(T.received))}</b></div><div><span>Still to collect</span><b class="${T.owed ? "bad" : ""}">${esc(fiMoney(T.owed))}</b></div>
+    </div>
+    <div class="fi-sums">${sumTable("By client", byClient, ["Client", "Videos given", "Done", "They pay", "Editor cost", "Profit"])}${sumTable("By editor", byEditor, ["Editor", "Videos given", "Done", "Their videos earn", "We pay them", "Profit"])}</div>
+    ${rows.length ? `<h3 class="fi-h">Every video</h3><div class="tablewrap"><table class="list wl" id="fiTable" style="min-width:1300px"><thead><tr><th>Video</th><th>Client</th><th>Editor</th><th>Given</th><th>Delivered</th><th>Videos</th><th>Price / video</th><th>Client pays</th><th>Editor cost</th><th>Profit</th><th>Payment</th><th>Note</th>${edit ? "<th></th>" : ""}</tr></thead>
+      <tbody>${rows.sort((x, y) => String(y.given).localeCompare(String(x.given))).map(row).join("")}</tbody>
+      <tfoot><tr><td colspan="${edit ? 13 : 12}"><b>Total${fiui.month ? " in " + esc(monthName(fiui.month)) : ""}</b> · ${T.given} videos · ${T.done} done <span class="wl-sub-money">Clients pay <b>${esc(fiMoney(T.revenue))}</b> · Editors ${esc(fiMoney(T.cost))} · ${T.profit < 0 ? "Loss" : "Profit"} ${pl(T.profit)}</span></td></tr></tfoot></table></div>`
+      : `<div class="empty"><b>${got.has("finance") ? "Nothing here yet" : "Loading…"}</b>${got.has("finance") ? (all.length ? "No rows match these filters." : edit ? "Rows appear here by themselves when you create tasks with a client or editor." : "") : ""}</div>`}
+    ${edit ? `<p class="muted" style="font-size:12.5px;margin-top:10px">Videos, dates and editor cost fill in from the tasks and the work log. Set what each client pays under <b>Client prices</b>, or type a price on a row. Any number you type replaces the automatic one; clear it to go back. Cancelled tasks aren't counted in the totals.</p>` : ""}`;
+  $("#fiq").addEventListener("input", (e) => { fiui.q = e.target.value; render(); });
+  $("#fiMonth").addEventListener("change", (e) => { fiui.month = e.target.value; render(); });
+  $("#fiClient").addEventListener("change", (e) => { fiui.client = e.target.value; render(); });
+  $("#fiCsv").addEventListener("click", () => fiCsv(rows));
+  if (!edit) return;
+  $("#fiRatesBtn").addEventListener("click", () => { fiui.showRates = !fiui.showRates; render(); });
+  $("#fiAdd").addEventListener("click", () => {
+    const id = uid(), r = { manual: true, task: "", client: fiui.client || "", clientName: fiui.client ? personName(fiui.client) : "", editor: "", editorName: "", title: "New item", count: 1, given: new Date().toLocaleDateString("en-CA"),
+      delivered: "", approvedAt: "", status: "", cost: 0, gone: false, defRate: null, rate: null, oCount: null, oCost: null, clientPaid: false, paidAt: "", note: "" };
+    S.finance.set(id, r); Store.set("finance", id, r); fiui.month = ""; render();
+    setTimeout(() => { const i = $(`#fiTable tr[data-id="${id}"] [data-f="title"]`); i && (i.focus(), i.select()); }, 30);
+  });
+  $("#fiRates")?.addEventListener("change", (e) => {
+    const s = { currency: fiCur(), clientRates: { ...((S.fiSettings && S.fiSettings.clientRates) || {}) } };
+    if (e.target.id === "fiCurIn") s.currency = e.target.value.trim() || "Rs";
+    const c = e.target.dataset.price; if (c) { const v = e.target.value === "" ? null : Math.max(0, Number(e.target.value)); if (v === null) delete s.clientRates[c]; else s.clientRates[c] = v; }
+    S.fiSettings = s; Store.set("settings", "finance", s); fiSync(); toast("Saved"); render();
+  });
+}
+function fiSave(id, patch) { const r = S.finance.get(id); if (!r) return; S.finance.set(id, { ...r, ...patch }); Store.update("finance", id, patch); }
+$("#main").addEventListener("change", (e) => {
+  const tr = e.target.closest("#fiTable tr[data-id]"); if (!tr || !isAdmin()) return;
+  const id = tr.dataset.id, f = e.target.dataset.f; if (!f || !S.finance.get(id)) return;
+  const v = e.target.value;
+  if (f === "clientPaid") fiSave(id, { clientPaid: e.target.checked, paidAt: e.target.checked ? new Date().toLocaleDateString("en-CA") : "" });
+  else if (["rate", "oCost", "oCount"].includes(f)) fiSave(id, { [f]: v === "" ? null : Math.max(0, f === "oCount" ? Math.round(Number(v) || 0) : Number(v)) });
+  else fiSave(id, { [f]: v.slice(0, 200) });
+  setTimeout(render, 0);          // after Tab has moved the cursor, so it stays where you went
+});
+$("#main").addEventListener("click", (e) => {
+  const del = e.target.closest("#fiTable [data-del]"); if (!del || !isAdmin()) return;
+  if (del.dataset.armed !== "1") { del.dataset.armed = "1"; del.textContent = "Click again"; setTimeout(() => { if (del.isConnected) { del.dataset.armed = ""; del.textContent = "Delete"; } }, 3000); return; }
+  const id = del.closest("tr").dataset.id; S.finance.delete(id); Store.remove("finance", id); render();
+});
+function fiCsv(rows) {
+  const q = (x) => { x = String(x ?? ""); return /[",\n]/.test(x) ? `"${x.replace(/"/g, '""')}"` : x; };
+  const c = fiCur(), lines = [["Video", "Client", "Editor", "Given", "Delivered", "Status", "Videos", `Price per video (${c})`, `Client pays (${c})`, `Editor cost (${c})`, `Profit (${c})`, "Payment received", "Note"]];
+  rows.forEach((r) => lines.push([r.title, r.clientName, r.editorName, r.given, r.delivered, r.status, r.count, r.price, r.revenue, r.costNow, r.profit, r.clientPaid ? "Yes" : "No", r.note || ""]));
+  const T = fiTotals(rows); lines.push([], ["Total (cancelled not counted)", "", "", "", "", "", T.given, "", T.revenue, T.cost, T.profit, `Received ${T.received}`, `To collect ${T.owed}`]);
+  const blob = new Blob(["﻿" + lines.map((l) => l.map(q).join(",")).join("\r\n")], { type: "text/csv;charset=utf-8" });
+  const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = `business${fiui.month ? "-" + fiui.month : ""}.csv`; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+}
+
 /* ---------------- loading screen ---------------- */
 const bootAt = performance.now();
 function splashMsg(t) { const m = $("#spMsg"); if (m) m.textContent = t; }
@@ -2479,6 +2765,7 @@ const GUIDES = {
     { el: "#board", t: "3. Follow every video here", d: "Each task moves across these columns: To do → Editing → Internal QC → Internal revisions → Client review → Client revisions → Approved (or Cancelled). Click a card to open it, drag it to change its stage, and use the search box to find any video by name or link." },
     { t: "4. The editor delivers, the client reviews", d: "The editor pastes the export and presses <b>Send to client for review</b>. The client pauses on a moment and types what to change; the time is saved with the comment. Click a comment to jump to that moment. For a new cut, use <b>+ Add new version</b>.", ui: chip("0:12", "tc") + chip("Make the logo bigger") + chip("✓ Approve") + chip("↻ Revision") + chip("+ Add new version", "p") },
     { el: "#wlTab", t: "5. Track work and pay", d: "<b>Work log</b> counts each editor's videos, whether they were on time, and what you owe. Set rates under <b>Rates</b> and tick <b>Paid</b> when you pay. Editors can't see it unless you allow it in People." },
+    { el: "#rtTab", t: "6. Ratings and business", d: "<b>Ratings</b> gives each editor stars from their revisions and mistakes. <b>Business</b> shows what clients pay, what editors cost and your profit or loss. Only you see these unless you allow someone in People." },
     { el: "#helpBtn", t: "Need this again?", d: "Click <b>?</b> any time to replay this tour." },
   ],
   editor: [
