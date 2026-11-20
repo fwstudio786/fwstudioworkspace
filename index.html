@@ -402,7 +402,7 @@ body.rv-lock { overflow: hidden; }
 tr.not-counted td { opacity: .55; }
 /* ---- stages ---- */
 :root { --st-qc: #f5c84c; --st-intrev: #ff8a3d; --st-revision: #ff6b6b; --st-rejected: #e0457b; --st-cancelled: #7c818c; }
-[data-st="qc"] { --c: var(--st-qc); } [data-st="intrev"] { --c: var(--st-intrev); } [data-st="cancelled"] { --c: var(--st-cancelled); }
+[data-st="unassigned"] { --c: var(--st-cancelled); } [data-st="qc"] { --c: var(--st-qc); } [data-st="intrev"] { --c: var(--st-intrev); } [data-st="cancelled"] { --c: var(--st-cancelled); }
 [data-st="revision"] { --c: var(--st-revision); } [data-st="rejected"] { --c: var(--st-rejected); }
 .board { grid-auto-columns: minmax(210px, 1fr); }
 .col[data-st="cancelled"] .card { opacity: .7; }
@@ -420,6 +420,7 @@ table.list.wl td.wl-title { white-space: normal; min-width: 160px; }
 table.list.wl tr.is-paid td { background: color-mix(in srgb, var(--st-approved) 5%, transparent); }
 .wl-in, .wl-date input { background: var(--panel-2); border: 1px solid var(--line-2); border-radius: 6px; padding: 5px 7px; color: var(--fg); font: inherit; font-size: 12.5px; max-width: 100%; }
 .wl-in.num { font-family: var(--mono); }
+.rt-in { width: 64px; text-align: right; } .rt-in.edited { border-color: var(--accent); background: rgba(255, 90, 31, .12); }
 .wl-date { display: flex; align-items: center; gap: 3px; }
 .wl-date.ovr input { border-color: var(--accent); }
 .wl-date button { background: none; border: 0; color: var(--accent-2); font-size: 14px; padding: 2px; }
@@ -944,7 +945,7 @@ function makeEditor(host, html, onChange, opts = {}) {
 
 /* ---------------- constants ---------------- */
 const STATUSES = [
-  { id: "todo", label: "To do" }, { id: "editing", label: "Editing" }, { id: "qc", label: "Internal QC" }, { id: "intrev", label: "Internal revisions" },
+  { id: "todo", label: "Assigned" }, { id: "editing", label: "Editing" }, { id: "qc", label: "Internal QC" }, { id: "intrev", label: "Internal revisions" },
   { id: "review", label: "Client review" }, { id: "revision", label: "Client revisions" }, { id: "approved", label: "Approved" },
   { id: "rejected", label: "Rejected", rare: true }, { id: "cancelled", label: "Cancelled" },
 ];
@@ -953,9 +954,11 @@ const CLOSED = ["approved", "rejected", "cancelled"];
 const clientStage = (st) => (["todo", "editing", "qc", "intrev"].includes(st || "todo") ? { id: "editing", label: "Being edited" } : ST[st] || { id: st, label: st });
 const stLabel = (st) => (isClient() ? clientStage(st).label : (ST[st || "todo"] || { label: st }).label);
 const ST = Object.fromEntries(STATUSES.map((s) => [s.id, s]));
+ST.unassigned = { id: "unassigned", label: "Unassigned" };          // not a stored status: a "To do" task with nobody on it sits here, and moves to Assigned once an editor is picked
+const boardCol = (t) => { const s = (t && t.status) || "todo"; return s === "todo" && !(t && t.assignee) ? "unassigned" : s; };
 const PRIORITY = { high: "High", normal: "Normal", low: "Low" };
 const ROLE_LABEL = { admin: "Admin", editor: "Editor", client: "Client", guest: "Guest" };
-const TASK_FIELDS = ["title", "assignee", "client", "due", "type", "priority", "brief", "notes", "sheet", "assignedAt", "videoUrl", "versions", "videos", "files", "rawUrl", "docUrl", "sheetUrl", "clientNote", "order", "createdAt", "updatedAt"];
+const TASK_FIELDS = ["title", "assignee", "client", "due", "type", "priority", "brief", "notes", "sheet", "assignedAt", "videoUrl", "versions", "videos", "files", "rawUrl", "docUrl", "sheetUrl", "clientNote", "order", "ratingFix", "createdAt", "updatedAt"];
 const MIRROR_FIELDS = ["title", "assignee", "client", "due", "type", "videoUrl", "versions", "videos", "clientNote"];   // what the client is allowed to see
 const pick = (o, keys) => Object.fromEntries(keys.filter((k) => o[k] !== undefined).map((k) => [k, o[k]]));
 
@@ -1053,10 +1056,17 @@ function emptyState() {
   if (isEditor()) return `<div class="empty"><b>No tasks for you yet</b>When an admin assigns you a task, it shows up here.</div>`;
   return `<div class="empty"><b>No tasks yet</b>Click <b style="display:inline;font:inherit;color:var(--accent-2)">+ New task</b> to add the first one. Use <b style="display:inline;font:inherit;color:var(--accent-2)">People</b> to invite editors and clients.</div>`;
 }
+// Dropping a card on a column: Unassigned only holds tasks nobody is on; every other stage needs an editor first.
+function dropOn(id, col) {
+  const t = S.merged.get(id); if (!t) return;
+  if (col === "unassigned") { if (t.assignee) { toast("To unassign it, open the task and set Editor to Unassigned."); return; } setStatus(id, "todo", "", "team"); return; }
+  if (!t.assignee && col !== "cancelled") { toast("Pick an editor first. It moves to Assigned and shows to the editor."); openTask(id); return; }
+  setStatus(id, col, "", "team");
+}
 function renderBoard(m) {
   const list = filteredTasks();
-  m.innerHTML = filterBar(isEditor() ? "My tasks" : "Board") + (S.merged.size ? `<div class="board" id="board">${STATUSES.filter((s) => !s.rare || list.some((t) => t.status === s.id)).map((s) => {
-    const items = list.filter((t) => (t.status || "todo") === s.id).sort((a, b) => (a.order || 0) - (b.order || 0));
+  m.innerHTML = filterBar(isEditor() ? "My tasks" : "Board") + (S.merged.size ? `<div class="board" id="board">${(isEditor() ? STATUSES : [ST.unassigned, ...STATUSES]).filter((s) => !s.rare || list.some((t) => t.status === s.id)).map((s) => {
+    const items = list.filter((t) => boardCol(t) === s.id).sort((a, b) => (a.order || 0) - (b.order || 0));
     return `<section class="col" data-st="${s.id}" aria-label="${s.label}"><div class="col-h"><span class="pill" data-st="${s.id}">${s.label}</span><span class="n">${items.length}</span></div>
       <div class="cards">${items.map(cardHTML).join("")}</div></section>`;
   }).join("")}</div>` : emptyState());
@@ -1069,7 +1079,7 @@ function renderBoard(m) {
   $$(".col", m).forEach((col) => {
     col.addEventListener("dragover", (e) => { e.preventDefault(); col.classList.add("drop"); });
     col.addEventListener("dragleave", () => col.classList.remove("drop"));
-    col.addEventListener("drop", (e) => { e.preventDefault(); col.classList.remove("drop"); const id = e.dataTransfer.getData("text/plain"); if (id) setStatus(id, col.dataset.st, "", "team"); });
+    col.addEventListener("drop", (e) => { e.preventDefault(); col.classList.remove("drop"); const id = e.dataTransfer.getData("text/plain"); if (id) dropOn(id, col.dataset.st); });
   });
 }
 function renderTasks(m) {
@@ -1079,7 +1089,7 @@ function renderTasks(m) {
   const th = (k, l) => `<th data-k="${k}" aria-sort="${key === k ? (dir > 0 ? "ascending" : "descending") : "none"}">${l}</th>`;
   m.innerHTML = filterBar(isEditor() ? "My tasks" : "Tasks") + (list.length ? `<div class="tablewrap"><table class="list"><thead><tr>${th("title", "Task")}${th("client", "Client")}${th("assignee", "Editor")}${th("due", "Due")}${th("status", "Status")}${th("rev", "Revisions")}</tr></thead><tbody>
     ${list.map((t) => `<tr data-id="${esc(t.id)}" tabindex="0"><td><b>${esc(t.title || "Untitled task")}</b>${t.type ? ` <span class="tag">${esc(t.type)}</span>` : ""}</td><td>${esc(personName(t.client))}</td><td>${esc(personName(t.assignee)) || '<span class="muted">Unassigned</span>'}</td>
-      <td class="num ${isLate(t) ? "due late" : ""}">${esc(fmtDate(t.due))}</td><td><span class="pill" data-st="${t.status || "todo"}">${ST[t.status || "todo"].label}</span></td><td class="num">${revCount(t)}</td></tr>`).join("")}
+      <td class="num ${isLate(t) ? "due late" : ""}">${esc(fmtDate(t.due))}</td><td><span class="pill" data-st="${boardCol(t)}">${ST[boardCol(t)].label}</span></td><td class="num">${revCount(t)}</td></tr>`).join("")}
     </tbody></table></div>` : emptyState());
   bindFilters();
   $$("th[data-k]", m).forEach((h) => h.addEventListener("click", () => { const k = h.dataset.k; ui.sort = { key: k, dir: ui.sort.key === k ? -ui.sort.dir : 1 }; render(); }));
@@ -1255,7 +1265,7 @@ function drawTask() {
   const tab = (k, l) => `<button role="tab" data-t="${k}" aria-selected="${ui.subtab === k}">${l}</button>`;
   drawer.innerHTML = `
     <div class="dr-h"><input class="title" id="tTitle" value="${esc(t.title)}" placeholder="Task name, e.g. Reel 12 for Ahmed Properties" aria-label="Task name">
-      <span class="pill" data-st="${t.status || "todo"}">${ST[t.status || "todo"].label}</span><button class="btn ghost" id="dClose" aria-label="Close">✕</button></div>
+      <span class="pill" data-st="${boardCol(t)}">${ST[boardCol(t)].label}</span><button class="btn ghost" id="dClose" aria-label="Close">✕</button></div>
     <div class="dr-b">
       <div class="subtabs" role="tablist">${tab("overview", "Overview")}${tab("exports", "Exports" + (() => { const n = videosOf(t).filter((v) => v.versions.length).length; return n ? ` <span class="tabn">${n}</span>` : ""; })())}${tab("notes", "Notes")}${tab("sheet", "Sheet")}${tab("review", "Review & history")}</div>
       <div id="tBody"></div>
@@ -1267,7 +1277,7 @@ function drawTask() {
   liveEditor = liveGrid = null;
   if (ui.subtab === "overview") {
     body.innerHTML = `<div class="fields">
-      <div class="f"><label for="fSt">Status</label><select id="fSt">${STATUSES.map((s) => `<option value="${s.id}" ${s.id === (t.status || "todo") ? "selected" : ""}>${s.label}</option>`).join("")}</select></div>
+      <div class="f"><label for="fSt">Status</label><select id="fSt">${!t.assignee && boardCol(t) === "unassigned" ? `<option value="unassigned" selected>Unassigned</option>` : ""}${STATUSES.map((s) => `<option value="${s.id}" ${s.id === (t.status || "todo") && boardCol(t) !== "unassigned" ? "selected" : ""}>${s.label}</option>`).join("")}</select></div>
       <div class="f"><label for="fAs">Editor</label><select id="fAs" ${admin ? "" : "disabled"}>${opt(team(), t.assignee, "Unassigned")}</select></div>
       <div class="f"><label for="fCl">Client</label><select id="fCl" ${admin ? "" : "disabled"}>${opt(clients(), t.client, "No client")}${admin ? `<option value="__new">+ Add a new client…</option>` : ""}</select>
         ${admin ? `<div class="linkrow" id="fClNewRow" hidden style="margin-top:6px"><input id="fClNew" placeholder="Type the client or brand name" maxlength="60" aria-label="New client name"><button class="btn primary" id="fClAdd" type="button">Add</button></div>` : ""}</div>
@@ -1280,7 +1290,7 @@ function drawTask() {
     ${exportSummary(t)}
     <div class="sec"><h4>Message for the client</h4><div class="f"><textarea id="fCn" placeholder="Shown to the client next to the video, e.g. Here's the first cut. Music is a placeholder.">${esc(t.clientNote)}</textarea></div></div>
     ${taskActions(t, id)}`;
-    $("#fSt").addEventListener("change", (e) => { flushTask(); setStatus(id, e.target.value, "", "team"); });
+    $("#fSt").addEventListener("change", (e) => { flushTask(); const t = S.merged.get(id) || {}, v = e.target.value; if (v === "unassigned" ) return; if (!t.assignee && v !== "cancelled") { toast("Pick an editor first."); e.target.value = boardCol(t) === "unassigned" ? "unassigned" : t.status || "todo"; return; } setStatus(id, v, "", "team"); });
     bindFiles(body, id); bindActions(body, id);
     $$("[data-watch]", body).forEach((b) => b.addEventListener("click", () => { const [vid, ver] = b.dataset.watch.split("|"); flushTask(); openReview(id, Number(ver), vid); }));
     $$("[data-goto]", body).forEach((b) => b.addEventListener("click", () => { flushTask(); ui.subtab = b.dataset.goto; drawTask(); }));
@@ -1335,7 +1345,7 @@ function drawTask() {
     liveGrid = makeGrid($("#tGrid"), m, (mm) => patchTask({ sheet: JSON.parse(JSON.stringify(mm)) }));
   } else {
     const h = [...(t.history || [])].reverse();
-    body.innerHTML = `<div class="review"><div class="now"><span class="muted">Current status</span><span class="pill" data-st="${t.status || "todo"}">${ST[t.status || "todo"].label}</span><span class="tag rev">Revisions: ${revCount(t)}</span></div>
+    body.innerHTML = `<div class="review"><div class="now"><span class="muted">Current status</span><span class="pill" data-st="${boardCol(t)}">${ST[boardCol(t)].label}</span><span class="tag rev">Revisions: ${revCount(t)}</span></div>
       ${safeUrl(t.videoUrl) ? `<button class="btn" id="openRv2" type="button" style="justify-self:start">▶ Watch &amp; see comments</button>` : ""}
       <div class="muted" style="font-size:13px">Record a client decision yourself (for example one that came by WhatsApp):</div>
       <div class="decide"><button class="btn" data-d="approved">✓ Approved</button><button class="btn" data-d="revision">↻ Revision</button><button class="btn" data-d="rejected">✕ Rejected</button></div>
@@ -2720,12 +2730,17 @@ function rtRows() {
     const comments = (rtCache.get(id) || { list: [] }).list.filter((c) => !c.parent && c.uid !== t.assignee);
     const firstVid = videosOf(t)[0].id;
     const perVideo = vids.map((v) => ({ name: v.name, versions: v.versions.length, mistakes: comments.filter((c) => (c.vid || firstVid) === v.id).length }));
-    const cRev = h.filter((x) => x.state === "revision").length, iRev = h.filter((x) => x.state === "intrev").length;
-    const cMis = comments.filter((c) => c.by === "client").length, tMis = comments.length - cMis;
+    const aCRev = h.filter((x) => x.state === "revision").length, aIRev = h.filter((x) => x.state === "intrev").length;
+    const aCMis = comments.filter((c) => c.by === "client").length, aTMis = comments.length - aCMis;
+    // An admin can correct any number (a card dragged to the wrong board, a comment that wasn't really a mistake…). The correction is kept on the task.
+    const fix = t.ratingFix || {}, auto = { videos: Math.max(1, vids.length), cRev: aCRev, iRev: aIRev, cMis: aCMis, tMis: aTMis };
+    const eff = (k) => (Number.isFinite(fix[k]) ? fix[k] : auto[k]);
+    const fixed = Object.keys(auto).filter((k) => Number.isFinite(fix[k]) && fix[k] !== auto[k]);
+    const cRev = eff("cRev"), iRev = eff("iRev"), cMis = eff("cMis"), tMis = eff("tMis");
     return { id, title: t.title || "Untitled task", editor: t.assignee, editorName: personName(t.assignee) || "Former member", client: personName(t.client),
-      delivered: sent ? isoDay(sent.at) : "", status: t.status || "todo", videos: Math.max(1, vids.length), sentOnce: !!sent,
+      delivered: sent ? isoDay(sent.at) : "", status: t.status || "todo", videos: eff("videos"), sentOnce: !!sent, reach: !!sent || aIRev > 0 || comments.length > 0 || fixed.length > 0, auto, fixed,
       cRev, iRev, revs: cRev + iRev, cMis, tMis, mis: cMis + tMis, perVideo, firstTime: t.status === "approved" && cRev === 0, approved: t.status === "approved" };
-  }).filter((r) => r.sentOnce || r.iRev || r.mis);       // only work that reached review counts
+  }).filter((r) => r.reach);       // only work that reached review counts
 }
 function rtTotals(rows) {
   const t = { videos: 0, revs: 0, cRev: 0, iRev: 0, mis: 0, cMis: 0, tMis: 0, approved: 0, firstTime: 0, jobs: rows.length };
@@ -2733,8 +2748,17 @@ function rtTotals(rows) {
   t.score = rtScore(t.videos, t.revs, t.mis);
   return t;
 }
+function rtSave(id, patch) {
+  const t = S.tasks.get(id); if (!t || !isAdmin()) return;
+  const r = rtRows().find((x) => x.id === id); if (!r) return;
+  let fix = patch === null ? {} : { ...(t.ratingFix || {}) };
+  if (patch) Object.entries(patch).forEach(([k, v]) => { if (v === r.auto[k]) delete fix[k]; else fix[k] = v; });
+  const ratingFix = Object.keys(fix).length ? fix : null;
+  S.tasks.set(id, { ...t, ratingFix }); Store.update("tasks", id, { ratingFix }); merge();
+}
 function renderRatings(m) {
-  const acc = rtAccess(); if (!acc) { view = "board"; renderBoard(m); return; }
+  const acc = rtAccess();
+  const fa = document.activeElement, keepRt = fa && fa.matches && fa.matches("#main input[data-rt]") ? { id: fa.dataset.id, k: fa.dataset.rt, val: fa.value, s: (() => { try { return [fa.selectionStart, fa.selectionEnd]; } catch (e) { return null; } })() } : null; if (!acc) { view = "board"; renderBoard(m); return; }
   rtLoad(false);
   const all = rtRows();
   const months = [...new Set(all.map((r) => r.delivered.slice(0, 7)).filter(Boolean))].sort().reverse();
@@ -2744,6 +2768,9 @@ function renderRatings(m) {
   const eds = [...new Set(rows.map((r) => r.editor))].map((ed) => { const rr = rows.filter((r) => r.editor === ed); return { ed, name: rr[0].editorName, t: rtTotals(rr) }; })
     .sort((a, b) => (b.t.score || 0) - (a.t.score || 0) || a.name.localeCompare(b.name));
   const allEds = [...new Map(all.map((r) => [r.editor, r.editorName])).entries()];
+  const cell = (r, k, bad) => acc === "all"
+    ? `<td class="num"><input class="wl-in num rt-in${r.fixed.includes(k) ? " edited" : ""}" type="number" min="0" max="999" step="1" data-rt="${k}" data-id="${esc(r.id)}" value="${r[k]}" title="${r.fixed.includes(k) ? "Corrected by you. Counted automatically: " + r.auto[k] : "Counted automatically. Type a number to correct it."}" aria-label="${k} for ${esc(r.title)}"></td>`
+    : `<td class="num ${bad && r[k] ? "bad" : ""}">${r[k]}</td>`;
   const per = (n, d) => (d ? (n / d).toFixed(1) : "0");
   const card = (e) => `<button class="rt-card${rtui.editor === e.ed ? " on" : ""}" data-ed="${esc(e.ed)}" type="button">
       <div class="rt-top"><span class="av">${esc(initials(e.name))}</span><b>${esc(e.name)}</b></div>
@@ -2760,16 +2787,18 @@ function renderRatings(m) {
     ${eds.length ? `<div class="rt-cards">${eds.map(card).join("")}</div>` : ""}
     ${rows.length ? `<div class="tablewrap"><table class="list wl" style="min-width:900px"><thead><tr>${acc === "all" ? "<th>Editor</th>" : ""}<th>Video</th><th>Client</th><th>Delivered</th><th>Videos</th><th>Client revisions</th><th>Internal revisions</th><th>Client mistakes</th><th>Team mistakes</th><th>Status</th></tr></thead><tbody>
       ${rows.sort((a, b) => String(b.delivered).localeCompare(String(a.delivered))).map((r) => `<tr>${acc === "all" ? `<td>${esc(r.editorName)}</td>` : ""}<td class="wl-title"><b>${esc(r.title)}</b>${r.perVideo.length > 1 ? `<small class="muted" style="display:block">${r.perVideo.map((v) => `${esc(v.name)}: ${v.mistakes} mistake${v.mistakes === 1 ? "" : "s"}, v${v.versions}`).join(" · ")}</small>` : ""}</td>
-        <td>${esc(r.client) || '<span class="muted">—</span>'}</td><td class="num">${esc(fmtDate(r.delivered)) || '<span class="muted">—</span>'}</td><td class="num">${r.videos}</td>
-        <td class="num ${r.cRev ? "bad" : ""}">${r.cRev}</td><td class="num">${r.iRev}</td><td class="num ${r.cMis ? "bad" : ""}">${r.cMis}</td><td class="num">${r.tMis}</td>
-        <td><span class="pill" data-st="${esc(r.status)}">${esc(ST[r.status]?.label || r.status)}</span>${r.firstTime ? ` <span class="ok" title="Approved without any client revision">✓ first time</span>` : ""}</td></tr>`).join("")}</tbody></table></div>`
+        <td>${esc(r.client) || '<span class="muted">—</span>'}</td><td class="num">${esc(fmtDate(r.delivered)) || '<span class="muted">—</span>'}</td>${cell(r, "videos")}${cell(r, "cRev", 1)}${cell(r, "iRev")}${cell(r, "cMis", 1)}${cell(r, "tMis")}
+        <td><span class="pill" data-st="${esc(r.status)}">${esc(ST[r.status]?.label || r.status)}</span>${r.firstTime ? ` <span class="ok" title="Approved without any client revision">✓ first time</span>` : ""}${acc === "all" && r.fixed.length ? ` <button class="btn sm" data-rtreset="${esc(r.id)}" type="button" title="Go back to the automatic count">↺ Reset</button>` : ""}</td></tr>`).join("")}</tbody></table></div>`
       : `<div class="empty"><b>${loaded ? "No rated videos yet" : "Loading…"}</b>${loaded ? "Videos count here once they've been sent to the client or through internal QC." : ""}</div>`}
-    <p class="muted" style="font-size:12.5px;margin-top:10px">How it's worked out: every editor starts at 5 stars. Each revision per video takes off ${RT_REV}, each mistake per video takes off ${RT_MIS}, and it never goes below 1. Revisions = client revision requests + internal revisions. Mistakes = comments on the video from the client or the team (replies and the editor's own comments don't count).</p>`;
+    <p class="muted" style="font-size:12.5px;margin-top:10px">How it's worked out: every editor starts at 5 stars. Each revision per video takes off ${RT_REV}, each mistake per video takes off ${RT_MIS}, and it never goes below 1. Revisions = client revision requests + internal revisions. Mistakes = comments on the video from the client or the team (replies and the editor's own comments don't count).${acc === "all" ? " You can correct any number in the table (for example when a card was dragged to the wrong board). Corrected numbers are highlighted, and ↺ Reset goes back to the automatic count." : ""}</p>`;
   $("#rtq").addEventListener("input", (e) => { rtui.q = e.target.value; render(); });
   $("#rtMonth").addEventListener("change", (e) => { rtui.month = e.target.value; render(); });
   $("#rtEd")?.addEventListener("change", (e) => { rtui.editor = e.target.value; render(); });
   $("#rtRefresh").addEventListener("click", () => rtLoad(true));
   $$(".rt-card", m).forEach((c) => c.addEventListener("click", () => { if (acc !== "all") return; rtui.editor = rtui.editor === c.dataset.ed ? "" : c.dataset.ed; render(); }));
+  $$("[data-rt]", m).forEach((i) => i.addEventListener("change", () => { const n = Math.max(0, Math.min(999, Math.round(Number(i.value) || 0))); rtSave(i.dataset.id, { [i.dataset.rt]: n }); setTimeout(render, 0); }));
+  $$("[data-rtreset]", m).forEach((b) => b.addEventListener("click", () => { rtSave(b.dataset.rtreset, null); setTimeout(render, 0); }));
+  if (keepRt) { const el = $(`#main input[data-rt="${keepRt.k}"][data-id="${CSS.escape(keepRt.id)}"]`); if (el) { el.focus(); try { el.setSelectionRange(keepRt.s[0], keepRt.s[1]); } catch (e) {} } }
 }
 
 /* ---------------- business sheet: what clients pay, what editors cost, profit ----------------
@@ -2948,7 +2977,7 @@ const GUIDES = {
     { t: "Welcome to your workspace", d: "Everything for a video lives here: the task, the raw footage, the edit, the client's comments, the approval and the editor's pay. This quick tour shows you where everything is." },
     { el: "#peopleBtn", t: "1. Invite your team and clients", d: "Click <b>People</b>. Type their name and the exact email they'll sign in with, pick <b>Editor</b> or <b>Client</b>, and press Send invite. Then send them the site link with <b>Copy link</b>. For a client who shouldn't need an email login, use <b>Create share link</b> next to their name under Clients." },
     { el: "#newBtn", t: "2. Create a task", d: "Click <b>+ New task</b>. Pick the editor, the client and the due date, write the brief and add links under <b>Footage &amp; links</b> (raw footage, references, music…), then press <b>Save task</b>. The editor adds the exports in the <b>Exports</b> tab, one or several videos each with their own versions." },
-    { el: "#board", t: "3. Follow every video here", d: "Each task moves across these columns: To do → Editing → Internal QC → Internal revisions → Client review → Client revisions → Approved (or Cancelled). Click a card to open it, drag it to change its stage, and use the search box to find any video by name or link." },
+    { el: "#board", t: "3. Follow every video here", d: "Each task moves across these columns: Unassigned → Assigned → Editing → Internal QC → Internal revisions → Client review → Client revisions → Approved (or Cancelled). Click a card to open it, drag it to change its stage, and use the search box to find any video by name or link." },
     { t: "4. The editor delivers, the client reviews", d: "The editor pastes the export and presses <b>Send to client for review</b>. The client pauses on a moment and types what to change; the time is saved with the comment. Click a comment to jump to that moment. For a new cut, use <b>+ Add new version</b>.", ui: chip("0:12", "tc") + chip("Make the logo bigger") + chip("✓ Approve") + chip("↻ Revision") + chip("+ Add new version", "p") },
     { el: "#wlTab", t: "5. Track work and pay", d: "<b>Work log</b> counts each editor's videos, whether they were on time, and what you owe. Set rates under <b>Rates</b> and tick <b>Paid</b> when you pay. Editors can't see it unless you allow it in People." },
     { el: "#rtTab", t: "6. Ratings and business", d: "<b>Ratings</b> gives each editor stars from their revisions and mistakes. <b>Business</b> shows what clients pay, what editors cost and your profit or loss. Only you see these unless you allow someone in People." },
@@ -2956,7 +2985,7 @@ const GUIDES = {
   ],
   editor: [
     { t: "Welcome to FW Studio", d: "This is where you get your editing tasks, deliver your cuts and see the client's feedback. Here's where everything is." },
-    { el: "#board", t: "1. Your tasks", d: "Videos assigned to you show here, sorted by stage: To do, Editing, Internal QC, Internal revisions, Client review, Client revisions, Approved." },
+    { el: "#board", t: "1. Your tasks", d: "Videos assigned to you show here, sorted by stage: Assigned, Editing, Internal QC, Internal revisions, Client review, Client revisions, Approved." },
     { el: "#board .card", t: "2. Open a task", d: "Click a card to see the brief, the due date and the links under <b>Footage &amp; links</b>. Press <b>▶ Watch</b> on a reference to play it right there. Set the status to <b>Editing</b> when you start." },
     { t: "3. Deliver your edit", d: "Upload the export to YouTube as <b>Unlisted</b>, or to Google Drive or Dropbox shared with “Anyone with the link”. (A WeTransfer link also works, but it opens on WeTransfer, so there is no in-page player or compare.) In the task's <b>Exports</b> tab, paste the link (use <b>+ Add another video</b> for a batch) and press <b>Send to client for review</b>.", ui: chip("Exported video") + "→" + chip("Send to client for review", "p") },
     { t: "4. Fix revisions", d: "The client's comments have times. Click one to jump to that moment. Tick <b>✓ Done</b> as you fix each one, then add the new cut with <b>+ Add new version</b>.", ui: chip("0:12", "tc") + chip("✓ Done") + chip("+ Add new version", "p") },
