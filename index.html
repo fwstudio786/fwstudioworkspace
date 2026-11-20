@@ -353,6 +353,34 @@ body.rv-lock { overflow: hidden; }
 .rv-msg p { margin: 0; max-width: 44ch; color: #b5a89f; }
 .rv-side { display: flex; flex-direction: column; min-height: 0; border-left: 1px solid var(--line); background: var(--panel); }
 .rv-note { margin: 12px 14px 0; padding: 10px 12px; border-radius: 8px; background: var(--panel-2); border-left: 3px solid var(--accent); font-size: 13px; white-space: pre-wrap; }
+/* ---- links, exports, viewer ---- */
+.flist { display: grid; gap: 10px; }
+.frow { display: grid; gap: 4px; }
+.frow .flabel { justify-self: start; width: min(320px, 100%); background: transparent; border: 1px dashed transparent; border-radius: 6px; padding: 2px 6px; margin-left: -6px; color: var(--muted); font: 600 11.5px/1.4 var(--body); letter-spacing: .06em; text-transform: uppercase; }
+.frow .flabel:hover, .frow .flabel:focus { border-color: var(--line-2); color: var(--fg); outline: none; }
+.fdel { padding-inline: 10px; }
+.frow .furl { width: 100%; background: var(--panel); border: 1px solid var(--line-2); border-radius: 8px; padding: 8px 10px; color: var(--fg); }
+.drawer .sec > .flist { margin-top: 2px; }
+.fadd { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-top: 10px; font-size: 12.5px; }
+.tabn { display: inline-grid; place-items: center; min-width: 18px; height: 18px; padding: 0 5px; margin-left: 4px; border-radius: 9px; background: var(--accent-soft); color: var(--accent-2); font: 600 11px/1 var(--mono); }
+.vcards { display: grid; gap: 12px; }
+.vcard { display: grid; gap: 10px; background: var(--panel); border: 1px solid var(--line-2); border-radius: 10px; padding: 14px; min-width: 0; }
+.vc-h { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.vc-h .vname { flex: 1 1 160px; min-width: 0; background: transparent; border: 1px dashed transparent; border-radius: 6px; padding: 4px 6px; margin-left: -6px; color: var(--accent-2); font: 700 15px/1.2 var(--display); }
+.vc-h .vname:hover, .vc-h .vname:focus { border-color: var(--line-2); outline: none; }
+.vadd { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-top: 12px; font-size: 12.5px; }
+.vadd span { flex: 1 1 220px; }
+.cv-vids { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.tact { display: flex; flex-wrap: wrap; gap: 8px; justify-content: space-between; }
+.viewer { position: fixed; inset: 0; z-index: 66; background: var(--bg); display: grid; grid-template-rows: auto minmax(0, 1fr); padding: env(safe-area-inset-top, 0px) env(safe-area-inset-right, 0px) env(safe-area-inset-bottom, 0px) env(safe-area-inset-left, 0px); }
+.viewer[hidden] { display: none; }
+.bar input[type="search"] { min-width: 0; }
+/* ---- stages ---- */
+:root { --st-qc: #f5c84c; --st-intrev: #ff8a3d; --st-revision: #ff6b6b; --st-rejected: #e0457b; --st-cancelled: #7c818c; }
+[data-st="qc"] { --c: var(--st-qc); } [data-st="intrev"] { --c: var(--st-intrev); } [data-st="cancelled"] { --c: var(--st-cancelled); }
+[data-st="revision"] { --c: var(--st-revision); } [data-st="rejected"] { --c: var(--st-rejected); }
+.board { grid-auto-columns: minmax(210px, 1fr); }
+.col[data-st="cancelled"] .card { opacity: .7; }
 /* ---- work log ---- */
 .wl-tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 8px; margin-bottom: 14px; }
 .wl-tiles > div { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; display: grid; gap: 4px; min-width: 0; }
@@ -564,11 +592,16 @@ button.tc:hover { background: var(--accent); color: var(--accent-ink); }
   </div>
 </div>
 
+<div class="viewer" id="viewer" role="dialog" aria-modal="true" aria-labelledby="vwTitle" hidden>
+  <div class="rv-top"><button class="btn ghost" id="vwClose" type="button">← Back</button><div class="rv-tt"><h2 id="vwTitle"></h2></div><div class="spacer"></div><a class="btn sm" id="vwOpen" target="_blank" rel="noopener">Open in a new tab ↗</a></div>
+  <div class="rv-stage" id="vwStage"></div>
+</div>
 <section class="rv" id="rv" role="dialog" aria-modal="true" aria-labelledby="rvTitle" hidden>
   <div class="rv-top">
     <button class="btn ghost" id="rvBack" type="button">← Back</button>
     <div class="rv-tt"><h2 id="rvTitle"></h2><div class="rv-meta" id="rvMeta"></div></div>
     <div class="spacer"></div>
+    <select id="rvVidSel" class="rv-sel" aria-label="Which video" hidden></select>
     <select id="rvVer" class="rv-sel" aria-label="Version" hidden></select>
     <button class="btn sm" id="rvCmp" type="button" hidden>⇄ Compare versions</button>
     <a class="btn sm" id="rvOpen" target="_blank" rel="noopener" hidden>Open original ↗</a>
@@ -883,14 +916,19 @@ function makeEditor(host, html, onChange, opts = {}) {
 
 /* ---------------- constants ---------------- */
 const STATUSES = [
-  { id: "todo", label: "To do" }, { id: "editing", label: "Editing" }, { id: "review", label: "Client review" },
-  { id: "revision", label: "Revision" }, { id: "approved", label: "Approved" }, { id: "rejected", label: "Rejected" },
+  { id: "todo", label: "To do" }, { id: "editing", label: "Editing" }, { id: "qc", label: "Internal QC" }, { id: "intrev", label: "Internal revisions" },
+  { id: "review", label: "Client review" }, { id: "revision", label: "Client revisions" }, { id: "approved", label: "Approved" },
+  { id: "rejected", label: "Rejected", rare: true }, { id: "cancelled", label: "Cancelled" },
 ];
+const CLOSED = ["approved", "rejected", "cancelled"];
+// What a client sees: the team's internal stages all read as "Being edited".
+const clientStage = (st) => (["todo", "editing", "qc", "intrev"].includes(st || "todo") ? { id: "editing", label: "Being edited" } : ST[st] || { id: st, label: st });
+const stLabel = (st) => (isClient() ? clientStage(st).label : (ST[st || "todo"] || { label: st }).label);
 const ST = Object.fromEntries(STATUSES.map((s) => [s.id, s]));
 const PRIORITY = { high: "High", normal: "Normal", low: "Low" };
 const ROLE_LABEL = { admin: "Admin", editor: "Editor", client: "Client", guest: "Guest" };
-const TASK_FIELDS = ["title", "assignee", "client", "due", "type", "priority", "brief", "notes", "sheet", "assignedAt", "videoUrl", "versions", "rawUrl", "docUrl", "sheetUrl", "clientNote", "order", "createdAt", "updatedAt"];
-const MIRROR_FIELDS = ["title", "assignee", "client", "due", "type", "videoUrl", "versions", "clientNote"];   // what the client is allowed to see
+const TASK_FIELDS = ["title", "assignee", "client", "due", "type", "priority", "brief", "notes", "sheet", "assignedAt", "videoUrl", "versions", "videos", "files", "rawUrl", "docUrl", "sheetUrl", "clientNote", "order", "createdAt", "updatedAt"];
+const MIRROR_FIELDS = ["title", "assignee", "client", "due", "type", "videoUrl", "versions", "videos", "clientNote"];   // what the client is allowed to see
 const pick = (o, keys) => Object.fromEntries(keys.filter((k) => o[k] !== undefined).map((k) => [k, o[k]]));
 
 /* ---------------- Firebase ---------------- */
@@ -945,7 +983,7 @@ const isAdmin = () => me && me.role === "admin", isEditor = () => me && me.role 
 const team = () => [...S.users.entries()].filter(([, u]) => u.role === "admin" || u.role === "editor").map(([id, u]) => ({ id, name: u.name || u.email })).sort((a, b) => a.name.localeCompare(b.name));
 const clients = () => [...S.clients.entries()].map(([id, c]) => ({ id, name: c.name })).sort((a, b) => a.name.localeCompare(b.name));
 const personName = (id) => { if (!id) return ""; const u = S.users.get(id); if (u) return u.name || u.email || ""; const c = S.clients.get(id); return c ? c.name : ""; };
-function isLate(t) { if (!t.due || ["approved", "rejected"].includes(t.status)) return false; return new Date(t.due + "T23:59:59") < new Date(); }
+function isLate(t) { if (!t.due || CLOSED.includes(t.status)) return false; return new Date(t.due + "T23:59:59") < new Date(); }
 function revCount(t) { return (t.history || []).filter((h) => h.state === "revision").length; }
 function merge() {
   S.merged = new Map();
@@ -958,19 +996,19 @@ function setBanner(msg) { const b = $("#banner"); b.textContent = msg || ""; b.c
 function filteredTasks() {
   const q = ui.q.trim().toLowerCase();
   return [...S.merged.entries()].map(([id, t]) => ({ id, ...t })).filter((t) => t.id !== ui.draftId &&
-    (!q || [t.title, personName(t.client), personName(t.assignee), t.brief].join(" ").toLowerCase().includes(q)) &&
+    (!q || searchText(t).includes(q)) &&
     (!ui.fAssignee || t.assignee === ui.fAssignee) && (!ui.fClient || t.client === ui.fClient));
 }
 function filterBar(title) {
   const opt = (list, v) => list.map((p) => `<option value="${esc(p.id)}" ${p.id === v ? "selected" : ""}>${esc(p.name)}</option>`).join("");
   return `<div class="bar"><h1>${title}</h1>
-    <input type="search" id="q" placeholder="Search tasks" value="${esc(ui.q)}" aria-label="Search tasks">
+    <input type="search" id="q" placeholder="Search videos, people or links" value="${esc(ui.q)}" aria-label="Search videos, people or links">
     ${isAdmin() ? `<select id="fA" aria-label="Filter by editor"><option value="">All editors</option>${opt(team(), ui.fAssignee)}</select>` : ""}
     <select id="fC" aria-label="Filter by client"><option value="">All clients</option>${opt(clients(), ui.fClient)}</select></div>`;
 }
 function bindFilters() {
   const q = $("#q"); if (!q) return;
-  q.addEventListener("input", () => { ui.q = q.value; const pos = q.selectionStart; render(); const n = $("#q"); n.focus(); n.setSelectionRange(pos, pos); });
+  q.addEventListener("input", () => { ui.q = q.value; render(); });
   $("#fA")?.addEventListener("change", (e) => { ui.fAssignee = e.target.value; render(); });
   $("#fC").addEventListener("change", (e) => { ui.fClient = e.target.value; render(); });
 }
@@ -978,7 +1016,7 @@ function cardHTML(t) {
   const a = personName(t.assignee), c = personName(t.client), rv = revCount(t);
   return `<button class="card" draggable="true" data-id="${esc(t.id)}">
     <h3>${esc(t.title || "Untitled task")}</h3>
-    <div class="meta">${c ? `<span>${esc(c)}</span>` : ""}${t.type ? `<span class="tag">${esc(t.type)}</span>` : ""}${t.priority === "high" ? `<span class="tag" style="color:var(--st-rejected)">High</span>` : ""}${rv ? `<span class="tag rev">Rev ${rv}</span>` : ""}${parseVideo(t.videoUrl) && parseVideo(t.videoUrl).kind !== "notvideo" ? `<span class="tag exp-tag" title="Exported video added">▶ Export</span>` : ""}</div>
+    <div class="meta">${c ? `<span>${esc(c)}</span>` : ""}${t.type ? `<span class="tag">${esc(t.type)}</span>` : ""}${t.priority === "high" ? `<span class="tag" style="color:var(--st-rejected)">High</span>` : ""}${rv ? `<span class="tag rev">Rev ${rv}</span>` : ""}${(() => { const n = videosOf(t).filter((v) => v.versions.length).length; return n ? `<span class="tag exp-tag" title="Exported videos added">▶ ${n > 1 ? n + " videos" : "Export"}</span>` : ""; })()}</div>
     <div class="meta">${a ? `<span class="who"><span class="av">${esc(initials(a))}</span>${esc(a)}</span>` : `<span class="muted">Unassigned</span>`}${t.due ? `<span class="due ${isLate(t) ? "late" : ""}">Due ${esc(fmtDate(t.due))}</span>` : ""}</div>
   </button>`;
 }
@@ -989,7 +1027,7 @@ function emptyState() {
 }
 function renderBoard(m) {
   const list = filteredTasks();
-  m.innerHTML = filterBar(isEditor() ? "My tasks" : "Board") + (S.merged.size ? `<div class="board" id="board">${STATUSES.map((s) => {
+  m.innerHTML = filterBar(isEditor() ? "My tasks" : "Board") + (S.merged.size ? `<div class="board" id="board">${STATUSES.filter((s) => !s.rare || list.some((t) => t.status === s.id)).map((s) => {
     const items = list.filter((t) => (t.status || "todo") === s.id).sort((a, b) => (a.order || 0) - (b.order || 0));
     return `<section class="col" data-st="${s.id}" aria-label="${s.label}"><div class="col-h"><span class="pill" data-st="${s.id}">${s.label}</span><span class="n">${items.length}</span></div>
       <div class="cards">${items.map(cardHTML).join("")}</div></section>`;
@@ -1021,9 +1059,13 @@ function renderTasks(m) {
 }
 function renderLib(m, kind) {
   const map = S[kind], isDoc = kind === "docs";
-  const items = [...map.entries()].map(([id, d]) => ({ id, ...d })).sort((a, b) => String(b.updatedAt || "").localeCompare(String(a.updatedAt || "")));
-  m.innerHTML = `<div class="bar"><h1>${isDoc ? "Docs" : "Sheets"}</h1><button class="btn primary" id="newFile">+ New ${isDoc ? "doc" : "sheet"}</button></div>` +
-    (items.length ? `<div class="lib">${items.map((d) => `<button class="file" data-id="${esc(d.id)}"><span class="ico ${isDoc ? "doc" : "sheet"}">${isDoc ? "DOC" : "XLS"}</span><b>${esc(d.title || "Untitled")}</b><span class="muted" style="font-size:12px">Edited ${esc(fmtTime(d.updatedAt))}</span></button>`).join("")}</div>`
+  const lq = (ui.lq || "").trim().toLowerCase();
+  const text = (d) => (d.title + " " + (isDoc ? String(d.html || "").replace(/<[^>]+>/g, " ") : Object.values(d.cells || {}).join(" "))).toLowerCase();
+  const all = [...map.entries()].map(([id, d]) => ({ id, ...d })).sort((a, b) => String(b.updatedAt || "").localeCompare(String(a.updatedAt || "")));
+  const items = lq ? all.filter((d) => text(d).includes(lq)) : all;
+  m.innerHTML = `<div class="bar"><h1>${isDoc ? "Docs" : "Sheets"}</h1><input type="search" id="lq" placeholder="Search ${isDoc ? "docs" : "sheets"}" value="${esc(ui.lq || "")}" aria-label="Search ${isDoc ? "docs" : "sheets"}"><button class="btn primary" id="newFile">+ New ${isDoc ? "doc" : "sheet"}</button></div>` +
+    (lq && all.length && !items.length ? `<div class="empty"><b>Nothing found</b>No ${isDoc ? "doc" : "sheet"} mentions “${esc(ui.lq)}”.</div>` : "") +
+    (items.length || (lq && all.length) ? `<div class="lib">${items.map((d) => `<button class="file" data-id="${esc(d.id)}"><span class="ico ${isDoc ? "doc" : "sheet"}">${isDoc ? "DOC" : "XLS"}</span><b>${esc(d.title || "Untitled")}</b><span class="muted" style="font-size:12px">Edited ${esc(fmtTime(d.updatedAt))}</span></button>`).join("")}</div>`
       : `<div class="empty"><b>No ${isDoc ? "docs" : "sheets"} yet</b>${isDoc ? "Use docs for scripts, client briefs and meeting notes." : "Use sheets for budgets, payment tracking and content calendars."} Click <b style="display:inline;font:inherit;color:var(--accent-2)">+ New ${isDoc ? "doc" : "sheet"}</b> to make one.</div>`);
   $("#newFile").addEventListener("click", () => {
     const id = uid(), base = { title: isDoc ? "Untitled doc" : "Untitled sheet", updatedAt: now(), createdAt: now(), createdBy: me.uid };
@@ -1031,6 +1073,7 @@ function renderLib(m, kind) {
     map.set(id, data); Store.set(kind, id, data); openFile(kind, id);
   });
   $$(".file", m).forEach((f) => f.addEventListener("click", () => openFile(kind, f.dataset.id)));
+  $("#lq").addEventListener("input", (e) => { ui.lq = e.target.value; render(); });
 }
 function dlButton(id) {
   const d = S.dl.get(id), url = d && safeUrl(d.url);
@@ -1047,17 +1090,21 @@ function watchDownloads(list) {        // clients can only read a download link 
 }
 function renderClient(m) {
   const name = personName(me.clientId);
-  const mine = [...S.merged.entries()].map(([id, t]) => ({ id, ...t }));
-  watchDownloads(mine);
+  const every = [...S.merged.entries()].map(([id, t]) => ({ id, ...t }));
+  watchDownloads(every);
+  const cq = (ui.cq || "").trim().toLowerCase(), mine = cq ? every.filter((t) => searchText(t).includes(cq)) : every;
   const group = (title, st, items, decide) => items.length ? `<section class="cv-group"><h2><span class="pill" data-st="${st}">${title}</span><span class="muted mono" style="font-size:12px">${items.length}</span></h2><div class="cv-cards">${items.map((t) => clientCard(t, decide)).join("")}</div></section>` : "";
   const by = (s) => mine.filter((t) => s.includes(t.status || "todo"));
   m.innerHTML = `<div class="cv-head"><span class="muted">Hi ${esc((me.name || "").split(" ")[0] || "there")}</span><h1>${esc(name || "Your")} videos</h1>
-    <p class="muted" style="margin:0">Watch each video, then approve it, ask for a revision, or reject it. The FW Studio team sees your answer straight away.</p></div>` +
-    (mine.length ? group("Waiting for your review", "review", by(["review"]), true) + group("Being edited", "editing", by(["todo", "editing", "revision"]), false) + group("Approved", "approved", by(["approved"]), false) + group("Rejected", "rejected", by(["rejected"]), false)
+    <p class="muted" style="margin:0">Watch each video, then approve it, ask for a revision, or reject it. The FW Studio team sees your answer straight away.</p>
+    ${every.length > 3 || cq ? `<input type="search" id="cq" placeholder="Search your videos" value="${esc(ui.cq || "")}" aria-label="Search your videos" style="margin-top:8px;max-width:360px">` : ""}</div>` +
+    (cq && !mine.length ? `<div class="empty"><b>Nothing found</b>No video matches “${esc(ui.cq)}”.</div>` : "") +
+    (mine.length || cq ? group("Waiting for your review", "review", by(["review"]), true) + group("Being edited", "editing", by(["todo", "editing", "qc", "intrev", "revision"]), false) + group("Approved", "approved", by(["approved"]), false) + group("Rejected", "rejected", by(["rejected"]), false) + group("Cancelled", "cancelled", by(["cancelled"]), false)
       : `<div class="empty"><b>${loaded ? "Nothing here yet" : "Loading…"}</b>${loaded ? "When the team sends you a video to review, it shows up here." : ""}</div>`);
+  $("#cq")?.addEventListener("input", (e) => { ui.cq = e.target.value; render(); });
   $$(".cv-card", m).forEach((card) => {
     const id = card.dataset.id; let pick = "";
-    $("[data-rv]", card)?.addEventListener("click", () => openReview(id));
+    $$("[data-rv]", card).forEach((b) => b.addEventListener("click", () => openReview(id, 0, b.dataset.vid)));
     $$(".decide .btn", card).forEach((b) => b.addEventListener("click", () => {
       pick = b.dataset.d; $$(".decide .btn", card).forEach((x) => x.classList.toggle("pick", x === b));
       const ta = $("textarea", card); ta.hidden = false; ta.placeholder = pick === "approved" ? "Optional: a note for the team" : pick === "revision" ? "What should we change? Add timestamps if you can, e.g. 0:12 make the text bigger" : "Why doesn't this work for you?"; ta.focus();
@@ -1074,12 +1121,14 @@ function clientCard(t, decide) {
   const v = safeUrl(t.videoUrl), last = (t.history || []).slice(-1)[0];
   return `<article class="cv-card" data-id="${esc(t.id)}"><h3>${esc(t.title || "Untitled video")}</h3>
     <div class="meta">${t.type ? `<span class="tag">${esc(t.type)}</span>` : ""}${t.due ? `<span>Due ${esc(fmtDate(t.due))}</span>` : ""}${revCount(t) ? `<span class="tag rev">Revision ${revCount(t)}</span>` : ""}</div>
-    ${v ? `<button class="btn" data-rv type="button">▶ Watch &amp; comment</button>` : `<span class="muted">The video will appear here.</span>`}
+    ${(() => { const vids = videosOf(t).filter((x) => x.versions.length);
+      if (vids.length > 1) return `<div class="cv-vids"><span class="muted" style="font-size:12.5px">${vids.length} videos</span>${vids.map((x) => `<button class="btn" data-rv data-vid="${esc(x.id)}" type="button">▶ ${esc(x.name)}</button>`).join("")}</div>`;
+      return vids.length || v ? `<button class="btn" data-rv ${vids[0] ? `data-vid="${esc(vids[0].id)}"` : ""} type="button">▶ Watch &amp; comment</button>` : `<span class="muted">The video will appear here.</span>`; })()}
     ${t.clientNote ? `<div class="msg">${esc(t.clientNote)}</div>` : ""}
     ${decide ? `<div class="decide"><button class="btn" data-d="approved">✓ Approve</button><button class="btn" data-d="revision">↻ Revision</button><button class="btn" data-d="rejected">✕ Reject</button></div>
       <textarea hidden aria-label="Note for the team"></textarea><button class="btn primary send" hidden>Send</button>`
       : t.status === "approved" ? dlButton(t.id)
-      : last ? `<div class="muted" style="font-size:12.5px">Last update: ${esc(ST[last.state]?.label || last.state)} · ${esc(fmtTime(last.at))}</div>` : ""}
+      : last ? `<div class="muted" style="font-size:12.5px">Last update: ${esc(stLabel(last.state))} · ${esc(fmtTime(last.at))}</div>` : ""}
   </article>`;
 }
 
@@ -1091,13 +1140,13 @@ function setStatus(id, status, note, by, quiet) {
   const entry = { state: status, note: note || "", by: by === "client" ? "client" : "team", uid: me.uid, at: now() };
   const patch = { status, updatedAt: now() };
   if (status === "review" && by !== "client") {
-    const cur = (S.tasks.get(id) || r).videoUrl || "";
-    entry.url = cur;                                                       // remember which export was sent
-    const list = versionList(id);
-    if (!(Array.isArray(r.versions) && r.versions.length) || (cur && list.length && list[list.length - 1].url !== cur)) {
-      const versions = list.length && list[list.length - 1].url === cur ? list : [...list.filter((x) => x.url !== cur), ...(cur ? [{ url: cur, at: now(), note: "" }] : [])];
-      patch.versions = versions; const tk = S.tasks.get(id); if (tk) { S.tasks.set(id, { ...tk, versions }); Store.update("tasks", id, { versions }); }
-    }
+    // Mark the newest version of every video as sent, and remember the main link (older pages read it).
+    const videos = plainVideos(S.merged.get(id) || r), stamp = now();
+    videos.forEach((v) => { const l = v.versions[v.versions.length - 1]; if (l && !l.sentAt) l.sentAt = stamp; });
+    const first = videos.find((v) => v.versions.length);
+    entry.url = first ? first.versions[first.versions.length - 1].url : (r.videoUrl || "");
+    patch.videos = videos;
+    const tk = S.tasks.get(id); if (tk) { S.tasks.set(id, { ...tk, videos }); Store.update("tasks", id, { videos }); }
   }
   const history = [...(r.history || []), entry];
   patch.history = history;
@@ -1125,42 +1174,8 @@ function closeDrawer2() { flushTask(); flushFile(); drawer.classList.remove("on"
 scrim.addEventListener("click", closeDrawer);
 addEventListener("keydown", (e) => { if (e.key === "Escape" && !rv.id && drawer.classList.contains("on") && !e.target.closest(".sh-grid td.edit, .rt-link")) closeDrawer(); });
 
-function exportBox(t, id) {
-  const v = parseVideo(t.videoUrl), url = safeUrl(t.videoUrl), dl = S.dl.get(id) || {};
-  const m = S.merged.get(id) || t, vs = url ? versionsOf(m).filter((x) => x.url) : [], next = vs.length + 1;
-  const kind = !v ? "" : v.kind === "yt" ? "YouTube · time stamps on comments" : v.kind === "drive" ? "Google Drive" : v.kind === "file" ? "Video file · time stamps on comments" : v.kind === "notvideo" ? "" : "Opens on another site";
-  return `<div class="fields">
-    ${vs.length ? `<div class="f full"><label>Versions</label><div class="vlist">${vs.slice().reverse().map((x) => `<div class="vrow"><span class="tag">v${x.v}</span>${x.v === vs.length ? `<span class="now">Latest</span>` : ""}<span class="muted">${x.sent ? "Sent " + esc(fmtTime(x.sent)) : "Not sent to the client yet"}</span>${safeUrl(x.url) ? `<a class="vlink" href="${esc(safeUrl(x.url))}" target="_blank" rel="noopener" title="${esc(x.url)}">${esc(x.url.replace(/^https?:\/\/(www\.)?/, ""))}</a><button class="btn sm" data-watchv="${x.v}" type="button">▶ Watch</button>` : `<span class="muted vlink">Link not saved for this version</span>`}</div>`).join("")}</div>
-      <div id="nvWrap"><button class="btn" id="nvOpen" type="button">+ Add new version (v${next})</button>
-        <div class="nv-box" id="nvBox" hidden><label for="nvUrl" style="font-weight:600">Link to v${next}</label><input id="nvUrl" placeholder="Unlisted YouTube or Google Drive link of the new export" inputmode="url">
-          <textarea id="nvNote" rows="2" placeholder="What changed? (optional, the client sees this)" maxlength="500"></textarea>
-          <div><button class="btn ghost" id="nvCancel" type="button">Cancel</button><button class="btn" id="nvSave" type="button">Save v${next}</button>${t.client ? `<button class="btn primary" id="nvSend" type="button">Save v${next} &amp; send to client</button>` : ""}</div></div></div></div>` : ""}
-    <div class="f full"><label for="fVid">${vs.length > 1 ? `Link of the latest version (v${vs.length}). Only change it to fix a wrong link` : "Exported video the client watches"}</label><div class="linkrow"><input id="fVid" data-k="videoUrl" value="${esc(t.videoUrl)}" placeholder="Unlisted YouTube or Google Drive video link" inputmode="url">${url ? `<a class="btn" href="${esc(url)}" target="_blank" rel="noopener">Open ↗</a>` : ""}</div>
-      ${v && v.kind === "notvideo" ? `<div class="warn">This is a Google Doc or Sheet, not a video. <button class="linkbtn" id="mvDoc" type="button">Move it to the Google Doc field</button></div>`
-        : url ? `<div class="exp-row"><button class="btn primary" id="openRv" type="button">▶ Watch video &amp; comments</button><span class="muted" style="font-size:12px">${esc(kind)}</span></div>`
-        : `<small class="muted" style="font-size:12px">Leave this empty for now. The editor pastes the export here when the edit is ready, then presses “Send to client for review”. For Drive, set sharing to “Anyone with the link”.</small>`}</div>
-    <div class="f full"><label for="fFin">Final file for the client to download</label><div class="linkrow"><input id="fFin" placeholder="${S.dl.has(id) ? "https://drive.google.com/… (the full-quality file)" : "Loading…"}" inputmode="url" value="${esc(dl.url || "")}">${safeUrl(dl.url) ? `<a class="btn" href="${esc(safeUrl(dl.url))}" target="_blank" rel="noopener">Open ↗</a>` : ""}</div>
-      <small class="muted" style="font-size:12px">The client only gets this link after the video is approved.</small></div>
-  </div>`;
-}
 let taskDraft = null, taskTimer = 0;
 // A new export: the old link stays with its version, the new link becomes the latest version and goes to the client.
-// Saved versions as a plain list, starting from whatever the task already had.
-function versionList(id) {
-  const m = S.merged.get(id) || {};
-  return versionsOf(m).filter((x) => x.url).map((x) => ({ url: x.url, at: x.at || now(), note: x.note || "" }));
-}
-// A new export: the old link stays with its version; the new one becomes the latest. Optionally send it to the client.
-function addVersion(id, url, note, send) {
-  const r = S.reviews.get(id), t = S.tasks.get(id); if (!r || !t) return;
-  flushTask();
-  const versions = [...versionList(id), { url, at: now(), note: note || "" }];
-  const tp = { videoUrl: url, versions, updatedAt: now() }; if (note) tp.clientNote = note;
-  S.tasks.set(id, { ...S.tasks.get(id), ...tp }); Store.update("tasks", id, tp);
-  S.reviews.set(id, { ...r, ...tp }); merge(); Store.update("reviews", id, tp);
-  if (send) setStatus(id, "review", note || "", "team", true);
-  toast(send ? `v${versions.length} sent to the client` : `v${versions.length} saved`); render(); if (ui.openKind === "task" && ui.openId === id) drawTask();
-}
 function patchTask(patch, quick) {
   const id = ui.openId; const base = taskDraft || S.tasks.get(id); if (!base) return;
   taskDraft = { ...base, ...patch, updatedAt: now() }; S.tasks.set(id, taskDraft); merge();
@@ -1214,7 +1229,7 @@ function drawTask() {
     <div class="dr-h"><input class="title" id="tTitle" value="${esc(t.title)}" placeholder="Task name, e.g. Reel 12 for Ahmed Properties" aria-label="Task name">
       <span class="pill" data-st="${t.status || "todo"}">${ST[t.status || "todo"].label}</span><button class="btn ghost" id="dClose" aria-label="Close">✕</button></div>
     <div class="dr-b">
-      <div class="subtabs" role="tablist">${tab("overview", "Overview")}${tab("notes", "Notes")}${tab("sheet", "Sheet")}${tab("review", "Review & history")}</div>
+      <div class="subtabs" role="tablist">${tab("overview", "Overview")}${tab("exports", "Exports" + (() => { const n = videosOf(t).filter((v) => v.versions.length).length; return n ? ` <span class="tabn">${n}</span>` : ""; })())}${tab("notes", "Notes")}${tab("sheet", "Sheet")}${tab("review", "Review & history")}</div>
       <div id="tBody"></div>
     </div>`;
   $("#dClose").addEventListener("click", closeDrawer);
@@ -1233,40 +1248,14 @@ function drawTask() {
       <div class="f"><label for="fPr">Priority</label><select id="fPr">${Object.entries(PRIORITY).map(([k, l]) => `<option value="${k}" ${k === (t.priority || "normal") ? "selected" : ""}>${l}</option>`).join("")}</select></div>
       <div class="f full"><label for="fBr">Brief for the editor</label><textarea id="fBr" placeholder="Style, length, music, captions, reference videos…">${esc(t.brief)}</textarea></div>
     </div>
-    <div class="sec"><h4>Footage &amp; files <span class="muted" style="font:500 12px var(--body)">· team only, the client never sees these</span></h4><div class="fields">
-      ${[["fRaw", "rawUrl", "Raw footage for the editor", "Google Drive folder with the clips, music, logo…"], ["fDoc", "docUrl", "Google Doc", "https://docs.google.com/document/…"], ["fSh", "sheetUrl", "Google Sheet", "https://docs.google.com/spreadsheets/…"]].map(([fid, k, l, ph]) => `
-      <div class="f full"><label for="${fid}">${l}</label><div class="linkrow"><input id="${fid}" data-k="${k}" value="${esc(t[k])}" placeholder="${ph}" inputmode="url">${safeUrl(t[k]) ? `<a class="btn" href="${esc(safeUrl(t[k]))}" target="_blank" rel="noopener">Open ↗</a>` : ""}</div></div>`).join("")}
-    </div></div>
-    <div class="sec exp"><h4>Exported video ${safeUrl(t.videoUrl) ? "" : `<span class="muted" style="font:500 12px var(--body)">· optional for now</span>`}</h4>${exportBox(t, id)}</div>
+    ${filesBox(t)}
+    ${exportSummary(t)}
     <div class="sec"><h4>Message for the client</h4><div class="f"><textarea id="fCn" placeholder="Shown to the client next to the video, e.g. Here's the first cut. Music is a placeholder.">${esc(t.clientNote)}</textarea></div></div>
-    <div class="sec" style="display:flex;flex-wrap:wrap;gap:8px;justify-content:space-between">
-      ${(() => { const pv = parseVideo(t.videoUrl); if (ui.draftId === id) return `<div class="save-row"><button class="btn primary" id="saveTask" type="button">Save task</button>${pv && pv.kind !== "notvideo" && t.client ? `<button class="btn" id="toReview" type="button">Save &amp; send to client</button>` : ""}<span class="muted">Nothing is added to the board until you save.</span></div>`;
-        return pv && pv.kind !== "notvideo"
-        ? `<button class="btn primary" id="toReview" ${t.status === "review" ? "disabled" : ""}>Send to client for review</button>`
-        : `<div class="save-row"><button class="btn primary" id="saveTask" type="button">${admin ? "Save task" : "Save"}</button><span class="muted">${admin ? "The editor sees it straight away. They'll add the export when the edit is ready." : "Paste the exported video above when the edit is ready, then send it to the client."}</span></div>`; })()}
-      ${admin ? `<button class="btn ghost danger" id="delTask">${ui.draftId === id ? "Discard" : "Delete task"}</button>` : ""}</div>`;
+    ${taskActions(t, id)}`;
     $("#fSt").addEventListener("change", (e) => { flushTask(); setStatus(id, e.target.value, "", "team"); });
-    $("#openRv")?.addEventListener("click", () => { flushTask(); openReview(id); });
-    $$("[data-watchv]", body).forEach((b) => b.addEventListener("click", () => { flushTask(); openReview(id, Number(b.dataset.watchv)); }));
-    $("#nvOpen")?.addEventListener("click", () => { $("#nvBox").hidden = false; $("#nvOpen").hidden = true; $("#nvUrl").focus(); });
-    $("#nvCancel")?.addEventListener("click", () => { $("#nvBox").hidden = true; $("#nvOpen").hidden = false; });
-    const nv = (send) => {
-      const url = $("#nvUrl").value.trim(), pv = parseVideo(url);
-      if (!pv) { toast("Paste the full link of the new export."); $("#nvUrl").focus(); return; }
-      if (pv.kind === "notvideo") { toast("That link is a document, not a video."); $("#nvUrl").focus(); return; }
-      if (versionList(id).some((x) => x.url === url)) { toast("That link is already one of the versions."); $("#nvUrl").focus(); return; }
-      addVersion(id, url, $("#nvNote").value.trim(), send);
-    };
-    $("#nvSave")?.addEventListener("click", () => nv(false));
-    $("#nvSend")?.addEventListener("click", () => nv(true));
-    $("#mvDoc")?.addEventListener("click", () => { const cur = S.tasks.get(id) || {}; patchTask(cur.docUrl ? { rawUrl: cur.rawUrl || cur.videoUrl, videoUrl: "" } : { docUrl: cur.videoUrl, videoUrl: "" }, true); setTimeout(drawTask, 30); toast("Moved. Now paste the exported video link."); });
-    if (!S.dl.has(id)) Store.col("downloads").doc(id).get().then((s) => { S.dl.set(id, s.exists ? s.data() : {}); if (ui.openKind === "task" && ui.openId === id && ui.subtab === "overview" && document.activeElement?.id !== "fFin") drawTask(); }).catch(() => S.dl.set(id, {}));
-    $("#fFin").addEventListener("change", (e) => {
-      const url = e.target.value.trim();
-      if (url && !safeUrl(url)) { toast("Paste a full link starting with https://"); return; }
-      const d = { url, updatedAt: now() }; S.dl.set(id, d); Store.set("downloads", id, d);
-      toast(url ? "Download link saved" : "Download link removed"); setTimeout(drawTask, 30);
-    });
+    bindFiles(body, id); bindActions(body, id);
+    $$("[data-watch]", body).forEach((b) => b.addEventListener("click", () => { const [vid, ver] = b.dataset.watch.split("|"); flushTask(); openReview(id, Number(ver), vid); }));
+    $$("[data-goto]", body).forEach((b) => b.addEventListener("click", () => { flushTask(); ui.subtab = b.dataset.goto; drawTask(); }));
     if (admin) {
       $("#fAs").addEventListener("change", (e) => patchTask({ assignee: e.target.value, assignedAt: e.target.value ? now() : "" }, true));
       const addClient = () => {
@@ -1288,47 +1277,15 @@ function drawTask() {
     $("#fPr").addEventListener("change", (e) => patchTask({ priority: e.target.value }, true));
     $("#fBr").addEventListener("input", (e) => patchTask({ brief: e.target.value }));
     $("#fCn").addEventListener("input", (e) => patchTask({ clientNote: e.target.value }));
-    $$("[data-k]", body).forEach((inp) => inp.addEventListener("change", () => {
-      const k = inp.dataset.k, val = inp.value.trim(), patch = { [k]: val }, cur = S.tasks.get(id) || {};
-      let msg = "";
-      if (k === "videoUrl") {
-        const all = versionsOf(S.merged.get(id) || cur).filter((x) => x.url), last = all[all.length - 1];
-        const list = all.map((x) => ({ url: x.url, at: x.at || now(), note: x.note || "" }));
-        if (val && last && last.sent && last.url !== val && parseVideo(val)?.kind !== "notvideo") {      // the client already saw the latest one, so this is a new version
-          patch.versions = [...list, { url: val, at: now(), note: "" }]; msg = `Saved as v${list.length + 1}. The client already saw v${list.length}.`;
-        } else if (list.length && (Array.isArray(cur.versions) && cur.versions.length || last.sent)) {   // fixing the latest link
-          const vs = list.map((x) => ({ ...x })); if (val) vs[vs.length - 1].url = val; else vs.pop(); patch.versions = vs;
-        }
-      }
-      patchTask(patch, true); setTimeout(drawTask, 30); if (msg) toast(msg);
-    }));
-    $("#saveTask")?.addEventListener("click", () => {
-      if (ui.draftId === id) {
-        const cur = { ...(S.tasks.get(id) || {}), ...(taskDraft || {}) };
-        if (!String(cur.title || "").trim()) { toast("Give the task a name first."); $("#tTitle").focus(); return; }
-        commitDraft();
-        if (!cur.assignee) { drawTask(); toast("Saved. Pick an editor so someone can start on it."); $("#fAs")?.focus(); return; }
-        closeDrawer2(); render(); toast(`Saved. ${personName(cur.assignee) || "The editor"} can see it in their tasks.`); return;
-      }
-      flushTask(); const cur = S.tasks.get(id) || {};
-      if (admin && !cur.assignee) { toast("Saved. Pick an editor so someone can start on it."); $("#fAs").focus(); return; }
-      closeDrawer(); render();
-      toast(admin ? `Saved. ${personName(cur.assignee) || "The editor"} can see it in their tasks.` : "Saved");
-    });
-    $("#toReview")?.addEventListener("click", () => {
-      if (ui.draftId === id) { const c0 = { ...(S.tasks.get(id) || {}), ...(taskDraft || {}) }; if (!String(c0.title || "").trim()) { toast("Give the task a name first."); $("#tTitle").focus(); return; } commitDraft(); }
-      flushTask(); const cur = S.merged.get(id);
-      if (!cur.client) { toast("Pick a client first."); return; }
-      const pv = parseVideo(cur.videoUrl);
-      if (!pv) { toast("Paste the exported video link in the Exported video box first."); $("#fVid").focus(); return; }
-      if (pv.kind === "notvideo") { toast("That link is a document, not a video."); $("#fVid").focus(); return; }
-      setStatus(id, "review", "", "team");
-    });
-    const del = $("#delTask"); let armed = false;
-    del?.addEventListener("click", () => {
-      if (ui.draftId === id) { discardDraft(); closeDrawer2(); render(); toast("New task thrown away"); return; }
-      if (!armed) { armed = true; del.textContent = "Click again to delete for good"; setTimeout(() => { armed = false; if (del.isConnected) del.textContent = "Delete task"; }, 3500); return; }
-      taskDraft = null; S.tasks.delete(id); S.reviews.delete(id); merge(); Store.remove("tasks", id); Store.remove("reviews", id); closeDrawer(); render(); toast("Task deleted");
+  } else if (ui.subtab === "exports") {
+    body.innerHTML = exportsTab(t, id) + taskActions(t, id);
+    bindExports(body, id); bindActions(body, id);
+    if (!S.dl.has(id)) Store.col("downloads").doc(id).get().then((s) => { S.dl.set(id, s.exists ? s.data() : {}); if (ui.openKind === "task" && ui.openId === id && ui.subtab === "exports" && document.activeElement?.id !== "fFin") drawTask(); }).catch(() => S.dl.set(id, {}));
+    $("#fFin").addEventListener("change", (e) => {
+      const url = e.target.value.trim();
+      if (url && !safeUrl(url)) { toast("Paste a full link starting with https://"); return; }
+      const d = { url, updatedAt: now() }; S.dl.set(id, d); Store.set("downloads", id, d);
+      toast(url ? "Download link saved" : "Download link removed"); setTimeout(drawTask, 30);
     });
   } else if (ui.subtab === "notes") {
     liveEditor = makeEditor(body, t.notes, (h) => patchTask({ notes: h }), { placeholder: "Script, shot list, feedback notes… Use the toolbar for headings, lists and checklists." });
@@ -1478,12 +1435,14 @@ function render() {
   $$("#tabs [data-v]").forEach((b) => b.setAttribute("aria-selected", String(b.dataset.v === view)));
   $$("#tabs [data-v]").forEach((b) => { if (b.dataset.v === "board") b.textContent = isEditor() ? "My tasks" : "Board"; });
   const m = $("#main");
+  const a = document.activeElement, keep = a && a.matches && a.matches('#main input[type="search"]') ? { id: a.id, s: a.selectionStart, e: a.selectionEnd } : null;
   if (client) renderClient(m);
   else if (view === "tasks") renderTasks(m);
   else if (view === "docs") renderLib(m, "docs");
   else if (view === "sheets") renderLib(m, "sheets");
   else if (view === "worklog") renderWorklog(m);
   else renderBoard(m);
+  if (keep) { const n = document.getElementById(keep.id); if (n) { n.focus(); try { n.setSelectionRange(keep.s, keep.e); } catch (e) {} } }
   if ($("#peopleModal").classList.contains("on")) drawPeople();
   if (rv.id) rvHead();
 }
@@ -1615,7 +1574,7 @@ async function guestProfile(u) {
   return p;
 }
 async function handleUser(u) {
-  closeReview(); dlWatching.clear(); got.clear(); clearTimeout(wlTimer); guideAsked = false; $("#guide").classList.remove("on");
+  closeReview(); closeViewer(); $("#toast").classList.remove("on"); dlWatching.clear(); got.clear(); clearTimeout(wlTimer); guideAsked = false; $("#guide").classList.remove("on");
   Store.stop(); me = null; loaded = false; Object.keys(S).forEach((k) => (S[k] = new Map())); S.wlSettings = S.wlRates = null;
   if (!u) { setMode(false); if (LINK && !wantTeamSignin) showGuest(); else showAuth("aSignin"); return; }
   if (u.isAnonymous) {
@@ -1708,7 +1667,17 @@ function parseTC(str) {
   if (!/^\d{1,3}(:\d{1,2}){0,2}$/.test(str)) return NaN;
   return str.split(":").reduce((a, p) => a * 60 + Number(p), 0);
 }
-const verOf = (r) => Math.max(1, versionsOf(r).length);
+// The video being reviewed (a task can hold several) and its versions.
+const rvVid = (t) => { const vs = videosOf(t); return vs.find((v) => v.id === rv.vid) || vs[0]; };
+const rvVersions = (t) => rvVid(t).versions;
+const verOf = (r) => Math.max(1, rvVersions(r).length);
+// Comments made before a task had several videos belong to its first video.
+const cVid = (c, t) => c.vid || videosOf(t)[0].id;
+// Open comments on the newest version of every video: what a revision request points to.
+function openOnLatest() {
+  const t = S.merged.get(rv.id) || {}, vids = videosOf(t);
+  return [...rv.comments.values()].filter((c) => { if (c.parent || c.done) return false; const v = vids.find((x) => x.id === cVid(c, t)); return v && (c.v || 1) === Math.max(1, v.versions.length); }).length;
+}
 // Every "send to client" stores the export link it sent, so older versions can be watched again.
 // Versions are saved on the task (versions: [{url, at, note}]). Older tasks worked them out from each "send to client".
 function versionsOf(t) {
@@ -1800,12 +1769,13 @@ function makePlayer(stage, v, team) {
   return api;
 }
 
-const rv = { id: null, player: null, playerB: null, view: 1, cmp: 0, urlB: "", comments: new Map(), unsub: null, tick: 0, stampOn: true, stamp: 0, filter: "current", ver: 1, replyTo: "", replyText: "", pick: "", url: "" };
+const rv = { id: null, vid: "", player: null, playerB: null, view: 1, cmp: 0, urlB: "", comments: new Map(), unsub: null, tick: 0, stampOn: true, stamp: 0, filter: "current", ver: 1, replyTo: "", replyText: "", pick: "", url: "" };
 const rvEl = $("#rv");
 
-function openReview(id, ver) {
+function openReview(id, ver, vid) {
   if (rv.id) closeReview();
   const t = S.merged.get(id); if (!t) return;
+  const vids = videosOf(t); rv.vid = (vids.find((v) => v.id === vid) || vids.find((v) => v.versions.length) || vids[0]).id;
   rv.id = id; rv.first = true; rv.ver = verOf(t); rv.view = ver && ver <= rv.ver ? ver : rv.ver; rv.cmp = 0; rv.comments = new Map(); rv.filter = "current"; rv.replyTo = rv.replyText = ""; rv.pick = ""; rv.stampOn = true; rv.url = "";
   rvEl.hidden = false; document.body.classList.add("rv-lock");
   $("#rvText").value = ""; $("#rvTime").value = ""; $("#rvFilter").value = "current";
@@ -1813,7 +1783,7 @@ function openReview(id, ver) {
   rv.unsub = fs.collection("reviews/" + id + "/comments").onSnapshot((s) => {
     rv.comments = new Map(s.docs.map((d) => [d.id, d.data()]));
     if (rv.first) {        // a new version with no comments yet: show the earlier ones so fixes can be checked
-      rv.first = false; const tops = [...rv.comments.values()].filter((c) => !c.parent);
+      rv.first = false; const t0 = S.merged.get(rv.id) || {}; const tops = [...rv.comments.values()].filter((c) => !c.parent && cVid(c, t0) === rv.vid);
       if (tops.length && !tops.some((c) => (c.v || 1) === rv.view)) { rv.filter = "all"; $("#rvFilter").value = "all"; }
     }
     rvRender();
@@ -1829,7 +1799,7 @@ function closeReview() {
 }
 function rvLoadPlayer() {
   const t = S.merged.get(rv.id) || {};
-  const want = (versionsOf(t).find((x) => x.v === rv.view) || {}).url || "";
+  const want = (rvVersions(t).find((x) => x.v === rv.view) || {}).url || "";
   if (rv.player && rv.url === want) return;
   rv.player && rv.player.destroy();
   rv.url = want;
@@ -1843,15 +1813,18 @@ function rvHead() {
   const t = S.merged.get(rv.id); if (!t) { closeReview(); return; }
   const prev = rv.ver; rv.ver = verOf(t);
   if (rv.view === prev || rv.view > rv.ver) rv.view = rv.ver;          // keep following the newest version
-  const vs = versionsOf(t), sel = $("#rvVer");
+  const vids = videosOf(t), vsel = $("#rvVidSel");
+  vsel.hidden = vids.length < 2 || !!rv.cmp;
+  vsel.innerHTML = vids.map((v) => `<option value="${esc(v.id)}" ${v.id === rv.vid ? "selected" : ""}>${esc(v.name)}${v.versions.length ? "" : " (no export yet)"}</option>`).join("");
+  const vs = rvVersions(t), sel = $("#rvVer");
   sel.hidden = vs.length < 2 || !!rv.cmp;
   sel.innerHTML = vs.slice().reverse().map((x) => `<option value="${x.v}" ${x.v === rv.view ? "selected" : ""}>v${x.v}${x.v === rv.ver ? " (latest)" : ""}${x.at ? " · " + esc(fmtTime(x.at)) : ""}</option>`).join("");
   const cmpOk = vs.filter((x) => parseVideo(x.url)).length >= 2;
   $("#rvCmp").hidden = !cmpOk; $("#rvCmp").setAttribute("aria-pressed", String(!!rv.cmp)); $("#rvCmp").textContent = rv.cmp ? "✕ Stop comparing" : "⇄ Compare versions";
   if (rv.cmp && !cmpOk) rvCompare(0);
   const st = t.status || "todo";
-  $("#rvTitle").textContent = t.title || "Untitled video";
-  $("#rvMeta").innerHTML = `<span class="tag">${rv.view === rv.ver ? "v" + rv.ver : "viewing v" + rv.view + " of " + rv.ver}</span><span class="pill" data-st="${esc(st)}">${esc(ST[st]?.label || st)}</span>${t.client && !isClient() ? `<span class="muted">${esc(personName(t.client))}</span>` : ""}`;
+  $("#rvTitle").textContent = (t.title || "Untitled video") + (vids.length > 1 ? " · " + rvVid(t).name : "");
+  $("#rvMeta").innerHTML = `<span class="tag">${rv.view === rv.ver ? "v" + rv.ver : "viewing v" + rv.view + " of " + rv.ver}</span><span class="pill" data-st="${esc(isClient() ? clientStage(st).id : st)}">${esc(stLabel(st))}</span>${t.client && !isClient() ? `<span class="muted">${esc(personName(t.client))}</span>` : ""}`;
   const note = $("#rvNote"); note.hidden = !t.clientNote; note.textContent = t.clientNote || "";
   const dl = $("#rvDl"); dl.hidden = !(isClient() && st === "approved"); dl.innerHTML = dl.hidden ? "" : dlButton(rv.id);
   const d = $("#rvDecide");
@@ -1875,7 +1848,8 @@ function rvTick() { if (!rv.player || !rv.player.canTime || $("#rvText").value) 
 
 function rvRender() {
   if (!rv.id) return;
-  const all = [...rv.comments.entries()].map(([id, c]) => ({ id, ...c }));
+  const tk = S.merged.get(rv.id) || {};
+  const all = [...rv.comments.entries()].map(([id, c]) => ({ id, ...c })).filter((c) => cVid(c, tk) === rv.vid);
   const tops = all.filter((c) => !c.parent), cur = (c) => (c.v || 1) === rv.view;
   const counts = { current: tops.filter(cur).length, open: tops.filter((c) => cur(c) && !c.done).length, all: tops.length };
   $$("#rvFilter option").forEach((o) => { o.textContent = { current: "This version", open: "Not done yet", all: "All versions" }[o.value] + ` (${counts[o.value]})`; });
@@ -1904,7 +1878,7 @@ function rvRender() {
 
 function rvAdd(text, t, parent) {
   const id = uid();
-  const c = { text: text.slice(0, 2000), t: t == null ? null : Math.round(t * 10) / 10, v: rv.view, by: isClient() ? "client" : "team", uid: me.uid, name: (me.name || me.email || "").slice(0, 80), at: now(), parent: parent || "", done: false, doneBy: "", doneAt: "" };
+  const c = { text: text.slice(0, 2000), t: t == null ? null : Math.round(t * 10) / 10, v: rv.view, vid: rv.vid, by: isClient() ? "client" : "team", uid: me.uid, name: (me.name || me.email || "").slice(0, 80), at: now(), parent: parent || "", done: false, doneBy: "", doneAt: "" };
   rv.comments.set(id, c); rvRender();
   Store.set("reviews/" + rv.id + "/comments", id, c);
 }
@@ -1954,14 +1928,14 @@ $("#rvList").addEventListener("keydown", (e) => { if (e.target.id === "rvReply" 
 $("#rvList").addEventListener("input", (e) => { if (e.target.id === "rvReply") rv.replyText = e.target.value; });
 $$("#rvDecide .decide .btn").forEach((b) => b.addEventListener("click", () => {
   rv.pick = b.dataset.d; $$("#rvDecide .decide .btn").forEach((x) => x.classList.toggle("pick", x === b));
-  const open = [...rv.comments.values()].filter((c) => !c.parent && (c.v || 1) === rv.ver && !c.done).length;
+  const open = openOnLatest();
   const ta = $("#rvDecNote"); ta.hidden = false;
   ta.placeholder = rv.pick === "approved" ? "Optional: a note for the team" : rv.pick === "revision" ? (open ? `Optional: anything to add to your ${open} comment${open > 1 ? "s" : ""}` : "What should we change? Or leave comments on the video first.") : "Why doesn't this work for you?";
   const s = $("#rvDecSend"); s.hidden = false; s.textContent = rv.pick === "approved" ? "Approve video" : rv.pick === "revision" ? "Send revision request" : "Reject video";
   ta.focus();
 }));
 $("#rvDecSend").addEventListener("click", () => {
-  const open = [...rv.comments.values()].filter((c) => !c.parent && (c.v || 1) === rv.ver && !c.done).length;
+  const open = openOnLatest();
   let note = $("#rvDecNote").value.trim();
   if (rv.pick === "revision" && !note) { if (!open) { toast("Leave a comment on the video or write what to change."); $("#rvText").focus(); return; } note = `See ${open} comment${open > 1 ? "s" : ""} on the video.`; }
   if (rv.pick === "rejected" && !note) { toast("Please tell the team why."); $("#rvDecNote").focus(); return; }
@@ -1978,7 +1952,7 @@ function rvCompare(b) {
   $("#rvPaneB").hidden = !on; $("#rvSync").hidden = !on; $("#rvLabA").hidden = !on;
   if (!on) { clearInterval(rv.syncT); rv.syncT = 0; rv.playerB && rv.playerB.destroy(); rv.playerB = null; rv.urlB = ""; rv.player && rv.player.mute && rv.player.mute(false); return; }
   if (!was) { rv.linked = true; rv.sound = "left"; rv.autoStart = true; }
-  const t = S.merged.get(rv.id) || {}, vs = versionsOf(t).filter((x) => parseVideo(x.url));
+  const t = S.merged.get(rv.id) || {}, vs = rvVersions(t).filter((x) => parseVideo(x.url));
   const opts = (cur) => vs.slice().reverse().map((x) => `<option value="${x.v}" ${x.v === cur ? "selected" : ""}>v${x.v}${x.v === rv.ver ? " (latest)" : ""}</option>`).join("");
   $("#rvLabA").innerHTML = `<span>Left</span><select id="rvVerA" aria-label="Left video version">${opts(rv.view)}</select>`;
   $("#rvVerB").innerHTML = opts(rv.cmp);
@@ -2021,7 +1995,7 @@ function rvSyncTick() {
 $("#rvVer").addEventListener("change", (e) => { rv.view = Number(e.target.value); rvHead(); rvRender(); if (rv.cmp) rvCompare(rv.cmp); });
 $("#rvCmp").addEventListener("click", () => {
   if (rv.cmp) { rvCompare(0); rvHead(); return; }
-  const vs = versionsOf(S.merged.get(rv.id) || {}).filter((x) => parseVideo(x.url));
+  const vs = rvVersions(S.merged.get(rv.id) || {}).filter((x) => parseVideo(x.url));
   const other = vs.filter((x) => x.v !== rv.view).pop() || vs[0];
   rvCompare(other ? other.v : 0); rvHead();
   if (rv.view < rv.cmp) { const a = rv.view; rv.view = rv.cmp; rvHead(); rvRender(); rvCompare(a); }   // newer on the left
@@ -2045,7 +2019,7 @@ function rvJump(card, t) {
   if (!card || !isFinite(t)) return;
   const v = Number(card.dataset.v || rv.view);
   rv.active = card.dataset.id; $$("#rvList .cm.active").forEach((x) => x.classList.remove("active")); card.classList.add("active");
-  if (v !== rv.view && versionsOf(S.merged.get(rv.id) || {}).some((x) => x.v === v && parseVideo(x.url))) {      // a comment on another version: switch to that version first
+  if (v !== rv.view && rvVersions(S.merged.get(rv.id) || {}).some((x) => x.v === v && parseVideo(x.url))) {      // a comment on another version: switch to that version first
     rv.view = v; rvHead(); rvRender(); if (rv.cmp) rvCompare(rv.cmp);
     const go = () => (rv.player && rv.player.canTime ? rv.player.seek(t) : rv.player && rv.player.mode === "trying" ? setTimeout(go, 300) : toast(`Go to ${fmtTC(t)} in the video.`));
     setTimeout(go, 400); return;
@@ -2053,6 +2027,220 @@ function rvJump(card, t) {
   if (rv.player && rv.player.canTime) { rv.player.seek(t); return; }
   if (rv.player && rv.player.mode === "trying") { toast("The video is still loading…"); return; }
   toast(`This player can't jump by itself. Go to ${fmtTC(t)} in the video.`);
+}
+
+$("#rvVidSel").addEventListener("change", (e) => {
+  if (rv.cmp) rvCompare(0);
+  rv.vid = e.target.value; const t = S.merged.get(rv.id) || {}; rv.ver = verOf(t); rv.view = rv.ver; rv.filter = "current"; $("#rvFilter").value = "current";
+  rvHead(); rvRender();
+});
+
+/* ---------------- named links (raw footage, reference, music…) ----------------
+   task.files = [{ id, label, url }]. Older tasks had rawUrl / docUrl / sheetUrl; those show as rows until the first edit. */
+const FILE_PRESETS = ["Raw footage for the editor", "Reference", "Music", "Logo / brand assets", "Script", "Google Doc", "Google Sheet"];
+function filesOf(t) {
+  t = t || {};
+  if (Array.isArray(t.files)) return t.files.map((f, i) => ({ id: f.id || "f" + i, label: f.label || "", url: f.url || "" }));
+  const out = [];
+  if (t.rawUrl) out.push({ id: "raw", label: "Raw footage for the editor", url: t.rawUrl });
+  if (t.docUrl) out.push({ id: "doc", label: "Google Doc", url: t.docUrl });
+  if (t.sheetUrl) out.push({ id: "sheet", label: "Google Sheet", url: t.sheetUrl });
+  if (!out.length) out.push({ id: "raw", label: "Raw footage for the editor", url: "" });
+  return out;
+}
+const playable = (url) => { const v = parseVideo(url); return !!v && ["yt", "drive", "file"].includes(v.kind); };
+function filesBox(t) {
+  const rows = filesOf(t).map((f) => {
+    const url = safeUrl(f.url);
+    return `<div class="frow" data-fid="${esc(f.id)}">
+      <input class="flabel" list="fPresets" value="${esc(f.label)}" placeholder="What is this? e.g. Reference" maxlength="60" aria-label="Link name">
+      <div class="linkrow"><input class="furl" value="${esc(f.url)}" placeholder="Paste the link (Google Drive, YouTube, Dropbox…)" inputmode="url" aria-label="${esc(f.label || "Link")}">
+        ${url && playable(url) ? `<button class="btn" data-fwatch type="button" title="Play it here">▶ Watch</button>` : ""}
+        ${url ? `<a class="btn" href="${esc(url)}" target="_blank" rel="noopener" title="Open in a new tab">Open ↗</a>` : ""}
+        <button class="btn ghost fdel" data-fdel type="button" aria-label="Remove ${esc(f.label || "link")}" title="Remove">✕</button></div>
+    </div>`;
+  }).join("");
+  return `<div class="sec"><h4>Footage &amp; links <span class="muted" style="font:500 12px var(--body)">· team only, the client never sees these</span></h4>
+    <div class="flist">${rows}</div>
+    <div class="fadd"><span class="muted">Add:</span>${["Raw footage for the editor", "Reference", "Music"].map((l) => `<button class="btn sm" data-fadd="${esc(l)}" type="button">+ ${esc(l === "Raw footage for the editor" ? "Raw footage" : l)}</button>`).join("")}<button class="btn sm" data-fadd="" type="button">+ Other link</button></div>
+    <datalist id="fPresets">${FILE_PRESETS.map((x) => `<option value="${esc(x)}">`).join("")}</datalist></div>`;
+}
+function bindFiles(body, id) {
+  const read = () => $$(".frow", body).map((r) => ({ id: r.dataset.fid, label: $(".flabel", r).value.trim().slice(0, 60), url: $(".furl", r).value.trim() }));
+  const save = (files, focusId) => {
+    patchTask({ files }, true);
+    setTimeout(() => { drawTask(); if (focusId) { const i = $(`.frow[data-fid="${CSS.escape(focusId)}"] .furl`); i && i.focus(); } }, 30);
+  };
+  body.addEventListener("change", (e) => {
+    if (!e.target.closest(".frow")) return;
+    const u = e.target.classList.contains("furl") ? e.target.value.trim() : "";
+    if (u && !safeUrl(u)) { toast("Paste a full link starting with https://"); return; }
+    save(read());
+  });
+  body.addEventListener("click", (e) => {
+    const add = e.target.closest("[data-fadd]");
+    if (add) { const f = { id: uid(), label: add.dataset.fadd, url: "" }; save([...read(), f], f.id); return; }
+    const del = e.target.closest("[data-fdel]");
+    if (del) { const fid = del.closest(".frow").dataset.fid; save(read().filter((f) => f.id !== fid)); return; }
+    const w = e.target.closest("[data-fwatch]");
+    if (w) { const r = w.closest(".frow"); openViewer($(".flabel", r).value || "Video", $(".furl", r).value.trim()); }
+  });
+}
+
+/* ---------------- quick player for any link ---------------- */
+let vwPlayer = null;
+function openViewer(title, url) {
+  const v = parseVideo(url); if (!v) return;
+  $("#vwTitle").textContent = title; const o = $("#vwOpen"); o.href = safeUrl(url);
+  $("#viewer").hidden = false; document.body.classList.add("rv-lock");
+  vwPlayer && vwPlayer.destroy(); vwPlayer = makePlayer($("#vwStage"), v, true);
+  setTimeout(() => $("#vwClose").focus(), 0);
+}
+function closeViewer() { if ($("#viewer").hidden) return; vwPlayer && vwPlayer.destroy(); vwPlayer = null; $("#viewer").hidden = true; if (!rv.id) document.body.classList.remove("rv-lock"); }
+$("#vwClose").addEventListener("click", closeViewer);
+addEventListener("keydown", (e) => { if (e.key === "Escape" && !$("#viewer").hidden) { e.stopImmediatePropagation(); closeViewer(); } }, true);
+
+/* ---------------- exports: several videos per task, each with its own versions ----------------
+   task.videos = [{ id, name, versions: [{ url, at, note, sentAt }] }], mirrored to the client's copy.
+   Older tasks had one video (videoUrl + versions); it becomes "Video 1" with id "main", so its comments still match. */
+function videosOf(t) {
+  t = t || {};
+  if (Array.isArray(t.videos) && t.videos.length) {
+    return t.videos.map((x, i) => ({ id: x.id || "v" + i, name: x.name || "Video " + (i + 1),
+      versions: (x.versions || []).filter((y) => y && y.url).map((y, j) => ({ v: j + 1, url: y.url, at: y.at || "", note: y.note || "", sentAt: y.sentAt || "", sent: y.sentAt || "" })) }));
+  }
+  const vs = versionsOf(t).filter((x) => x.url);
+  return [{ id: "main", name: "Video 1", versions: vs.map((x, j) => ({ v: j + 1, url: x.url, at: x.at || "", note: x.note || "", sentAt: x.sent || "", sent: x.sent || "" })) }];
+}
+const plainVideos = (t) => videosOf(t).map((x) => ({ id: x.id, name: x.name, versions: x.versions.map((y) => ({ url: y.url, at: y.at || now(), note: y.note || "", sentAt: y.sentAt || "" })) }));
+const latestOf = (v) => v.versions[v.versions.length - 1];
+const hasExport = (t) => videosOf(t).some((v) => v.versions.length && parseVideo(latestOf(v).url)?.kind !== "notvideo");
+function saveVideos(id, videos, extra) {
+  const first = videos.find((v) => v.versions.length);
+  patchTask({ videos, videoUrl: first ? latestOf(first).url : "", ...(extra || {}) }, true);
+}
+function searchText(t) {
+  return [t.title, personName(t.client), personName(t.assignee), t.brief, t.type, t.videoUrl,
+    ...filesOf(t).flatMap((f) => [f.label, f.url]), ...videosOf(t).flatMap((v) => [v.name, ...v.versions.map((x) => x.url)])].join(" ").toLowerCase();
+}
+
+function exportSummary(t) {
+  const vids = videosOf(t).filter((v) => v.versions.length);
+  return `<div class="sec exp"><h4>Exports</h4>
+    ${vids.length ? `<div class="vlist">${vids.map((v) => { const l = latestOf(v); return `<div class="vrow"><b>${esc(v.name)}</b><span class="tag">v${l.v}</span><span class="muted">${l.sent ? "Sent " + esc(fmtTime(l.sent)) : "Not sent to the client yet"}</span><span style="flex:1"></span><button class="btn sm" data-watch="${esc(v.id)}|${l.v}" type="button">▶ Watch</button></div>`; }).join("")}</div>`
+      : `<p class="muted" style="margin:0">No export yet. The editor adds it in the <b>Exports</b> tab when the edit is ready.</p>`}
+    <div><button class="btn" data-goto="exports" type="button">Open Exports →</button></div></div>`;
+}
+function exportsTab(t, id) {
+  const vids = videosOf(t), dl = S.dl.get(id) || {}, editable = !isClient();
+  return `<div class="vcards">${vids.map((v, i) => {
+    const n = v.versions.length, l = latestOf(v);
+    return `<section class="vcard" data-vid="${esc(v.id)}">
+      <div class="vc-h"><input class="vname" value="${esc(v.name)}" maxlength="60" aria-label="Video name">${n ? `<span class="tag">v${n}</span>` : ""}
+        ${n ? `<button class="btn sm primary" data-watch="${esc(v.id)}|${n}" type="button">▶ Watch &amp; comments</button>` : ""}
+        ${vids.length > 1 && editable ? `<button class="btn sm ghost danger" data-vdel type="button">Remove</button>` : ""}</div>
+      ${n ? `<div class="vlist">${v.versions.slice().reverse().map((x) => `<div class="vrow"><span class="tag">v${x.v}</span>${x.v === n ? `<span class="now">Latest</span>` : ""}<span class="muted">${x.sent ? "Sent " + esc(fmtTime(x.sent)) : "Not sent yet"}</span>
+          <a class="vlink" href="${esc(safeUrl(x.url))}" target="_blank" rel="noopener" title="${esc(x.url)}">${esc(x.url.replace(/^https?:\/\/(www\.)?/, ""))}</a><button class="btn sm" data-watch="${esc(v.id)}|${x.v}" type="button">▶ Watch</button></div>`).join("")}</div>` : ""}
+      <div class="f"><label>${n ? `Link of v${n}. Only change it to fix a wrong link` : "Export link"}</label><div class="linkrow"><input class="vlatest" value="${esc(n ? l.url : "")}" placeholder="Unlisted YouTube or Google Drive video link" inputmode="url" aria-label="Export link for ${esc(v.name)}">${n ? `<a class="btn" href="${esc(safeUrl(l.url))}" target="_blank" rel="noopener">Open ↗</a>` : ""}</div>
+        ${n ? "" : `<small class="muted" style="font-size:12px">Paste the export here when it's ready. For Drive, set sharing to “Anyone with the link”.</small>`}</div>
+      ${n ? `<div><button class="btn" data-nvopen type="button">+ Add new version (v${n + 1})</button>
+        <div class="nv-box" hidden><label style="font-weight:600">Link to v${n + 1} of ${esc(v.name)}</label><input class="nvurl" placeholder="Link of the new export" inputmode="url">
+          <textarea class="nvnote" rows="2" placeholder="What changed? (optional, the client sees this)" maxlength="500"></textarea>
+          <div><button class="btn ghost" data-nvcancel type="button">Cancel</button><button class="btn" data-nvsave type="button">Save v${n + 1}</button>${t.client ? `<button class="btn primary" data-nvsend type="button">Save v${n + 1} &amp; send to client</button>` : ""}</div></div></div>` : ""}
+    </section>`;
+  }).join("")}</div>
+    <div class="vadd"><button class="btn" data-vadd type="button">+ Add another video</button><span class="muted">For a batch, e.g. 5 reels for the same client. Each video keeps its own versions and comments.</span></div>
+    <div class="sec"><h4>Final file for the client</h4><div class="f"><label for="fFin">Download link (a file or a folder with all the finals)</label><div class="linkrow"><input id="fFin" placeholder="${S.dl.has(id) ? "https://drive.google.com/… (full quality)" : "Loading…"}" inputmode="url" value="${esc(dl.url || "")}">${safeUrl(dl.url) ? `<a class="btn" href="${esc(safeUrl(dl.url))}" target="_blank" rel="noopener">Open ↗</a>` : ""}</div>
+      <small class="muted" style="font-size:12px">The client only gets this after approving.</small></div></div>`;
+}
+function bindExports(body, id) {
+  const vids = () => plainVideos(S.merged.get(id) || S.tasks.get(id) || {});
+  const card = (e) => e.target.closest(".vcard");
+  body.addEventListener("change", (e) => {
+    const c = card(e); if (!c) return;
+    const all = vids(), v = all.find((x) => x.id === c.dataset.vid); if (!v) return;
+    if (e.target.classList.contains("vname")) { v.name = e.target.value.trim().slice(0, 60) || v.name; saveVideos(id, all); setTimeout(drawTask, 30); return; }
+    if (!e.target.classList.contains("vlatest")) return;
+    const val = e.target.value.trim(), pv = parseVideo(val), last = v.versions[v.versions.length - 1];
+    if (val && !pv) { toast("Paste a full link starting with https://"); return; }
+    if (pv && pv.kind === "notvideo") { toast("That's a document, not a video. Put it under Footage & links in Overview."); return; }
+    let msg = "";
+    if (!last) { if (val) v.versions.push({ url: val, at: now(), note: "", sentAt: "" }); }
+    else if (val && last.sentAt && last.url !== val) { v.versions.push({ url: val, at: now(), note: "", sentAt: "" }); msg = `Saved as v${v.versions.length}. The client already saw v${v.versions.length - 1}.`; }
+    else if (val) last.url = val;
+    else v.versions.pop();
+    saveVideos(id, all); setTimeout(drawTask, 30); if (msg) toast(msg);
+  });
+  body.addEventListener("click", (e) => {
+    const w = e.target.closest("[data-watch]");
+    if (w) { const [vid, ver] = w.dataset.watch.split("|"); flushTask(); openReview(id, Number(ver), vid); return; }
+    if (e.target.closest("[data-vadd]")) {
+      const all = vids(), nv = { id: uid(), name: "Video " + (all.length + 1), versions: [] };
+      saveVideos(id, [...all, nv]); setTimeout(() => { drawTask(); $(`.vcard[data-vid="${nv.id}"] .vlatest`)?.focus(); }, 30); return;
+    }
+    const c = card(e); if (!c) return;
+    const box = $(".nv-box", c);
+    if (e.target.closest("[data-nvopen]")) { box.hidden = false; e.target.closest("[data-nvopen]").hidden = true; $(".nvurl", c).focus(); return; }
+    if (e.target.closest("[data-nvcancel]")) { box.hidden = true; $("[data-nvopen]", c).hidden = false; return; }
+    const del = e.target.closest("[data-vdel]");
+    if (del) {
+      if (del.dataset.armed !== "1") { del.dataset.armed = "1"; del.textContent = "Click again to remove"; setTimeout(() => { if (del.isConnected) { del.dataset.armed = ""; del.textContent = "Remove"; } }, 3000); return; }
+      saveVideos(id, vids().filter((x) => x.id !== c.dataset.vid)); setTimeout(drawTask, 30); return;
+    }
+    const send = !!e.target.closest("[data-nvsend]");
+    if (send || e.target.closest("[data-nvsave]")) {
+      const url = $(".nvurl", c).value.trim(), pv = parseVideo(url);
+      if (!pv) { toast("Paste the full link of the new export."); $(".nvurl", c).focus(); return; }
+      if (pv.kind === "notvideo") { toast("That link is a document, not a video."); $(".nvurl", c).focus(); return; }
+      const all = vids(), v = all.find((x) => x.id === c.dataset.vid);
+      if (v.versions.some((x) => x.url === url)) { toast("That link is already one of the versions."); $(".nvurl", c).focus(); return; }
+      const note = $(".nvnote", c).value.trim();
+      v.versions.push({ url, at: now(), note, sentAt: "" });
+      saveVideos(id, all, note ? { clientNote: note } : null);
+      if (send) sendToClient(id, note); else { toast(`${v.name}: v${v.versions.length} saved`); setTimeout(drawTask, 30); }
+    }
+  });
+}
+// Checks, saves a new task if needed, then sends it.
+function sendToClient(id, note) {
+  if (ui.draftId === id) { const c0 = { ...(S.tasks.get(id) || {}), ...(taskDraft || {}) }; if (!String(c0.title || "").trim()) { toast("Give the task a name first."); $("#tTitle")?.focus(); return false; } commitDraft(); }
+  flushTask(); const cur = S.merged.get(id) || {};
+  if (!cur.client) { toast("Pick a client first."); return false; }
+  if (!hasExport(cur)) { toast("Add the exported video in the Exports tab first."); return false; }
+  setStatus(id, "review", note || "", "team", true); toast("Sent to the client for review"); setTimeout(drawTask, 30);
+  return true;
+}
+// Footer of a task: save / send / delete.
+function taskActions(t, id) {
+  const admin = isAdmin(), ready = hasExport(t);
+  const left = ui.draftId === id
+    ? `<div class="save-row"><button class="btn primary" data-save type="button">Save task</button>${ready && t.client ? `<button class="btn" data-send type="button">Save &amp; send to client</button>` : ""}<span class="muted">Nothing is added to the board until you save.</span></div>`
+    : ready ? `<button class="btn primary" data-send type="button" ${t.status === "review" ? "disabled" : ""}>${t.status === "review" ? "With the client for review" : "Send to client for review"}</button>`
+    : `<div class="save-row"><button class="btn primary" data-save type="button">${admin ? "Save task" : "Save"}</button><span class="muted">${admin ? "The editor sees it straight away and adds the export in the Exports tab when the edit is ready." : "Add your export in the Exports tab when the edit is ready, then send it to the client."}</span></div>`;
+  return `<div class="sec tact">${left}${admin ? `<button class="btn ghost danger" data-del type="button">${ui.draftId === id ? "Discard" : "Delete task"}</button>` : ""}</div>`;
+}
+function bindActions(body, id) {
+  const admin = isAdmin();
+  $("[data-save]", body)?.addEventListener("click", () => {
+    if (ui.draftId === id) {
+      const cur = { ...(S.tasks.get(id) || {}), ...(taskDraft || {}) };
+      if (!String(cur.title || "").trim()) { toast("Give the task a name first."); $("#tTitle").focus(); return; }
+      commitDraft();
+      if (!cur.assignee) { drawTask(); toast("Saved. Pick an editor so someone can start on it."); $("#fAs")?.focus(); return; }
+      closeDrawer2(); render(); toast(`Saved. ${personName(cur.assignee) || "The editor"} can see it in their tasks.`); return;
+    }
+    flushTask(); const cur = S.tasks.get(id) || {};
+    if (admin && !cur.assignee) { toast("Saved. Pick an editor so someone can start on it."); $("#fAs")?.focus(); return; }
+    closeDrawer(); render();
+    toast(admin ? `Saved. ${personName(cur.assignee) || "The editor"} can see it in their tasks.` : "Saved");
+  });
+  $("[data-send]", body)?.addEventListener("click", () => sendToClient(id, ""));
+  const del = $("[data-del]", body); let armed = false;
+  del?.addEventListener("click", () => {
+    if (ui.draftId === id) { discardDraft(); closeDrawer2(); render(); toast("New task thrown away"); return; }
+    if (!armed) { armed = true; del.textContent = "Click again to delete for good"; setTimeout(() => { armed = false; if (del.isConnected) del.textContent = "Delete task"; }, 3500); return; }
+    taskDraft = null; S.tasks.delete(id); S.reviews.delete(id); merge(); Store.remove("tasks", id); Store.remove("reviews", id); closeDrawer(); render(); toast("Task deleted");
+  });
 }
 
 /* ---------------- editor work log (pay sheet) ----------------
@@ -2078,7 +2266,8 @@ function wlAuto(id, t) {
   const ok = t.status === "approved" ? [...h].reverse().find((x) => x.state === "approved") : null;
   return { task: id, editor: t.assignee || "", title: t.title || "Untitled task", client: personName(t.client) || "", type: t.type || "",
     assignedAt: isoDay(t.assignedAt || t.createdAt), due: t.due || "", deliveredAt: sent ? isoDay(sent.at) : "", approvedAt: ok ? isoDay(ok.at) : "",
-    revisions: revCount(t), status: t.status || "todo", gone: false };
+    revisions: revCount(t), status: t.status || "todo", gone: false,
+    count: Math.max(1, videosOf(t).filter((v) => v.versions.length).length) };          // a batch task pays per video
 }
 const WL_AUTO_KEYS = Object.keys(wlAuto("x", {}));
 
@@ -2114,16 +2303,17 @@ function wlRows() {
       const d = Object.fromEntries(WL_DATES.map(([k, o]) => [k, eff(r, k, o)]));
       const late = d.deliveredAt && d.due ? Math.round((new Date(d.deliveredAt) - new Date(d.due)) / 864e5) : null;
       const overdue = !d.deliveredAt && d.due && new Date(d.due + "T23:59:59") < new Date();
-      return { ...r, ...d, _auto: Object.fromEntries(WL_DATES.map(([k]) => [k, r[k] || ""])), amount: rowRate(r), late, overdue, editorName: personName(r.editor) || "Former member" };
+      return { ...r, ...d, _auto: Object.fromEntries(WL_DATES.map(([k]) => [k, r[k] || ""])), count: Math.max(1, Number(r.count) || 1), amount: rowRate(r) * Math.max(1, Number(r.count) || 1), late, overdue, editorName: personName(r.editor) || "Former member" };
     });
 }
 function wlFiltered() {
-  return wlRows().filter((r) => (!wlui.month || (r.assignedAt || "").slice(0, 7) === wlui.month)
+  const q = (ui.wq || "").trim().toLowerCase();
+  return wlRows().filter((r) => (!q || [r.title, r.client, r.editorName, r.note, r.type].join(" ").toLowerCase().includes(q)) && (!wlui.month || (r.assignedAt || "").slice(0, 7) === wlui.month)
     && (!wlui.editor || r.editor === wlui.editor) && (!wlui.paid || (wlui.paid === "paid" ? r.paid : !r.paid)));
 }
 function wlTotals(rows) {
-  const t = { n: rows.length, delivered: 0, ontime: 0, timed: 0, total: 0, paid: 0, unpaid: 0, revs: 0 };
-  rows.forEach((r) => { if (r.deliveredAt) t.delivered++; if (r.late !== null) { t.timed++; if (r.late <= 0) t.ontime++; } t.total += r.amount; t[r.paid ? "paid" : "unpaid"] += r.amount; t.revs += Number(r.revisions) || 0; });
+  const t = { n: 0, delivered: 0, ontime: 0, timed: 0, total: 0, paid: 0, unpaid: 0, revs: 0 };
+  rows.forEach((r) => { t.n += r.count || 1; if (r.deliveredAt) t.delivered += r.count || 1; if (r.late !== null) { t.timed++; if (r.late <= 0) t.ontime++; } t.total += r.amount; t[r.paid ? "paid" : "unpaid"] += r.amount; t.revs += Number(r.revisions) || 0; });
   return t;
 }
 function onTimeCell(r) {
@@ -2164,7 +2354,7 @@ function wlRender(m) {
     <td>${onTimeCell(r)}</td>
     <td class="num">${admin && r.manual ? `<input class="wl-in num" type="number" min="0" data-f="revisions" value="${esc(r.revisions || 0)}" aria-label="Revisions" style="width:56px">` : esc(r.revisions || 0)}</td>
     ${dateCell(r, "approvedAt", "oApproved")}
-    <td class="num">${admin ? `<input class="wl-in num" type="number" min="0" step="any" data-f="rate" value="${typeof r.rate === "number" ? r.rate : ""}" placeholder="${typeof r.defRate === "number" ? r.defRate : "0"}" aria-label="Rate for this video" style="width:90px">` : esc(money(r.amount))}</td>
+    <td class="num">${admin ? `<input class="wl-in num" type="number" min="0" step="any" data-f="rate" value="${typeof r.rate === "number" ? r.rate : ""}" placeholder="${typeof r.defRate === "number" ? r.defRate : "0"}" aria-label="Rate per video" style="width:90px">${r.count > 1 ? ` <span class="muted" title="${r.count} videos in this task">× ${r.count} = ${esc(money(r.amount))}</span>` : ""}` : esc(money(r.amount)) + (r.count > 1 ? ` <span class="muted">(${r.count} videos)</span>` : "")}</td>
     <td>${admin ? `<label class="wl-paid"><input type="checkbox" data-f="paid" ${r.paid ? "checked" : ""}> ${r.paid ? "Paid" : "Unpaid"}</label>` : r.paid ? `<span class="ok">Paid</span>` : `<span class="muted">Unpaid</span>`}${r.paid && r.paidAt ? `<small class="muted" style="display:block">${esc(fmtDate(r.paidAt))}</small>` : ""}</td>
     <td>${admin ? `<input class="wl-in" data-f="note" value="${esc(r.note)}" placeholder="Note" aria-label="Note" style="width:150px">` : esc(r.note)}</td>
     ${admin ? `<td>${r.manual || r.gone ? `<button class="btn sm ghost danger" data-del type="button">Delete</button>` : ""}</td>` : ""}
@@ -2172,6 +2362,7 @@ function wlRender(m) {
   const sub = (g) => { const t = wlTotals(g.rows); return `<tr class="wl-sub"><td colspan="${admin ? 13 : 12}"><b>${esc(g.name)}</b> · ${t.n} video${t.n === 1 ? "" : "s"} · ${t.delivered} delivered${t.timed ? ` · ${Math.round((t.ontime / t.timed) * 100)}% on time` : ""} · ${t.revs} revisions <span class="wl-sub-money">Total <b>${esc(money(t.total))}</b> · Paid ${esc(money(t.paid))} · <span class="${t.unpaid ? "bad" : ""}">Unpaid ${esc(money(t.unpaid))}</span></span></td></tr>`; };
   const rates = (S.wlRates && S.wlRates.rates) || {};
   m.innerHTML = `<div class="bar"><h1>Editor work log</h1>
+      <input type="search" id="wq" placeholder="Search videos, clients, notes" value="${esc(ui.wq || "")}" aria-label="Search the work log">
       <select id="wlMonth" aria-label="Month"><option value="">All months</option>${months.map((k) => `<option value="${k}" ${k === wlui.month ? "selected" : ""}>${esc(monthName(k))}</option>`).join("")}</select>
       ${acc === "all" ? `<select id="wlEd" aria-label="Editor"><option value="">All editors</option>${eds.map(([id, n]) => `<option value="${esc(id)}" ${id === wlui.editor ? "selected" : ""}>${esc(n)}</option>`).join("")}</select>` : ""}
       <select id="wlPaid" aria-label="Paid"><option value="">Paid and unpaid</option><option value="unpaid" ${wlui.paid === "unpaid" ? "selected" : ""}>Unpaid only</option><option value="paid" ${wlui.paid === "paid" ? "selected" : ""}>Paid only</option></select>
@@ -2191,6 +2382,7 @@ function wlRender(m) {
       : `<div class="empty"><b>${got.has("worklog") ? "Nothing here yet" : "Loading…"}</b>${got.has("worklog") ? (all.length ? "No rows match these filters." : admin ? "Rows appear here by themselves when you assign tasks to editors." : "Your videos will show up here.") : ""}</div>`}
     ${admin ? `<p class="muted" style="font-size:12.5px;margin-top:10px">Each video counts once, however many versions it went through; revisions are shown separately. Video, client, dates and revisions fill in from the tasks. Assigned = when the editor got the task, Delivered = first time it was sent to the client, Approved = when the client approved it. Change any date by hand; ↺ puts back the automatic one.</p>` : ""}`;
   $("#wlMonth").addEventListener("change", (e) => { wlui.month = e.target.value; saveWlui(); render(); });
+  $("#wq").addEventListener("input", (e) => { ui.wq = e.target.value; render(); });
   $("#wlEd")?.addEventListener("change", (e) => { wlui.editor = e.target.value; saveWlui(); render(); });
   $("#wlPaid").addEventListener("change", (e) => { wlui.paid = e.target.value; saveWlui(); render(); });
   $("#wlCsv").addEventListener("click", () => wlCsv(rows, groups));
@@ -2233,10 +2425,10 @@ $("#main").addEventListener("click", (e) => {
 });
 function wlCsv(rows, groups) {
   const q = (x) => { x = String(x ?? ""); return /[",\n]/.test(x) ? `"${x.replace(/"/g, '""')}"` : x; };
-  const head = ["Editor", "Video", "Client", "Type", "Assigned", "Due", "Delivered", "On time", "Revisions", "Approved", `Rate (${cur$()})`, "Paid", "Paid on", "Note"];
+  const head = ["Editor", "Video", "Client", "Type", "Assigned", "Due", "Delivered", "On time", "Revisions", "Approved", "Videos", `Rate per video (${cur$()})`, `Amount (${cur$()})`, "Paid", "Paid on", "Note"];
   const lines = [head];
-  groups.forEach((g) => g.rows.forEach((r) => lines.push([r.editorName, r.title, r.client, r.type, r.assignedAt, r.due, r.deliveredAt, r.late === null ? (r.overdue ? "Overdue" : "") : r.late <= 0 ? "Yes" : `${r.late} days late`, r.revisions || 0, r.approvedAt, r.amount, r.paid ? "Yes" : "No", r.paidAt || "", r.note || ""])));
-  const T = wlTotals(rows); lines.push([], ["Total", `${T.n} videos`, "", "", "", "", `${T.delivered} delivered`, "", T.revs, "", T.total, `Paid ${T.paid}`, `Unpaid ${T.unpaid}`, ""]);
+  groups.forEach((g) => g.rows.forEach((r) => lines.push([r.editorName, r.title, r.client, r.type, r.assignedAt, r.due, r.deliveredAt, r.late === null ? (r.overdue ? "Overdue" : "") : r.late <= 0 ? "Yes" : `${r.late} days late`, r.revisions || 0, r.approvedAt, r.count, rowRate(r), r.amount, r.paid ? "Yes" : "No", r.paidAt || "", r.note || ""])));
+  const T = wlTotals(rows); lines.push([], ["Total", `${T.n} videos`, "", "", "", "", `${T.delivered} delivered`, "", T.revs, "", T.n, "", T.total, `Paid ${T.paid}`, `Unpaid ${T.unpaid}`, ""]);
   const blob = new Blob(["﻿" + lines.map((l) => l.map(q).join(",")).join("\r\n")], { type: "text/csv;charset=utf-8" });
   const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = `work-log${wlui.month ? "-" + wlui.month : ""}.csv`; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 2000);
 }
@@ -2245,21 +2437,23 @@ function wlCsv(rows, groups) {
 function renderMyCount(m) {
   const mine = [...S.merged.entries()].map(([id, t]) => {
     const h = t.history || [], sent = h.find((x) => x.state === "review");
-    return { id, title: t.title || "Untitled task", client: personName(t.client), made: sent ? isoDay(sent.at) : "", status: t.status || "todo", revs: revCount(t) };
+    return { id, title: t.title || "Untitled task", client: personName(t.client), made: sent ? isoDay(sent.at) : "", status: t.status || "todo", revs: revCount(t), count: Math.max(1, videosOf(t).filter((v) => v.versions.length).length) };
   });
   const months = [...new Set(mine.map((r) => r.made.slice(0, 7)).filter(Boolean))].sort().reverse();
   const mm = months.includes(wlui.month) ? wlui.month : "";
-  const made = mine.filter((r) => r.made && (!mm || r.made.slice(0, 7) === mm)).sort((a, b) => b.made.localeCompare(a.made));
+  const q = (ui.wq || "").trim().toLowerCase();
+  const made = mine.filter((r) => r.made && (!mm || r.made.slice(0, 7) === mm) && (!q || (r.title + " " + r.client).toLowerCase().includes(q))).sort((a, b) => b.made.localeCompare(a.made));
   const monthName = (k) => new Date(k + "-01T00:00:00").toLocaleDateString("en-GB", { month: "long", year: "numeric" });
   const n = (f) => made.filter(f).length;
-  m.innerHTML = `<div class="bar"><h1>My videos</h1><select id="wlMonth" aria-label="Month"><option value="">All months</option>${months.map((k) => `<option value="${k}" ${k === mm ? "selected" : ""}>${esc(monthName(k))}</option>`).join("")}</select></div>
-    <div class="wl-tiles"><div><span>Videos made</span><b>${made.length}</b></div><div><span>Approved</span><b class="ok">${n((r) => r.status === "approved")}</b></div>
+  m.innerHTML = `<div class="bar"><h1>My videos</h1><input type="search" id="wq" placeholder="Search your videos" value="${esc(ui.wq || "")}" aria-label="Search your videos"><select id="wlMonth" aria-label="Month"><option value="">All months</option>${months.map((k) => `<option value="${k}" ${k === mm ? "selected" : ""}>${esc(monthName(k))}</option>`).join("")}</select></div>
+    <div class="wl-tiles"><div><span>Videos made</span><b>${made.reduce((a, r) => a + r.count, 0)}</b></div><div><span>Approved</span><b class="ok">${n((r) => r.status === "approved")}</b></div>
       <div><span>With the client</span><b>${n((r) => r.status === "review")}</b></div><div><span>Revisions asked</span><b>${made.reduce((a, r) => a + r.revs, 0)}</b></div>
       <div><span>Still to deliver</span><b>${mine.filter((r) => !r.made).length}</b></div></div>
     ${made.length ? `<div class="tablewrap"><table class="list wl" style="min-width:560px"><thead><tr><th>Video</th><th>Client</th><th>Made on</th><th>Revisions</th><th>Status</th></tr></thead><tbody>
-      ${made.map((r) => `<tr><td class="wl-title"><b>${esc(r.title)}</b></td><td>${esc(r.client) || '<span class="muted">—</span>'}</td><td class="num">${esc(fmtDate(r.made))}</td><td class="num">${r.revs}</td><td><span class="pill" data-st="${esc(r.status)}">${esc(ST[r.status]?.label || r.status)}</span></td></tr>`).join("")}</tbody></table></div>`
+      ${made.map((r) => `<tr><td class="wl-title"><b>${esc(r.title)}</b>${r.count > 1 ? ` <span class="tag">${r.count} videos</span>` : ""}</td><td>${esc(r.client) || '<span class="muted">—</span>'}</td><td class="num">${esc(fmtDate(r.made))}</td><td class="num">${r.revs}</td><td><span class="pill" data-st="${esc(r.status)}">${esc(ST[r.status]?.label || r.status)}</span></td></tr>`).join("")}</tbody></table></div>`
       : `<div class="empty"><b>${loaded ? "No videos yet" : "Loading…"}</b>${loaded ? "A video counts here once it's first sent to the client." : ""}</div>`}
     <p class="muted" style="font-size:12.5px;margin-top:10px">Each video counts once, however many versions it took. A video counts from the day it was first sent to the client.</p>`;
+  $("#wq").addEventListener("input", (e) => { ui.wq = e.target.value; render(); });
   $("#wlMonth").addEventListener("change", (e) => { wlui.month = e.target.value; saveWlui(); render(); });
 }
 
@@ -2281,17 +2475,17 @@ const GUIDES = {
   admin: [
     { t: "Welcome to your workspace", d: "Everything for a video lives here: the task, the raw footage, the edit, the client's comments, the approval and the editor's pay. This quick tour shows you where everything is." },
     { el: "#peopleBtn", t: "1. Invite your team and clients", d: "Click <b>People</b>. Type their name and the exact email they'll sign in with, pick <b>Editor</b> or <b>Client</b>, and press Send invite. Then send them the site link with <b>Copy link</b>. For a client who shouldn't need an email login, use <b>Create share link</b> next to their name under Clients." },
-    { el: "#newBtn", t: "2. Create a task", d: "Click <b>+ New task</b>. Pick the editor, the client and the due date, write the brief and paste the <b>raw footage</b> link, then press <b>Save task</b>. Leave the exported video empty; the editor adds it." },
-    { el: "#board", t: "3. Follow every video here", d: "Each task moves across these columns: To do → Editing → Client review → Revision → Approved. Click a card to open it. Drag cards to change their stage." },
+    { el: "#newBtn", t: "2. Create a task", d: "Click <b>+ New task</b>. Pick the editor, the client and the due date, write the brief and add links under <b>Footage &amp; links</b> (raw footage, references, music…), then press <b>Save task</b>. The editor adds the exports in the <b>Exports</b> tab, one or several videos each with their own versions." },
+    { el: "#board", t: "3. Follow every video here", d: "Each task moves across these columns: To do → Editing → Internal QC → Internal revisions → Client review → Client revisions → Approved (or Cancelled). Click a card to open it, drag it to change its stage, and use the search box to find any video by name or link." },
     { t: "4. The editor delivers, the client reviews", d: "The editor pastes the export and presses <b>Send to client for review</b>. The client pauses on a moment and types what to change; the time is saved with the comment. Click a comment to jump to that moment. For a new cut, use <b>+ Add new version</b>.", ui: chip("0:12", "tc") + chip("Make the logo bigger") + chip("✓ Approve") + chip("↻ Revision") + chip("+ Add new version", "p") },
     { el: "#wlTab", t: "5. Track work and pay", d: "<b>Work log</b> counts each editor's videos, whether they were on time, and what you owe. Set rates under <b>Rates</b> and tick <b>Paid</b> when you pay. Editors can't see it unless you allow it in People." },
     { el: "#helpBtn", t: "Need this again?", d: "Click <b>?</b> any time to replay this tour." },
   ],
   editor: [
     { t: "Welcome to FW Studio", d: "This is where you get your editing tasks, deliver your cuts and see the client's feedback. Here's where everything is." },
-    { el: "#board", t: "1. Your tasks", d: "Videos assigned to you show here, sorted by stage: To do, Editing, Client review, Revision, Approved." },
-    { el: "#board .card", t: "2. Open a task", d: "Click a card to see the brief, the due date and the <b>raw footage</b> link. Set the status to <b>Editing</b> when you start." },
-    { t: "3. Deliver your edit", d: "Upload the export to YouTube as <b>Unlisted</b>, or to Google Drive shared with “Anyone with the link”. In the task, paste it in <b>Exported video</b> and press <b>Send to client for review</b>.", ui: chip("Exported video") + "→" + chip("Send to client for review", "p") },
+    { el: "#board", t: "1. Your tasks", d: "Videos assigned to you show here, sorted by stage: To do, Editing, Internal QC, Internal revisions, Client review, Client revisions, Approved." },
+    { el: "#board .card", t: "2. Open a task", d: "Click a card to see the brief, the due date and the links under <b>Footage &amp; links</b>. Press <b>▶ Watch</b> on a reference to play it right there. Set the status to <b>Editing</b> when you start." },
+    { t: "3. Deliver your edit", d: "Upload the export to YouTube as <b>Unlisted</b>, or to Google Drive shared with “Anyone with the link”. In the task's <b>Exports</b> tab, paste the link (use <b>+ Add another video</b> for a batch) and press <b>Send to client for review</b>.", ui: chip("Exported video") + "→" + chip("Send to client for review", "p") },
     { t: "4. Fix revisions", d: "The client's comments have times. Click one to jump to that moment. Tick <b>✓ Done</b> as you fix each one, then add the new cut with <b>+ Add new version</b>.", ui: chip("0:12", "tc") + chip("✓ Done") + chip("+ Add new version", "p") },
     { el: "#helpBtn", t: "Need this again?", d: "Click <b>?</b> any time to replay this tour." },
   ],
