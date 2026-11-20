@@ -1770,7 +1770,12 @@ function parseVideo(raw) {
     if (id) return { kind: "drive", id, url };
   }
   if (h === "docs.google.com") return { kind: "notvideo", url };
-  if (h.endsWith("dropbox.com")) { u.searchParams.delete("dl"); u.searchParams.set("raw", "1"); return { kind: "file", src: u.toString(), url }; }
+  if (h === "wetransfer.com" || h === "we.tl" || h.endsWith(".wetransfer.com")) return { kind: "wetransfer", url };   // a download page: it can't be played or timed here
+  if (h.endsWith("dropbox.com")) {
+    if (/^\/(scl\/fo|sh)\//.test(u.pathname)) return { kind: "link", url };                    // a Dropbox folder, not a file
+    u.searchParams.delete("dl"); u.searchParams.set("raw", "1"); return { kind: "file", src: u.toString(), url };
+  }
+  if (h === "dl.dropboxusercontent.com") return { kind: "file", src: url, url };
   if (/\.(mp4|m4v|mov|webm)$/i.test(u.pathname)) return { kind: "file", src: url, url };
   return { kind: "link", url };
 }
@@ -1831,6 +1836,7 @@ function makePlayer(stage, v, team) {
   const msg = (title, body, link) => { stage.innerHTML = `<div class="rv-msg"><b>${title}</b><p>${body}</p>${link ? `<a class="btn" href="${esc(link)}" target="_blank" rel="noopener">Open the link ↗</a>` : ""}</div>`; return none; };
   if (!v) return msg("No video yet", team ? "Paste the video link in the task first." : "The team hasn't added the video yet.");
   if (v.kind === "notvideo") return msg("This link isn't a video", team ? "It's a Google Doc or Sheet. Upload the video to Google Drive, set sharing to “Anyone with the link”, then paste that link in the task." : "The team linked a document here by mistake. Let them know.", v.url);
+  if (v.kind === "wetransfer") return msg("This video is on WeTransfer", "WeTransfer only gives a download page, so it can't play inside the workspace. Open it, watch or download it there, then come back and leave your comments with the time, e.g. 0:12. Free WeTransfer links stop working after about 7 days.", v.url);
   if (v.kind === "link") return msg("This video opens on another site", "It can't play inside the workspace. Open it, then come back here to leave your comments.", v.url);
   if (v.kind === "drive") {
     // First try playing the Drive file directly (gives exact times and jumping); if Drive won't stream it, use Drive's own player.
@@ -1923,7 +1929,7 @@ function rvLoadPlayer() {
   const v = parseVideo(rv.url);
   rv.player = makePlayer($("#rvStage"), v, !isClient()); if (rv.cmp) rv.autoStart = true;
   const open = $("#rvOpen"); const link = safeUrl(rv.url);
-  open.hidden = !link || (v && v.kind !== "drive" && v.kind !== "yt"); if (link) open.href = link;
+  open.hidden = !link || (v && v.kind !== "drive" && v.kind !== "yt" && v.kind !== "wetransfer"); if (link) open.href = link;
   rvSyncComposer();
 }
 function rvHead() {
@@ -1936,7 +1942,7 @@ function rvHead() {
   const vs = rvVersions(t), sel = $("#rvVer");
   sel.hidden = vs.length < 2 || !!rv.cmp;
   sel.innerHTML = vs.slice().reverse().map((x) => `<option value="${x.v}" ${x.v === rv.view ? "selected" : ""}>v${x.v}${x.v === rv.ver ? " (latest)" : ""}${x.at ? " · " + esc(fmtTime(x.at)) : ""}</option>`).join("");
-  const cmpOk = vs.filter((x) => parseVideo(x.url)).length >= 2;
+  const cmpOk = vs.filter((x) => playable(x.url)).length >= 2;
   $("#rvCmp").hidden = !cmpOk; $("#rvCmp").setAttribute("aria-pressed", String(!!rv.cmp)); $("#rvCmp").textContent = rv.cmp ? "✕ Stop comparing" : "⇄ Compare versions";
   if (rv.cmp && !cmpOk) rvCompare(0);
   const st = t.status || "todo";
@@ -1954,8 +1960,9 @@ function rvPlayerReady() { rvSyncComposer(); rvRender(); if (rv.cmp) rvCompare(r
 function rvSyncComposer() {
   const timed = !!(rv.player && rv.player.canTime);
   $("#rvChip").hidden = !timed; $("#rvTime").hidden = timed;
-  const isDrive = parseVideo(rv.url)?.kind === "drive";
+  const pk = parseVideo(rv.url)?.kind, isDrive = pk === "drive";
   $("#rvHint").textContent = timed ? "Pause on the moment, then type. Click a comment to jump back to its time."
+    : pk === "wetransfer" ? "This video is on WeTransfer. Watch it there, then type the time from the video, e.g. 0:12 (optional)."
     : isDrive ? (rv.player && rv.player.mode === "trying" ? "Loading the video…" : "This Drive video plays in Drive's own player, so type the time, e.g. 0:12 (optional). Not showing? The file must be shared as “Anyone with the link”.")
     : "Add the time from the video if you can, e.g. 0:12.";
   rvChip();
@@ -2069,7 +2076,7 @@ function rvCompare(b) {
   $("#rvPaneB").hidden = !on; $("#rvSync").hidden = !on; $("#rvLabA").hidden = !on;
   if (!on) { clearInterval(rv.syncT); rv.syncT = 0; rv.playerB && rv.playerB.destroy(); rv.playerB = null; rv.urlB = ""; rv.player && rv.player.mute && rv.player.mute(false); return; }
   if (!was) { rv.linked = true; rv.sound = "left"; rv.autoStart = true; }
-  const t = S.merged.get(rv.id) || {}, vs = rvVersions(t).filter((x) => parseVideo(x.url));
+  const t = S.merged.get(rv.id) || {}, vs = rvVersions(t).filter((x) => playable(x.url));
   const opts = (cur) => vs.slice().reverse().map((x) => `<option value="${x.v}" ${x.v === cur ? "selected" : ""}>v${x.v}${x.v === rv.ver ? " (latest)" : ""}</option>`).join("");
   $("#rvLabA").innerHTML = `<span>Left</span><select id="rvVerA" aria-label="Left video version">${opts(rv.view)}</select>`;
   $("#rvVerB").innerHTML = opts(rv.cmp);
@@ -2112,7 +2119,7 @@ function rvSyncTick() {
 $("#rvVer").addEventListener("change", (e) => { rv.view = Number(e.target.value); rvHead(); rvRender(); if (rv.cmp) rvCompare(rv.cmp); });
 $("#rvCmp").addEventListener("click", () => {
   if (rv.cmp) { rvCompare(0); rvHead(); return; }
-  const vs = rvVersions(S.merged.get(rv.id) || {}).filter((x) => parseVideo(x.url));
+  const vs = rvVersions(S.merged.get(rv.id) || {}).filter((x) => playable(x.url));
   const other = vs.filter((x) => x.v !== rv.view).pop() || vs[0];
   rvCompare(other ? other.v : 0); rvHead();
   if (rv.view < rv.cmp) { const a = rv.view; rv.view = rv.cmp; rvHead(); rvRender(); rvCompare(a); }   // newer on the left
@@ -2165,6 +2172,7 @@ function filesOf(t) {
   if (!out.length) out.push({ id: "raw", label: "Raw footage for the editor", url: "" });
   return out;
 }
+const WT_NOTE = "WeTransfer saved. It can't play here, so people open it on WeTransfer and comment with a typed time. Free links expire after about 7 days. Use Drive, YouTube or Dropbox for full review and compare.";
 const playable = (url) => { const v = parseVideo(url); return !!v && ["yt", "drive", "file"].includes(v.kind); };
 function filesBox(t) {
   const rows = filesOf(t).map((f) => {
@@ -2352,7 +2360,7 @@ function exportsTab(t, id) {
         ${vids.length > 1 && editable ? `<button class="btn sm ghost danger" data-vdel type="button">Remove</button>` : ""}</div>
       ${n ? `<div class="vlist">${v.versions.slice().reverse().map((x) => `<div class="vrow"><span class="tag">v${x.v}</span>${x.v === n ? `<span class="now">Latest</span>` : ""}<span class="muted">${x.sent ? "Sent " + esc(fmtTime(x.sent)) : "Not sent yet"}</span>
           <a class="vlink" href="${esc(safeUrl(x.url))}" target="_blank" rel="noopener" title="${esc(x.url)}">${esc(x.url.replace(/^https?:\/\/(www\.)?/, ""))}</a><button class="btn sm" data-watch="${esc(v.id)}|${x.v}" type="button">▶ Watch</button></div>`).join("")}</div>` : ""}
-      <div class="f"><label>${n ? `Link of v${n}. Only change it to fix a wrong link` : "Export link"}</label><div class="linkrow"><input class="vlatest" value="${esc(n ? l.url : "")}" placeholder="Unlisted YouTube or Google Drive video link" inputmode="url" aria-label="Export link for ${esc(v.name)}">${n ? `<a class="btn" href="${esc(safeUrl(l.url))}" target="_blank" rel="noopener">Open ↗</a>` : ""}</div>
+      <div class="f"><label>${n ? `Link of v${n}. Only change it to fix a wrong link` : "Export link"}</label><div class="linkrow"><input class="vlatest" value="${esc(n ? l.url : "")}" placeholder="Unlisted YouTube, Google Drive or Dropbox link (WeTransfer works too, comments only)" inputmode="url" aria-label="Export link for ${esc(v.name)}">${n ? `<a class="btn" href="${esc(safeUrl(l.url))}" target="_blank" rel="noopener">Open ↗</a>` : ""}</div>
         ${n ? "" : `<small class="muted" style="font-size:12px">Paste the export here when it's ready. For Drive, set sharing to “Anyone with the link”.</small>`}</div>
       ${n ? `<div><button class="btn" data-nvopen type="button">+ Add new version (v${n + 1})</button>
         <div class="nv-box" hidden><label style="font-weight:600">Link to v${n + 1} of ${esc(v.name)}</label><input class="nvurl" placeholder="Link of the new export" inputmode="url">
@@ -2380,6 +2388,7 @@ function bindExports(body, id) {
     else if (val && last.sentAt && last.url !== val) { v.versions.push({ url: val, at: now(), note: "", sentAt: "" }); msg = `Saved as v${v.versions.length}. The client already saw v${v.versions.length - 1}.`; }
     else if (val) last.url = val;
     else v.versions.pop();
+    if (pv && pv.kind === "wetransfer") msg = (msg ? msg + " " : "") + WT_NOTE;
     saveVideos(id, all); setTimeout(drawTask, 30); if (msg) toast(msg);
   });
   body.addEventListener("click", (e) => {
@@ -2408,7 +2417,8 @@ function bindExports(body, id) {
       const note = $(".nvnote", c).value.trim();
       v.versions.push({ url, at: now(), note, sentAt: "" });
       saveVideos(id, all, note ? { clientNote: note } : null);
-      if (send) sendToClient(id, note); else { toast(`${v.name}: v${v.versions.length} saved`); setTimeout(drawTask, 30); }
+      if (pv.kind === "wetransfer") toast(WT_NOTE);
+      if (send) sendToClient(id, note); else { if (pv.kind !== "wetransfer") toast(`${v.name}: v${v.versions.length} saved`); setTimeout(drawTask, 30); }
     }
   });
 }
@@ -2948,7 +2958,7 @@ const GUIDES = {
     { t: "Welcome to FW Studio", d: "This is where you get your editing tasks, deliver your cuts and see the client's feedback. Here's where everything is." },
     { el: "#board", t: "1. Your tasks", d: "Videos assigned to you show here, sorted by stage: To do, Editing, Internal QC, Internal revisions, Client review, Client revisions, Approved." },
     { el: "#board .card", t: "2. Open a task", d: "Click a card to see the brief, the due date and the links under <b>Footage &amp; links</b>. Press <b>▶ Watch</b> on a reference to play it right there. Set the status to <b>Editing</b> when you start." },
-    { t: "3. Deliver your edit", d: "Upload the export to YouTube as <b>Unlisted</b>, or to Google Drive shared with “Anyone with the link”. In the task's <b>Exports</b> tab, paste the link (use <b>+ Add another video</b> for a batch) and press <b>Send to client for review</b>.", ui: chip("Exported video") + "→" + chip("Send to client for review", "p") },
+    { t: "3. Deliver your edit", d: "Upload the export to YouTube as <b>Unlisted</b>, or to Google Drive or Dropbox shared with “Anyone with the link”. (A WeTransfer link also works, but it opens on WeTransfer, so there is no in-page player or compare.) In the task's <b>Exports</b> tab, paste the link (use <b>+ Add another video</b> for a batch) and press <b>Send to client for review</b>.", ui: chip("Exported video") + "→" + chip("Send to client for review", "p") },
     { t: "4. Fix revisions", d: "The client's comments have times. Click one to jump to that moment. Tick <b>✓ Done</b> as you fix each one, then add the new cut with <b>+ Add new version</b>.", ui: chip("0:12", "tc") + chip("✓ Done") + chip("+ Add new version", "p") },
     { el: "#helpBtn", t: "Need this again?", d: "Click <b>?</b> any time to replay this tour." },
   ],
