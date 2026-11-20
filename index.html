@@ -273,6 +273,10 @@ table.list tr:last-child td { border-bottom: 0; }
 .prow small { color: var(--muted); display: block; font-size: 12px; overflow: hidden; text-overflow: ellipsis; }
 .prow select { background: var(--panel); border: 1px solid var(--line-2); border-radius: 7px; padding: 4px 6px; color: var(--fg); }
 .copyrow { display: flex; gap: 8px; align-items: center; background: var(--panel-2); border-radius: 8px; padding: 8px 10px; font-size: 12.5px; }
+.prow .alias, .prow .mergebar { flex: 1 1 100%; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: space-between; background: var(--panel); border-radius: 8px; padding: 6px 10px; font-size: 12.5px; }
+.prow .alias span, .prow .mergebar span { flex: 1 1 220px; min-width: 0; overflow-wrap: anywhere; white-space: normal; overflow: visible; }
+.prow .mergebar { border: 1px solid var(--accent); }
+.prow select[data-merge] { max-width: 170px; }
 .prow .linkbox { flex: 1 1 100%; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; background: var(--panel-2); border-radius: 8px; padding: 6px 8px; font-size: 12px; min-width: 0; }
 .prow .linkbox code { flex: 1 1 160px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--mono); user-select: all; }
 .copyrow code { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--mono); user-select: all; }
@@ -594,6 +598,7 @@ button.tc:hover { background: var(--accent); color: var(--accent-ink); }
     <section class="pm-sec">
       <h3>Invite someone</h3>
       <form class="inv" id="invForm" novalidate>
+        <select id="invSame" aria-label="New person or another email for a member"><option value="">A new person</option></select>
         <input id="invName" placeholder="Name" maxlength="60" aria-label="Name">
         <input id="invEmail" type="email" placeholder="Email address" aria-label="Email address">
         <select id="invRole" aria-label="Role"><option value="editor">Editor</option><option value="admin">Admin</option><option value="client">Client</option></select>
@@ -1001,9 +1006,9 @@ let me = null, view = "board", loaded = false;
 const ui = { draftId: null, q: "", fAssignee: "", fClient: "", sort: { key: "due", dir: 1 }, openKind: null, openId: null, subtab: "overview" };
 try { const v = localStorage.getItem("fw-ws-view"); if (v) view = v; } catch (e) {}
 const isAdmin = () => me && me.role === "admin", isEditor = () => me && me.role === "editor", isClient = () => me && (me.role === "client" || me.role === "guest");
-const team = () => [...S.users.entries()].filter(([, u]) => u.role === "admin" || u.role === "editor").map(([id, u]) => ({ id, name: u.name || u.email })).sort((a, b) => a.name.localeCompare(b.name));
+const team = () => [...S.users.entries()].filter(([, u]) => (u.role === "admin" || u.role === "editor") && !u.actsAs).map(([id, u]) => ({ id, name: u.name || u.email })).sort((a, b) => a.name.localeCompare(b.name));
 const clients = () => [...S.clients.entries()].map(([id, c]) => ({ id, name: c.name })).sort((a, b) => a.name.localeCompare(b.name));
-const personName = (id) => { if (!id) return ""; const u = S.users.get(id); if (u) return u.name || u.email || ""; const c = S.clients.get(id); return c ? c.name : ""; };
+const personName = (id) => { if (!id) return ""; const u = S.users.get(id); if (u && u.actsAs && S.users.has(u.actsAs)) return personName(u.actsAs); if (u) return u.name || u.email || ""; const c = S.clients.get(id); return c ? c.name : ""; };
 function isLate(t) { if (!t.due || CLOSED.includes(t.status)) return false; return new Date(t.due + "T23:59:59") < new Date(); }
 function revCount(t) { return (t.history || []).filter((h) => h.state === "revision").length; }
 function merge() {
@@ -1360,16 +1365,22 @@ function drawPeople() {
   const cOpts = clients().map((c) => `<option value="${esc(c.id)}">${esc(c.name)}</option>`).join("");
   const ic = $("#invClient"), keep = ic.value; ic.innerHTML = cOpts + `<option value="__new">+ New client…</option>`; if (keep) ic.value = keep;
   syncInvite();
-  const members = [...S.users.entries()].map(([id, u]) => ({ id, ...u })).sort((a, b) => (a.role > b.role ? 1 : -1) || String(a.name).localeCompare(b.name));
+  const everyone = [...S.users.entries()].map(([id, u]) => ({ id, ...u }));
+  const aliasesOf = (id) => everyone.filter((x) => x.actsAs === id);
+  const members = everyone.filter((u) => !u.actsAs || !S.users.has(u.actsAs)).sort((a, b) => (a.role > b.role ? 1 : -1) || String(a.name).localeCompare(b.name));
+  const mergeTargets = (u) => members.filter((x) => x.id !== u.id && x.role !== "guest" && (u.role === "client" ? x.role === "client" : x.role !== "client"));
   $("#memberList").innerHTML = members.map((u) => `<div class="prow" data-uid="${esc(u.id)}"><span class="av">${esc(initials(u.name || u.email))}</span><span>${esc(u.name || u.email)}<small>${u.role === "guest" ? "Opened the share link · " + esc(personName(u.clientId) || "client") : esc(u.email) + (u.role === "client" ? " · " + esc(personName(u.clientId) || "client") : "")}</small></span>
     ${u.role === "client" || u.role === "guest" ? `<span class="role-chip">${u.role === "guest" ? "Guest" : "Client"}</span>` : `<select data-role aria-label="Role" ${u.id === me.uid ? "disabled" : ""}><option value="editor" ${u.role === "editor" ? "selected" : ""}>Editor</option><option value="admin" ${u.role === "admin" ? "selected" : ""}>Admin</option></select>`}
     ${u.role === "editor" ? `<select data-wl aria-label="Work log access for ${esc(u.name || u.email)}" title="Can this editor see the work log?"><option value="" ${!u.worklog ? "selected" : ""}>Work log: hidden</option><option value="count" ${u.worklog === "count" ? "selected" : ""}>Video count only</option><option value="own" ${u.worklog === "own" ? "selected" : ""}>Own videos + pay</option><option value="all" ${u.worklog === "all" ? "selected" : ""}>Everyone + pay</option></select>` : ""}
     ${u.role === "editor" ? `<select data-acc="rating" aria-label="Rating access for ${esc(u.name || u.email)}"><option value="" ${!u.rating ? "selected" : ""}>Rating: hidden</option><option value="own" ${u.rating === "own" ? "selected" : ""}>Rating: sees own</option></select>
       <select data-acc="finance" aria-label="Business sheet access for ${esc(u.name || u.email)}"><option value="" ${!u.finance ? "selected" : ""}>Business: hidden</option><option value="view" ${u.finance === "view" ? "selected" : ""}>Business: can view</option></select>` : ""}
-    ${u.id === me.uid ? `<span class="muted" style="font-size:12px">You</span>` : `<button class="btn sm ghost danger" data-rm>Remove</button>`}</div>`).join("") || `<span class="muted">Nobody yet.</span>`;
+    ${u.id !== me.uid && u.role !== "guest" && mergeTargets(u).length ? `<select data-merge aria-label="Same person as" title="Is this the same person as another member?"><option value="">Same person as…</option>${mergeTargets(u).map((x) => `<option value="${esc(x.id)}">${esc(x.name || x.email)}</option>`).join("")}</select>` : ""}
+    ${u.id === me.uid ? `<span class="muted" style="font-size:12px">You</span>` : `<button class="btn sm ghost danger" data-rm>Remove</button>`}
+    ${aliasesOf(u.id).map((a) => `<div class="alias" data-alias="${esc(a.id)}"><span>Also signs in as <b>${esc(a.email)}</b></span><button class="btn sm ghost danger" data-unalias type="button">Remove this email</button></div>`).join("")}
+    ${ui.merge && ui.merge.from === u.id ? `<div class="mergebar"><span>Merge <b>${esc(u.name || u.email)}</b> (${esc(u.email)}) into <b>${esc(personName(ui.merge.into))}</b>? Their tasks, comments and work move to ${esc(personName(ui.merge.into))}, and ${esc(u.email)} becomes another way to sign in as them.</span><button class="btn sm primary" data-domerge type="button">Merge</button><button class="btn sm ghost" data-nomerge type="button">Cancel</button></div>` : ""}</div>`).join("") || `<span class="muted">Nobody yet.</span>`;
   const joined = new Set([...S.users.values()].map((u) => String(u.email || "").toLowerCase()));
   const waiting = [...S.invites.entries()].filter(([email]) => !joined.has(email));
-  $("#inviteList").innerHTML = waiting.map(([email, v]) => `<div class="prow" data-inv="${esc(email)}"><span class="av">${esc(initials(v.name || email))}</span><span>${esc(v.name || email)}<small>${esc(email)} · ${ROLE_LABEL[v.role] || v.role}${v.role === "client" ? " · " + esc(personName(v.clientId)) : ""}</small></span><button class="btn sm ghost danger" data-cancel>Cancel</button></div>`).join("") || `<span class="muted">No pending invites.</span>`;
+  $("#inviteList").innerHTML = waiting.map(([email, v]) => `<div class="prow" data-inv="${esc(email)}"><span class="av">${esc(initials(v.name || email))}</span><span>${esc(v.name || email)}<small>${esc(email)} · ${v.actsAs ? "another email for " + esc(personName(v.actsAs) || "a member") : (ROLE_LABEL[v.role] || v.role) + (v.role === "client" ? " · " + esc(personName(v.clientId)) : "")}</small></span><button class="btn sm ghost danger" data-cancel>Cancel</button></div>`).join("") || `<span class="muted">No pending invites.</span>`;
   $("#clientList").innerHTML = clients().map((c) => {
     const lk = [...S.links.entries()].find(([, l]) => l.clientId === c.id && l.active), guests = members.filter((u) => u.role === "guest" && u.clientId === c.id).length;
     return `<div class="prow" data-cid="${esc(c.id)}"><span class="av">${esc(initials(c.name))}</span><span>${esc(c.name)}<small>${lk ? `Share link on${guests ? " · " + guests + " guest" + (guests > 1 ? "s" : "") : ""}` : "No share link"}</small></span>
@@ -1377,12 +1388,41 @@ function drawPeople() {
       ${lk ? `<div class="linkbox" data-token="${esc(lk[0])}"><code>${esc(SITE_LINK + "#c=" + lk[0])}</code><button class="btn sm" data-copylink type="button">Copy link</button><button class="btn sm ghost danger" data-offlink type="button">Turn off</button></div>` : ""}</div>`;
   }).join("") || `<span class="muted">No clients yet.</span>`;
 }
+// Two accounts that are really one person: move everything onto the main one, and keep the
+// other email as another way to sign in as them.
+async function mergeAccounts(fromId, intoId) {
+  const from = S.users.get(fromId), into = S.users.get(intoId); if (!from || !into || fromId === intoId) return;
+  toast("Merging…");
+  const up = { actsAs: intoId, role: into.role, clientId: into.clientId || "" };
+  S.users.set(fromId, { ...from, ...up }); Store.update("users", fromId, up);
+  [...S.users.entries()].filter(([, u]) => u.actsAs === fromId).forEach(([id, u]) => { S.users.set(id, { ...u, ...up }); Store.update("users", id, up); });   // its own extra emails follow
+  let moved = 0;
+  S.tasks.forEach((t, id) => { if (t.assignee === fromId) { S.tasks.set(id, { ...t, assignee: intoId }); Store.update("tasks", id, { assignee: intoId }); moved++; } });
+  S.reviews.forEach((r, id) => { if (r.assignee === fromId) { S.reviews.set(id, { ...r, assignee: intoId }); Store.update("reviews", id, { assignee: intoId }); } });
+  S.worklog.forEach((r, id) => { if (r.editor === fromId) { S.worklog.set(id, { ...r, editor: intoId }); Store.update("worklog", id, { editor: intoId }); } });
+  merge(); render(); drawPeople();
+  let comments = 0;
+  for (const id of [...S.reviews.keys()]) {
+    try {
+      const s = await Store.col("reviews/" + id + "/comments").get();
+      s.docs.forEach((d) => { if (d.data().uid === fromId) { Store.update("reviews/" + id + "/comments", d.id, { uid: intoId, name: (into.name || "").slice(0, 80) }); comments++; } });
+    } catch (e) {}
+  }
+  rtCache.clear();
+  toast(`Merged into ${into.name || "them"}: ${moved} task${moved === 1 ? "" : "s"} and ${comments} comment${comments === 1 ? "" : "s"} moved.`);
+}
 function syncInvite() {
-  const client = $("#invRole").value === "client";
+  const sel = $("#invSame"), keep = sel.value;
+  sel.innerHTML = `<option value="">A new person</option>` + [...S.users.entries()].filter(([, u]) => !u.actsAs && u.role !== "guest").sort((a, b) => String(a[1].name).localeCompare(b[1].name)).map(([id, u]) => `<option value="${esc(id)}">Another email for ${esc(u.name || u.email)}</option>`).join("");
+  sel.value = [...sel.options].some((o) => o.value === keep) ? keep : "";
+  const same = !!sel.value;
+  $("#invRole").hidden = same; $("#invName").hidden = same;
+  const client = !same && $("#invRole").value === "client";
   $("#invClient").hidden = !client;
   $("#invNewClient").hidden = !(client && $("#invClient").value === "__new");
 }
 $("#invRole").addEventListener("change", syncInvite);
+$("#invSame").addEventListener("change", syncInvite);
 $("#invClient").addEventListener("change", syncInvite);
 $("#peopleBtn").addEventListener("click", () => { drawPeople(); $("#peopleModal").classList.add("on"); $("#invName").focus(); });
 $("#pmClose").addEventListener("click", () => $("#peopleModal").classList.remove("on"));
@@ -1401,14 +1441,25 @@ $("#invForm").addEventListener("submit", (e) => {
       clientId = uid(); const c = { name: cname.slice(0, 60), createdAt: now() }; S.clients.set(clientId, c); Store.set("clients", clientId, c); $("#invNewClient").value = "";
     }
   }
-  const inv = { name: name.slice(0, 60), email, role, clientId, invitedBy: me.uid, invitedAt: now() };
+  const same = $("#invSame").value, main = same ? S.users.get(same) : null;
+  const inv = main ? { name: main.name || name.slice(0, 60), email, role: main.role, clientId: main.clientId || "", actsAs: same, invitedBy: me.uid, invitedAt: now() }
+    : { name: name.slice(0, 60), email, role, clientId, invitedBy: me.uid, invitedAt: now() };
   S.invites.set(email, inv); Store.set("invites", email, inv);
-  $("#invName").value = ""; $("#invEmail").value = "";
-  toast("Invite saved. Send them the link."); drawPeople(); $("#invClient").value = clientId; syncInvite();
+  $("#invName").value = ""; $("#invEmail").value = ""; $("#invSame").value = "";
+  toast(main ? `Saved. When ${email} signs in, it opens ${main.name || "their"} account.` : "Invite saved. Send them the link."); drawPeople(); $("#invClient").value = clientId; syncInvite();
 });
 $("#peopleModal").addEventListener("click", (e) => {
   if (e.target.id === "peopleModal") { e.target.classList.remove("on"); return; }
   const row = e.target.closest(".prow"); if (!row) return;
+  if (e.target.closest("[data-nomerge]")) { ui.merge = null; drawPeople(); return; }
+  if (e.target.closest("[data-domerge]")) { const m = ui.merge; ui.merge = null; mergeAccounts(m.from, m.into); return; }
+  const ua = e.target.closest("[data-unalias]");
+  if (ua) {
+    if (!ua.dataset.armed) { ua.dataset.armed = 1; ua.textContent = "Click to confirm"; setTimeout(() => { if (ua.isConnected) { delete ua.dataset.armed; ua.textContent = "Remove this email"; } }, 3500); return; }
+    const aid = ua.closest("[data-alias]").dataset.alias, a = S.users.get(aid); S.users.delete(aid); Store.remove("users", aid);
+    const em = String(a?.email || "").toLowerCase(); if (em && S.invites.has(em)) { S.invites.delete(em); Store.remove("invites", em); }
+    toast("That email can't sign in any more."); drawPeople(); return;
+  }
   if (e.target.closest("[data-rm]")) {
     const b = e.target.closest("[data-rm]"); if (!b.dataset.armed) { b.dataset.armed = 1; b.textContent = "Click to confirm"; setTimeout(() => { if (b.isConnected) { delete b.dataset.armed; b.textContent = "Remove"; } }, 3500); return; }
     const id = row.dataset.uid, u = S.users.get(id); S.users.delete(id); Store.remove("users", id);
@@ -1439,6 +1490,8 @@ $("#peopleModal").addEventListener("change", (e) => {
     toast(k === "rating" ? (ac.value ? "They can now see their own rating" : "Rating hidden for this editor") : (ac.value ? "They can now see the business sheet" : "Business sheet hidden for this editor")); return; }
   const wl = e.target.closest("[data-wl]");
   if (wl) { const id = wl.closest(".prow").dataset.uid, u = S.users.get(id); if (!u) return; S.users.set(id, { ...u, worklog: wl.value }); Store.update("users", id, { worklog: wl.value }); toast({ "": "Work log hidden for this editor", count: "They can now see how many videos they made", own: "They can now see their own videos and pay", all: "They can now see everyone's work log" }[wl.value]); return; }
+  const mg = e.target.closest("[data-merge]");
+  if (mg) { ui.merge = mg.value ? { from: mg.closest(".prow").dataset.uid, into: mg.value } : null; drawPeople(); return; }
   const sel = e.target.closest("[data-role]"); if (!sel) return;
   const id = sel.closest(".prow").dataset.uid, u = S.users.get(id); if (!u) return;
   S.users.set(id, { ...u, role: sel.value }); Store.update("users", id, { role: sel.value }); toast("Role changed to " + ROLE_LABEL[sel.value]);
@@ -1569,6 +1622,7 @@ async function ensureProfile(u) {
   try { const s = await Store.col("invites").doc(email).get(); inv = s.exists ? s.data() : null; } catch (e) { inv = null; }
   if (!inv) return null;
   const p = { name: inv.name || u.displayName || email, email, role: inv.role, clientId: inv.clientId || "", createdAt: now() };
+  if (inv.actsAs) p.actsAs = inv.actsAs;              // another email for someone who's already a member
   await ref.set(p); return p;
 }
 /* ---------------- guests: a client's share link, no email ---------------- */
@@ -1622,18 +1676,32 @@ async function handleUser(u) {
   let p = null, err = "";
   try { p = await ensureProfile(u); } catch (e) { console.warn(e); err = e && e.code === "permission-denied" ? "" : "Couldn't reach the workspace. Check your connection and try again."; }
   if (!p) { showAuth("aNo", { email: u.email, error: err }); return; }
+  if (p.actsAs) {                                   // signed in with an extra email: become the main person
+    let main = null; try { const s = await Store.col("users").doc(p.actsAs).get(); main = s.exists ? s.data() : null; } catch (e) { main = null; }
+    if (!main) { showAuth("aNo", { email: u.email, error: "The account this email belongs to was removed." }); return; }
+    p = { ...main, email: p.email, actsAs: p.actsAs, ownName: p.name };
+  }
   start(u, p);
 }
 function start(u, p) {
   splashMsg("Loading your videos…");
-  me = { uid: u.uid, ...p };
+  me = { ...p, uid: p.actsAs || u.uid, authUid: u.uid };
   authEl.hidden = true; $("#top").hidden = false; $("#main").hidden = false; setBanner("");
   $("#meName").textContent = me.name || ""; $("#meMail").textContent = me.email || (me.role === "guest" ? "Guest via share link" : ""); $("#meRole").textContent = ROLE_LABEL[me.role] || me.role;
   const col = Store.col;
-  Store.watchDoc(col("users").doc(u.uid), (d) => {          // removed or role changed while signed in
-    if (!d) { Store.stop(); me = null; showAuth("aNo", { email: u.email, error: "Your access was removed." }); return; }
-    if (d.role !== me.role || d.clientId !== me.clientId || ["worklog", "rating", "finance"].some((k) => (d[k] || "") !== (me[k] || ""))) { handleUser(auth.currentUser); return; }
-    me = { uid: u.uid, ...d }; $("#meName").textContent = me.name || "";
+  const gone = () => { Store.stop(); me = null; showAuth("aNo", { email: u.email, error: "Your access was removed." }); };
+  const changedAccess = (d) => d.role !== me.role || (d.clientId || "") !== (me.clientId || "") || ["worklog", "rating", "finance"].some((k) => (d[k] || "") !== (me[k] || ""));
+  Store.watchDoc(col("users").doc(u.uid), (d) => {          // removed, or role / access changed while signed in
+    if (!d) { gone(); return; }
+    if ((d.actsAs || "") !== (p.actsAs || "")) { handleUser(auth.currentUser); return; }
+    if (p.actsAs) return;
+    if (changedAccess(d)) { handleUser(auth.currentUser); return; }
+    me = { ...d, uid: u.uid, authUid: u.uid }; $("#meName").textContent = me.name || "";
+  });
+  if (p.actsAs) Store.watchDoc(col("users").doc(p.actsAs), (d) => {     // the main person's role and access apply to every email they use
+    if (!d) { gone(); return; }
+    if (changedAccess(d)) { handleUser(auth.currentUser); return; }
+    me = { ...me, name: d.name }; $("#meName").textContent = me.name || "";
   });
   if (me.role === "guest") Store.watchDoc(col("links").doc(me.linkToken || "-"), (l) => { if (!l || !l.active) auth.signOut(); });   // link turned off: out you go
   if (isClient()) {
@@ -1648,14 +1716,14 @@ function start(u, p) {
       Store.watch("invites", col("invites"), onRows("invites"));
       Store.watch("share links", col("links"), onRows("links"));
     } else {
-      Store.watch("tasks", col("tasks").where("assignee", "==", u.uid), onRows("tasks"));
-      Store.watch("reviews", col("reviews").where("assignee", "==", u.uid), onRows("reviews"));
+      Store.watch("tasks", col("tasks").where("assignee", "==", me.uid), onRows("tasks"));
+      Store.watch("reviews", col("reviews").where("assignee", "==", me.uid), onRows("reviews"));
     }
     if (me.role === "admin") {
       Store.watch("work log", col("worklog"), onRows("worklog"));
       Store.watchDoc(col("settings").doc("rates"), (d) => { S.wlRates = d || { rates: {} }; got.add("rates"); render(); });
     } else if (me.worklog === "all" || me.worklog === "own") {
-      Store.watch("work log", me.worklog === "all" ? col("worklog") : col("worklog").where("editor", "==", u.uid), onRows("worklog"));
+      Store.watch("work log", me.worklog === "all" ? col("worklog") : col("worklog").where("editor", "==", me.uid), onRows("worklog"));
     }
     if (me.role === "admin" || me.worklog === "all" || me.worklog === "own") Store.watchDoc(col("settings").doc("worklog"), (d) => { S.wlSettings = d; render(); });
     if (me.role === "admin" || me.finance === "view") {
