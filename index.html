@@ -402,9 +402,10 @@ body.rv-lock { overflow: hidden; }
 tr.not-counted td { opacity: .55; }
 /* ---- stages ---- */
 :root { --st-qc: #f5c84c; --st-intrev: #ff8a3d; --st-revision: #ff6b6b; --st-rejected: #e0457b; --st-cancelled: #7c818c; }
-[data-st="unassigned"] { --c: var(--st-cancelled); } [data-st="qc"] { --c: var(--st-qc); } [data-st="intrev"] { --c: var(--st-intrev); } [data-st="cancelled"] { --c: var(--st-cancelled); }
+[data-st="unassigned"][data-st] { --c: #f472b6; } [data-st="todo"][data-st] { --c: #22d3ee; } [data-st="qc"] { --c: var(--st-qc); } [data-st="intrev"] { --c: var(--st-intrev); } [data-st="cancelled"] { --c: var(--st-cancelled); }
 [data-st="revision"] { --c: var(--st-revision); } [data-st="rejected"] { --c: var(--st-rejected); }
-.board { grid-auto-columns: minmax(210px, 1fr); }
+.board { grid-auto-columns: minmax(210px, 1fr); align-items: stretch; height: calc(100vh - 200px); height: calc(100dvh - 200px); min-height: 340px; padding-bottom: 10px; }
+.board .col { min-height: 0; max-height: 100%; } .board .cards { overflow-y: auto; min-height: 0; align-content: start; }
 .col[data-st="cancelled"] .card { opacity: .7; }
 /* ---- work log ---- */
 .wl-tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 8px; margin-bottom: 14px; }
@@ -580,6 +581,7 @@ button.tc:hover { background: var(--accent); color: var(--accent-ink); }
       <button role="tab" data-v="worklog" aria-selected="false" id="wlTab" hidden>Work log</button>
       <button role="tab" data-v="ratings" aria-selected="false" id="rtTab" hidden>Ratings</button>
       <button role="tab" data-v="business" aria-selected="false" id="fiTab" hidden>Business</button>
+      <button role="tab" data-v="activity" aria-selected="false" id="actTab" hidden>Activity</button>
     </nav>
     <div class="spacer"></div>
     <button class="btn ghost" id="peopleBtn" hidden>People</button>
@@ -1177,6 +1179,9 @@ function setStatus(id, status, note, by, quiet) {
   if (by === "client" && r.status !== "review") return;
   const entry = { state: status, note: note || "", by: by === "client" ? "client" : "team", uid: me.uid, at: now() };
   const patch = { status, updatedAt: now() };
+  { const cur = S.merged.get(id) || r, lt = { id, title: cur.title || r.title };
+    if (by === "client") logAct("decision", status === "approved" ? "Approved the video" : status === "revision" ? "Asked for a revision" + (note ? ": " + note.slice(0, 150) : "") : "Marked it " + (ST[status] || {}).label, lt, { every: 0 });
+    else logAct("status", `${(ST[boardCol(cur)] || {}).label || r.status} → ${ST[status].label}${note ? ": " + note.slice(0, 120) : ""}`, lt, { every: 0 }); }
   if (status === "review" && by !== "client") {
     // Mark the newest version of every video as sent, and remember the main link (older pages read it).
     const videos = plainVideos(S.merged.get(id) || r), stamp = now();
@@ -1212,10 +1217,11 @@ function closeDrawer2() { flushTask(); flushFile(); drawer.classList.remove("on"
 scrim.addEventListener("click", closeDrawer);
 addEventListener("keydown", (e) => { if (e.key === "Escape" && !rv.id && drawer.classList.contains("on") && !e.target.closest(".sh-grid td.edit, .rt-link")) closeDrawer(); });
 
-let taskDraft = null, taskTimer = 0;
+let taskDraft = null, taskTimer = 0, taskBefore = null;
 // A new export: the old link stays with its version, the new link becomes the latest version and goes to the client.
 function patchTask(patch, quick) {
   const id = ui.openId; const base = taskDraft || S.tasks.get(id); if (!base) return;
+  if (!taskDraft) taskBefore = { ...base };
   taskDraft = { ...base, ...patch, updatedAt: now() }; S.tasks.set(id, taskDraft); merge();
   clearTimeout(taskTimer); taskTimer = setTimeout(flushTask, quick ? 0 : 600);
 }
@@ -1223,6 +1229,7 @@ function flushTask() {
   clearTimeout(taskTimer);
   if (!taskDraft || ui.openKind !== "task") return;
   const id = ui.openId, t = taskDraft; taskDraft = null;
+  logTaskDiff(id, taskBefore, t); taskBefore = null;
   Store.set("tasks", id, pick(t, TASK_FIELDS));
   Store.update("reviews", id, { ...pick(t, MIRROR_FIELDS), updatedAt: now() });
   const r = S.reviews.get(id); if (r) S.reviews.set(id, { ...r, ...pick(t, MIRROR_FIELDS) });
@@ -1248,6 +1255,7 @@ function commitDraft() {
   if (task.assignee && !task.assignedAt) task.assignedAt = now();
   S.tasks.set(id, task);
   Store.set("tasks", id, task);
+  logAct("create", "Created the task" + (task.assignee ? " and assigned it to " + (personName(task.assignee) || "an editor") : ""), { id, title: task.title }, { every: 0 });
   Store.set("reviews", id, { ...pick(task, MIRROR_FIELDS), status: r.status || "todo", history: r.history || [], updatedAt: now() });
   const d = S.dl.get(id); if (d && d.url) Store.set("downloads", id, { url: d.url, updatedAt: now() });
   merge(); render();
@@ -1398,6 +1406,7 @@ function drawPeople() {
     ${u.role === "editor" ? `<select data-wl aria-label="Work log access for ${esc(u.name || u.email)}" title="Can this editor see the work log?"><option value="" ${!u.worklog ? "selected" : ""}>Work log: hidden</option><option value="count" ${u.worklog === "count" ? "selected" : ""}>Video count only</option><option value="own" ${u.worklog === "own" ? "selected" : ""}>Own videos + pay</option><option value="all" ${u.worklog === "all" ? "selected" : ""}>Everyone + pay</option></select>` : ""}
     ${u.role === "editor" ? `<select data-acc="rating" aria-label="Rating access for ${esc(u.name || u.email)}"><option value="" ${!u.rating ? "selected" : ""}>Rating: hidden</option><option value="own" ${u.rating === "own" ? "selected" : ""}>Rating: sees own</option></select>
       <select data-acc="finance" aria-label="Business sheet access for ${esc(u.name || u.email)}"><option value="" ${!u.finance ? "selected" : ""}>Business: hidden</option><option value="view" ${u.finance === "view" ? "selected" : ""}>Business: can view</option></select>` : ""}
+    ${u.role === "admin" && u.id !== me.uid && isOwner() ? `<select data-acc="activity" aria-label="Activity log access for ${esc(u.name || u.email)}" title="Can this admin see who changed what?"><option value="" ${!u.activity ? "selected" : ""}>Activity log: hidden</option><option value="view" ${u.activity === "view" ? "selected" : ""}>Activity log: can view</option></select>` : ""}
     ${u.id !== me.uid && u.role !== "guest" && mergeTargets(u).length ? `<select data-merge aria-label="Same person as" title="Is this the same person as another member?"><option value="">Same person as…</option>${mergeTargets(u).map((x) => `<option value="${esc(x.id)}">${esc(x.name || x.email)}</option>`).join("")}</select>` : ""}
     ${u.id === me.uid ? `<span class="muted" style="font-size:12px">You</span>` : `<button class="btn sm ghost danger" data-rm>Remove</button>`}
     ${aliasesOf(u.id).map((a) => `<div class="alias" data-alias="${esc(a.id)}"><span>Also signs in as <b>${esc(a.email)}</b></span><button class="btn sm ghost danger" data-unalias type="button">Remove this email</button></div>`).join("")}
@@ -1468,7 +1477,7 @@ $("#invForm").addEventListener("submit", (e) => {
   const same = $("#invSame").value, main = same ? S.users.get(same) : null;
   const inv = main ? { name: main.name || name.slice(0, 60), email, role: main.role, clientId: main.clientId || "", actsAs: same, invitedBy: me.uid, invitedAt: now() }
     : { name: name.slice(0, 60), email, role, clientId, invitedBy: me.uid, invitedAt: now() };
-  S.invites.set(email, inv); Store.set("invites", email, inv);
+  S.invites.set(email, inv); Store.set("invites", email, inv); logAct("people", `Invited ${inv.name || email} (${email}) as ${ROLE_LABEL[inv.role] || inv.role}${inv.actsAs ? " (extra email)" : ""}`, null, { every: 0 });
   $("#invName").value = ""; $("#invEmail").value = ""; $("#invSame").value = "";
   toast(main ? `Saved. When ${email} signs in, it opens ${main.name || "their"} account.` : "Invite saved. Send them the link."); drawPeople(); $("#invClient").value = clientId; syncInvite();
 });
@@ -1486,7 +1495,7 @@ $("#peopleModal").addEventListener("click", (e) => {
   }
   if (e.target.closest("[data-rm]")) {
     const b = e.target.closest("[data-rm]"); if (!b.dataset.armed) { b.dataset.armed = 1; b.textContent = "Click to confirm"; setTimeout(() => { if (b.isConnected) { delete b.dataset.armed; b.textContent = "Remove"; } }, 3500); return; }
-    const id = row.dataset.uid, u = S.users.get(id); S.users.delete(id); Store.remove("users", id);
+    const id = row.dataset.uid, u = S.users.get(id); logAct("people", `Removed ${(u && (u.name || u.email)) || "a member"}`, null, { every: 0 }); S.users.delete(id); Store.remove("users", id);
     const em = String(u?.email || "").toLowerCase(); if (em && S.invites.has(em)) { S.invites.delete(em); Store.remove("invites", em); }
     toast("Removed. They can't open the workspace any more."); drawPeople(); render();
   } else if (e.target.closest("[data-cancel]")) { const em = row.dataset.inv; S.invites.delete(em); Store.remove("invites", em); drawPeople(); }
@@ -1498,27 +1507,27 @@ $("#peopleModal").addEventListener("click", (e) => {
   } else if (e.target.closest("[data-mklink]")) {
     const id = row.dataset.cid, c = S.clients.get(id) || {}, token = randomToken();
     const l = { clientId: id, clientName: (c.name || "").slice(0, 60), active: true, createdAt: now(), createdBy: me.uid };
-    S.links.set(token, l); Store.set("links", token, l); drawPeople();
+    S.links.set(token, l); Store.set("links", token, l); logAct("people", "Made a share link for " + (c.name || "a client"), null, { every: 0 }); drawPeople();
     copyText(SITE_LINK + "#c=" + token, "Share link made and copied. Send it to " + (c.name || "the client") + ".");
   } else if (e.target.closest("[data-copylink]")) {
     copyText(SITE_LINK + "#c=" + e.target.closest("[data-token]").dataset.token, "Link copied");
   } else if (e.target.closest("[data-offlink]")) {
     const b = e.target.closest("[data-offlink]"); if (!b.dataset.armed) { b.dataset.armed = 1; b.textContent = "Click to confirm"; setTimeout(() => { if (b.isConnected) { delete b.dataset.armed; b.textContent = "Turn off"; } }, 3500); return; }
-    const token = e.target.closest("[data-token]").dataset.token; S.links.delete(token); Store.remove("links", token);
+    const token = e.target.closest("[data-token]").dataset.token; logAct("people", "Turned off a share link for " + ((S.links.get(token) || {}).clientName || "a client"), null, { every: 0 }); S.links.delete(token); Store.remove("links", token);
     drawPeople(); toast("Link turned off. Anyone using it can't open the videos any more.");
   }
 });
 $("#peopleModal").addEventListener("change", (e) => {
   const ac = e.target.closest("[data-acc]");
-  if (ac) { const id = ac.closest(".prow").dataset.uid, u = S.users.get(id), k = ac.dataset.acc; if (!u) return; S.users.set(id, { ...u, [k]: ac.value }); Store.update("users", id, { [k]: ac.value });
-    toast(k === "rating" ? (ac.value ? "They can now see their own rating" : "Rating hidden for this editor") : (ac.value ? "They can now see the business sheet" : "Business sheet hidden for this editor")); return; }
+  if (ac) { const id = ac.closest(".prow").dataset.uid, u = S.users.get(id), k = ac.dataset.acc; if (!u) return; S.users.set(id, { ...u, [k]: ac.value }); Store.update("users", id, { [k]: ac.value }); logAct("access", `${u.name || u.email}: ${k === "activity" ? "activity log" : k === "finance" ? "business sheet" : "rating"} access ${ac.value ? "set to " + ac.value : "turned off"}`, null, { every: 0 });
+    toast(k === "activity" ? (ac.value ? "They can now see the activity log" : "Activity log hidden for this admin") : k === "rating" ? (ac.value ? "They can now see their own rating" : "Rating hidden for this editor") : (ac.value ? "They can now see the business sheet" : "Business sheet hidden for this editor")); return; }
   const wl = e.target.closest("[data-wl]");
-  if (wl) { const id = wl.closest(".prow").dataset.uid, u = S.users.get(id); if (!u) return; S.users.set(id, { ...u, worklog: wl.value }); Store.update("users", id, { worklog: wl.value }); toast({ "": "Work log hidden for this editor", count: "They can now see how many videos they made", own: "They can now see their own videos and pay", all: "They can now see everyone's work log" }[wl.value]); return; }
+  if (wl) { const id = wl.closest(".prow").dataset.uid, u = S.users.get(id); if (!u) return; S.users.set(id, { ...u, worklog: wl.value }); Store.update("users", id, { worklog: wl.value }); logAct("access", `${u.name || u.email}: work log access ${wl.value ? "set to " + wl.value : "turned off"}`, null, { every: 0 }); toast({ "": "Work log hidden for this editor", count: "They can now see how many videos they made", own: "They can now see their own videos and pay", all: "They can now see everyone's work log" }[wl.value]); return; }
   const mg = e.target.closest("[data-merge]");
   if (mg) { ui.merge = mg.value ? { from: mg.closest(".prow").dataset.uid, into: mg.value } : null; drawPeople(); return; }
   const sel = e.target.closest("[data-role]"); if (!sel) return;
   const id = sel.closest(".prow").dataset.uid, u = S.users.get(id); if (!u) return;
-  S.users.set(id, { ...u, role: sel.value }); Store.update("users", id, { role: sel.value }); toast("Role changed to " + ROLE_LABEL[sel.value]);
+  S.users.set(id, { ...u, role: sel.value }); Store.update("users", id, { role: sel.value }); logAct("people", `Changed ${u.name || u.email} to ${ROLE_LABEL[sel.value]}`, null, { every: 0 }); toast("Role changed to " + ROLE_LABEL[sel.value]);
 });
 $("#addClient").addEventListener("submit", (e) => {
   e.preventDefault(); const name = $("#addClientIn").value.trim(); if (!name) return;
@@ -1536,8 +1545,8 @@ function render() {
   $("#wlTab").hidden = !wlAccess(); $("#wlTab").textContent = wlAccess() === "count" ? "My videos" : "Work log"; if (view === "worklog" && !wlAccess()) view = "board";
   wlSchedule(); fiSchedule();
   $("#rtTab").hidden = !rtAccess(); $("#rtTab").textContent = rtAccess() === "own" ? "My rating" : "Ratings";
-  $("#fiTab").hidden = !fiAccess();
-  if ((view === "ratings" && !rtAccess()) || (view === "business" && !fiAccess())) view = "board";
+  $("#fiTab").hidden = !fiAccess(); $("#actTab").hidden = !actAccess();
+  if ((view === "ratings" && !rtAccess()) || (view === "business" && !fiAccess()) || (view === "activity" && !actAccess())) view = "board";
   $$("#tabs [data-v]").forEach((b) => b.setAttribute("aria-selected", String(b.dataset.v === view)));
   $$("#tabs [data-v]").forEach((b) => { if (b.dataset.v === "board") b.textContent = isEditor() ? "My tasks" : "Board"; });
   const m = $("#main");
@@ -1549,6 +1558,7 @@ function render() {
   else if (view === "worklog") renderWorklog(m);
   else if (view === "ratings") renderRatings(m);
   else if (view === "business") renderFinance(m);
+  else if (view === "activity") renderActivity(m);
   else renderBoard(m);
   if (keep) { const n = document.getElementById(keep.id); if (n) { n.focus(); try { n.setSelectionRange(keep.s, keep.e); } catch (e) {} } }
   if ($("#peopleModal").classList.contains("on")) drawPeople();
@@ -1750,6 +1760,7 @@ function start(u, p) {
       Store.watch("work log", me.worklog === "all" ? col("worklog") : col("worklog").where("editor", "==", me.uid), onRows("worklog"));
     }
     if (me.role === "admin" || me.worklog === "all" || me.worklog === "own") Store.watchDoc(col("settings").doc("worklog"), (d) => { S.wlSettings = d; render(); });
+    if (actAccess()) Store.watch("activity", col("activity").orderBy("at", "desc").limit(300), (rows) => { S.activity = rows.map(([id, d]) => ({ id, ...d })); got.add("activity"); if (view === "activity") render(); });
     if (me.role === "admin" || me.finance === "view") {
       Store.watch("business", col("finance"), onRows("finance"));
       Store.watchDoc(col("settings").doc("finance"), (d) => { S.fiSettings = d; got.add("finset"); render(); });
@@ -2015,6 +2026,7 @@ function rvAdd(text, t, parent) {
   const c = { text: text.slice(0, 2000), t: t == null ? null : Math.round(t * 10) / 10, v: rv.view, vid: rv.vid, by: isClient() ? "client" : "team", uid: me.uid, name: (me.name || me.email || "").slice(0, 80), at: now(), parent: parent || "", done: false, doneBy: "", doneAt: "" };
   rv.comments.set(id, c); rvRender();
   Store.set("reviews/" + rv.id + "/comments", id, c);
+  logAct("comment", `${parent ? "Replied" : "Commented"}${c.t != null ? " at " + fmtTC(c.t) : ""} on v${c.v}: “${c.text.slice(0, 110)}”`, { id: rv.id, title: (S.merged.get(rv.id) || {}).title }, { every: 0 });
 }
 
 $("#rvBack").addEventListener("click", closeReview);
@@ -2048,6 +2060,7 @@ $("#rvList").addEventListener("click", (e) => {
   if (!c) return;
   if (e.target.closest("[data-done]")) {
     const patch = c.done ? { done: false, doneBy: "", doneAt: "" } : { done: true, doneBy: (me.name || "").split(" ")[0] || "", doneAt: now() };
+    logAct("comment", patch.done ? "Marked a comment as done" : "Reopened a comment", { id: rv.id, title: (S.merged.get(rv.id) || {}).title }, { every: 20000 });
     rv.comments.set(id, { ...c, ...patch }); rvRender(); Store.update("reviews/" + rv.id + "/comments", id, patch); return;
   }
   const del = e.target.closest("[data-del]");
@@ -2399,6 +2412,7 @@ function bindExports(body, id) {
     else if (val) last.url = val;
     else v.versions.pop();
     if (pv && pv.kind === "wetransfer") msg = (msg ? msg + " " : "") + WT_NOTE;
+    logAct("export", `${v.name}: ${!val ? "removed the latest version" : !last ? "added v1" : msg && !/WeTransfer saved/.test(msg) || (last && last.url !== val && last.sentAt) ? "added v" + v.versions.length : "corrected the export link"}`, { id, title: (S.merged.get(id) || {}).title }, { every: 0 });
     saveVideos(id, all); setTimeout(drawTask, 30); if (msg) toast(msg);
   });
   body.addEventListener("click", (e) => {
@@ -2406,7 +2420,7 @@ function bindExports(body, id) {
     if (w) { const [vid, ver] = w.dataset.watch.split("|"); flushTask(); openReview(id, Number(ver), vid); return; }
     if (e.target.closest("[data-vadd]")) {
       const all = vids(), nv = { id: uid(), name: "Video " + (all.length + 1), versions: [] };
-      saveVideos(id, [...all, nv]); setTimeout(() => { drawTask(); $(`.vcard[data-vid="${nv.id}"] .vlatest`)?.focus(); }, 30); return;
+      logAct("export", "Added another video to the task", { id, title: (S.merged.get(id) || {}).title }, { every: 0 }); saveVideos(id, [...all, nv]); setTimeout(() => { drawTask(); $(`.vcard[data-vid="${nv.id}"] .vlatest`)?.focus(); }, 30); return;
     }
     const c = card(e); if (!c) return;
     const box = $(".nv-box", c);
@@ -2415,7 +2429,7 @@ function bindExports(body, id) {
     const del = e.target.closest("[data-vdel]");
     if (del) {
       if (del.dataset.armed !== "1") { del.dataset.armed = "1"; del.textContent = "Click again to remove"; setTimeout(() => { if (del.isConnected) { del.dataset.armed = ""; del.textContent = "Remove"; } }, 3000); return; }
-      saveVideos(id, vids().filter((x) => x.id !== c.dataset.vid)); setTimeout(drawTask, 30); return;
+      logAct("export", "Removed a video from the task", { id, title: (S.merged.get(id) || {}).title }, { every: 0 }); saveVideos(id, vids().filter((x) => x.id !== c.dataset.vid)); setTimeout(drawTask, 30); return;
     }
     const send = !!e.target.closest("[data-nvsend]");
     if (send || e.target.closest("[data-nvsave]")) {
@@ -2426,6 +2440,7 @@ function bindExports(body, id) {
       if (v.versions.some((x) => x.url === url)) { toast("That link is already one of the versions."); $(".nvurl", c).focus(); return; }
       const note = $(".nvnote", c).value.trim();
       v.versions.push({ url, at: now(), note, sentAt: "" });
+      logAct("export", `${v.name}: v${v.versions.length} saved${send ? " and sent to the client" : ""}`, { id, title: (S.merged.get(id) || {}).title }, { every: 0 });
       saveVideos(id, all, note ? { clientNote: note } : null);
       if (pv.kind === "wetransfer") toast(WT_NOTE);
       if (send) sendToClient(id, note); else { if (pv.kind !== "wetransfer") toast(`${v.name}: v${v.versions.length} saved`); setTimeout(drawTask, 30); }
@@ -2470,7 +2485,7 @@ function bindActions(body, id) {
   del?.addEventListener("click", () => {
     if (ui.draftId === id) { discardDraft(); closeDrawer2(); render(); toast("New task thrown away"); return; }
     if (!armed) { armed = true; del.textContent = "Click again to delete for good"; setTimeout(() => { armed = false; if (del.isConnected) del.textContent = "Delete task"; }, 3500); return; }
-    taskDraft = null; S.tasks.delete(id); S.reviews.delete(id); merge(); Store.remove("tasks", id); Store.remove("reviews", id); closeDrawer(); render(); toast("Task deleted");
+    logAct("delete", "Deleted the task", { id, title: (S.merged.get(id) || {}).title }, { every: 0 }); taskDraft = null; S.tasks.delete(id); S.reviews.delete(id); merge(); Store.remove("tasks", id); Store.remove("reviews", id); closeDrawer(); render(); toast("Task deleted");
   });
 }
 
@@ -2634,7 +2649,7 @@ function wlAddRow() {
   S.worklog.set(id, r); Store.set("worklog", id, r); wlui.month = ""; render();
   setTimeout(() => { const i = $(`tr[data-id="${id}"] [data-f="title"]`); i && (i.focus(), i.select()); }, 30);
 }
-function wlSave(id, patch) { const r = S.worklog.get(id); if (!r) return; S.worklog.set(id, { ...r, ...patch }); Store.update("worklog", id, patch); }
+function wlSave(id, patch) { const r = S.worklog.get(id); if (!r) return; logAct("pay", `Work log: ${Object.entries(patch).map(([k, v]) => `${k} ${v === null || v === "" ? "cleared" : "→ " + v}`).join(", ")} (${personName(r.editor) || "editor"})`, { id, title: r.title }, { every: 15000 }); S.worklog.set(id, { ...r, ...patch }); Store.update("worklog", id, patch); }
 $("#main").addEventListener("change", (e) => {
   const tr = e.target.closest("#wlTable tr[data-id]"); if (!tr || !isAdmin()) return;
   const id = tr.dataset.id, r = S.worklog.get(id), f = e.target.dataset.f; if (!r || !f) return;
@@ -2754,6 +2769,8 @@ function rtSave(id, patch) {
   let fix = patch === null ? {} : { ...(t.ratingFix || {}) };
   if (patch) Object.entries(patch).forEach(([k, v]) => { if (v === r.auto[k]) delete fix[k]; else fix[k] = v; });
   const ratingFix = Object.keys(fix).length ? fix : null;
+  const LBL = { videos: "videos", cRev: "client revisions", iRev: "internal revisions", cMis: "client mistakes", tMis: "team mistakes" };
+  logAct("rating", patch === null ? "Reset the rating corrections" : "Corrected " + Object.entries(patch).map(([k, v]) => `${LBL[k]} ${r.auto[k]} → ${v}`).join(", ") + " for " + (r.editorName || "an editor"), { id, title: r.title }, { every: 0 });
   S.tasks.set(id, { ...t, ratingFix }); Store.update("tasks", id, { ratingFix }); merge();
 }
 function renderRatings(m) {
@@ -2934,7 +2951,7 @@ function fiRender(m, acc) {
     S.fiSettings = s; Store.set("settings", "finance", s); fiSync(); toast("Saved"); render();
   });
 }
-function fiSave(id, patch) { const r = S.finance.get(id); if (!r) return; S.finance.set(id, { ...r, ...patch }); Store.update("finance", id, patch); }
+function fiSave(id, patch) { const r = S.finance.get(id); if (!r) return; logAct("pay", `Business sheet: ${Object.entries(patch).map(([k, v]) => `${k} ${v === null || v === "" ? "cleared" : "→ " + v}`).join(", ")}`, { id, title: r.title }, { every: 15000 }); S.finance.set(id, { ...r, ...patch }); Store.update("finance", id, patch); }
 $("#main").addEventListener("change", (e) => {
   const tr = e.target.closest("#fiTable tr[data-id]"); if (!tr || !isAdmin()) return;
   const id = tr.dataset.id, f = e.target.dataset.f; if (!f || !S.finance.get(id)) return;
@@ -2956,6 +2973,58 @@ function fiCsv(rows) {
   const T = fiTotals(rows); lines.push([], ["Total (cancelled not counted)", "", "", "", "", "", T.given, "", T.revenue, T.cost, T.profit, `Received ${T.received}`, `To collect ${T.owed}`]);
   const blob = new Blob(["﻿" + lines.map((l) => l.map(q).join(",")).join("\r\n")], { type: "text/csv;charset=utf-8" });
   const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = `business${fiui.month ? "-" + fiui.month : ""}.csv`; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+}
+
+/* ---------------- activity log: who changed what ----------------
+   Every change a person makes writes one small, never-edited entry to activity/{id}.
+   Only the owner can read it; the owner can let another admin view it in People (users/{uid}.activity = "view"). */
+const isOwner = () => !!me && String(me.email || "").toLowerCase() === OWNER_EMAIL;
+const actAccess = () => (isOwner() || (isAdmin() && me.activity === "view") ? "all" : "");
+const ACT_TYPES = { status: "Moved", assign: "Assigned", create: "Created", delete: "Deleted", edit: "Edited", export: "Export", comment: "Comments", decision: "Client decision", people: "People", access: "Access", rating: "Ratings", pay: "Work log & business" };
+const actRecent = new Map(), actui = { q: "", who: "", type: "" };
+S.activity = [];
+function logAct(action, detail, t, o) {
+  try {
+    if (!me || !detail) return;
+    const key = [me.uid, t && t.id || "", action, detail].join("|"), ms = Date.now(), win = o && o.every != null ? o.every : 45000;
+    if (win && actRecent.get(key) > ms - win) return; actRecent.set(key, ms);
+    const d = { at: now(), by: me.uid, name: String(me.name || me.email || "Someone").slice(0, 80), role: String(me.role || ""), action, taskId: String(t && t.id || ""), task: String(t && t.title || "").slice(0, 120), detail: String(detail).slice(0, 300) };
+    fs.collection("activity").doc(uid()).set(d).catch(() => {});
+  } catch (e) {}
+}
+// Compare a task before and after an edit and record what changed.
+function logTaskDiff(id, a, b) {
+  if (!a || !b || id === ui.draftId) return;
+  const t = { id, title: b.title || a.title }, nm = (x) => personName(x) || "nobody";
+  if ((a.title || "") !== (b.title || "") && a.title) logAct("edit", `Renamed "${a.title}" to "${b.title}"`, t, { every: 5000 });
+  if ((a.assignee || "") !== (b.assignee || "")) logAct("assign", b.assignee ? `Assigned to ${nm(b.assignee)}${a.assignee ? ` (was ${nm(a.assignee)})` : ""}` : `Unassigned (was ${nm(a.assignee)})`, t, { every: 0 });
+  if ((a.client || "") !== (b.client || "")) logAct("edit", `Client changed to ${b.client ? nm(b.client) : "none"}`, t, { every: 5000 });
+  if ((a.due || "") !== (b.due || "")) logAct("edit", `Due date ${a.due || "none"} → ${b.due || "none"}`, t, { every: 5000 });
+  if ((a.type || "") !== (b.type || "")) logAct("edit", `Type ${a.type || "none"} → ${b.type || "none"}`, t, { every: 5000 });
+  if ((a.priority || "") !== (b.priority || "")) logAct("edit", `Priority ${a.priority || "normal"} → ${b.priority || "normal"}`, t, { every: 5000 });
+  if ((a.brief || "") !== (b.brief || "")) logAct("edit", "Edited the brief", t, { every: 600000 });
+  if ((a.notes || "") !== (b.notes || "")) logAct("edit", "Edited the notes", t, { every: 600000 });
+  if (JSON.stringify(a.files || null) !== JSON.stringify(b.files || null)) logAct("edit", "Changed the footage & links", t, { every: 120000 });
+}
+function renderActivity(m) {
+  if (!actAccess()) { view = "board"; renderBoard(m); return; }
+  const rows = S.activity, q = actui.q.trim().toLowerCase();
+  const people = [...new Map(rows.map((r) => [r.by, r.name])).entries()];
+  const list = rows.filter((r) => (!actui.who || r.by === actui.who) && (!actui.type || r.action === actui.type) && (!q || (r.name + " " + r.task + " " + r.detail).toLowerCase().includes(q)));
+  m.innerHTML = `<div class="bar"><h1>Activity log</h1>
+      <input type="search" id="acq" placeholder="Search people, videos or changes" value="${esc(actui.q)}" aria-label="Search activity">
+      <select id="acWho" aria-label="Person"><option value="">Everyone</option>${people.map(([id, n]) => `<option value="${esc(id)}" ${id === actui.who ? "selected" : ""}>${esc(n)}</option>`).join("")}</select>
+      <select id="acType" aria-label="Type of change"><option value="">All changes</option>${Object.entries(ACT_TYPES).map(([k, l]) => `<option value="${k}" ${k === actui.type ? "selected" : ""}>${esc(l)}</option>`).join("")}</select></div>
+    ${list.length ? `<div class="tablewrap"><table class="list wl" style="min-width:820px"><thead><tr><th>When</th><th>Who</th><th>What</th><th>Video</th><th>Details</th></tr></thead><tbody>
+      ${list.map((r) => `<tr><td class="num" style="white-space:nowrap">${esc(fmtTime(r.at))}</td><td><b>${esc(r.name)}</b> <span class="muted" style="font-size:12px">${esc(ROLE_LABEL[r.role] || r.role || "")}</span></td>
+        <td><span class="tag">${esc(ACT_TYPES[r.action] || r.action)}</span></td>
+        <td>${r.task ? (S.merged.has(r.taskId) ? `<a href="#" data-actopen="${esc(r.taskId)}">${esc(r.task)}</a>` : esc(r.task)) : '<span class="muted">—</span>'}</td><td>${esc(r.detail)}</td></tr>`).join("")}</tbody></table></div>`
+      : `<div class="empty"><b>${got.has("activity") ? "Nothing here yet" : "Loading…"}</b>${got.has("activity") ? "Changes people make from now on are recorded here: status moves, assigning, edits, exports, comments, client decisions and access changes." : ""}</div>`}
+    <p class="muted" style="font-size:12.5px;margin-top:10px">Showing the latest ${rows.length >= 300 ? "300 changes" : rows.length + (rows.length === 1 ? " change" : " changes")}. ${isOwner() ? "Only you can see this unless you allow another admin under People." : "The owner allowed you to see this."} Entries can't be edited or deleted.</p>`;
+  $("#acq").addEventListener("input", (e) => { actui.q = e.target.value; render(); });
+  $("#acWho").addEventListener("change", (e) => { actui.who = e.target.value; render(); });
+  $("#acType").addEventListener("change", (e) => { actui.type = e.target.value; render(); });
+  $$("[data-actopen]", m).forEach((a) => a.addEventListener("click", (e) => { e.preventDefault(); openTask(a.dataset.actopen); }));
 }
 
 /* ---------------- loading screen ---------------- */
