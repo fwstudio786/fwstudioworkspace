@@ -414,7 +414,7 @@ body.boardview main { padding-bottom: 0; }
 .board .col.got { animation: got 1.1s ease-out; }
 @keyframes got { 0% { box-shadow: 0 0 0 2px var(--accent); } 100% { box-shadow: 0 0 0 0 transparent; } }
 @media (prefers-reduced-motion: reduce) { .card.landed, .board .col.got { animation: none; } }
-.board .col.drop .cards::after { content: "Drop here"; display: grid; place-items: end center; padding-bottom: 20px; box-sizing: border-box; min-height: var(--slot, 64px); transition: min-height .16s ease-out; border-radius: 10px; border: 1px dashed var(--accent); color: var(--accent); font-weight: 600; font-size: 13px; }
+.board .col.drop .cards::after { content: "Drop here"; display: grid; place-items: center; height: 64px; margin-top: max(0px, calc(var(--slot, 64px) - 64px)); transition: margin-top .16s ease-out; border-radius: 10px; border: 1px dashed var(--accent); color: var(--accent); font-weight: 600; font-size: 13px; }
 .col[data-st="cancelled"] .card { opacity: .7; }
 /* ---- work log ---- */
 .wl-tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 8px; margin-bottom: 14px; }
@@ -430,6 +430,24 @@ table.list.wl td.wl-title { white-space: normal; min-width: 160px; }
 table.list.wl tr.is-paid td { background: color-mix(in srgb, var(--st-approved) 5%, transparent); }
 .wl-in, .wl-date input { background: var(--panel-2); border: 1px solid var(--line-2); border-radius: 6px; padding: 5px 7px; color: var(--fg); font: inherit; font-size: 12.5px; max-width: 100%; }
 .wl-in.num { font-family: var(--mono); }
+.bellwrap { position: relative; }
+.bell { position: relative; width: 38px; padding: 0; display: grid; place-items: center; }
+.bell-n { position: absolute; top: -5px; right: -5px; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 9px; background: var(--accent); color: #fff; font: 700 10.5px/18px var(--body); text-align: center; }
+.bell-panel { position: absolute; right: 0; top: calc(100% + 8px); width: min(380px, calc(100vw - 24px)); max-height: min(70vh, 560px); display: flex; flex-direction: column; background: var(--panel); border: 1px solid var(--line-2); border-radius: 12px; box-shadow: 0 18px 50px rgba(0, 0, 0, .45); z-index: 60; overflow: hidden; }
+.bell-h { display: flex; align-items: center; gap: 6px; padding: 10px 12px; border-bottom: 1px solid var(--line); } .bell-h b { margin-right: auto; font-size: 14px; }
+.bell-list { overflow-y: auto; }
+.nt { display: flex; gap: 10px; width: 100%; text-align: left; padding: 11px 12px; border: 0; border-bottom: 1px solid var(--line); background: none; color: var(--fg); font: inherit; cursor: pointer; }
+.nt:hover, .nt:focus-visible { background: var(--panel-2); } .nt.new { background: color-mix(in srgb, var(--panel) 88%, var(--accent) 12%); }
+.nt-ic { flex: none; width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center; background: var(--panel-2); font-size: 13px; }
+.nt-ic.probation { color: #f5c84c; } .nt-ic.decision { color: #3ecf8e; }
+.nt-b { display: grid; gap: 2px; min-width: 0; font-size: 13px; } .nt-b span { color: var(--muted); overflow-wrap: anywhere; } .nt-b small { color: var(--faint); font-size: 11.5px; }
+.nt-empty { padding: 18px 14px; color: var(--muted); font-size: 13px; }
+.rt-prob { font-size: 12.5px; font-weight: 600; padding: 5px 8px; border-radius: 7px; } .rt-prob.on { color: #ff6b6b; background: rgba(255, 107, 107, .12); } .rt-prob.ok { color: #3ecf8e; background: rgba(62, 207, 142, .12); }
+.rt-prob.sm { font-size: 11px; padding: 2px 6px; }
+.rt-send { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; justify-content: space-between; padding: 10px 12px; margin-bottom: 12px; border: 1px solid var(--line-2); border-radius: 10px; background: var(--panel); font-size: 13px; }
+.rt-hist { margin-top: 18px; }
+.tag.mis { color: #ff6b6b; border-color: rgba(255, 107, 107, .4); }
+.cm-a button[data-mis].on { color: #ff6b6b; }
 .rt-in { width: 64px; text-align: right; } .rt-in.edited { border-color: var(--accent); background: rgba(255, 90, 31, .12); }
 .wl-date { display: flex; align-items: center; gap: 3px; }
 .wl-date.ovr input { border-color: var(--accent); }
@@ -595,6 +613,8 @@ button.tc:hover { background: var(--accent); color: var(--accent-ink); }
     <div class="spacer"></div>
     <button class="btn ghost" id="peopleBtn" hidden>People</button>
     <button class="btn primary" id="newBtn" hidden>+ New task</button>
+    <div class="bellwrap"><button class="btn ghost bell" id="bellBtn" type="button" aria-label="Notifications" aria-haspopup="true" aria-expanded="false" hidden><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg><span class="bell-n" id="bellN" hidden>0</span></button>
+      <div class="bell-panel" id="bellPanel" role="dialog" aria-label="Notifications" hidden><div class="bell-h"><b>Notifications</b><button class="btn sm ghost" id="bellAll" type="button">Mark all read</button><button class="btn sm ghost" id="bellClear" type="button">Clear read</button></div><div class="bell-list" id="bellList"></div></div></div>
     <button class="btn ghost help" id="helpBtn" type="button" title="How it works" aria-label="How it works">?</button>
     <div class="acct"><div class="who"><span id="meName"></span><small id="meMail"></small></div><span class="role-chip" id="meRole"></span><button class="btn sm" id="outBtn">Sign out</button></div>
   </div>
@@ -1216,7 +1236,11 @@ function setStatus(id, status, note, by, quiet) {
   const patch = { status, updatedAt: now() };
   { const cur = S.merged.get(id) || r, lt = { id, title: cur.title || r.title };
     if (by === "client") logAct("decision", status === "approved" ? "Approved the video" : status === "revision" ? "Asked for a revision" + (note ? ": " + note.slice(0, 150) : "") : "Marked it " + (ST[status] || {}).label, lt, { every: 0 });
-    else logAct("status", `${(ST[boardCol(cur)] || {}).label || r.status} → ${ST[status].label}${note ? ": " + note.slice(0, 120) : ""}`, lt, { every: 0 }); }
+    else logAct("status", `${(ST[boardCol(cur)] || {}).label || r.status} → ${ST[status].label}${note ? ": " + note.slice(0, 120) : ""}`, lt, { every: 0 });
+    const nm = me.name || "Someone", ttl = cur.title || r.title || "a video";
+    if (by === "client") notifyTask(id, { kind: "decision", title: status === "approved" ? `${nm} approved "${ttl}"` : status === "revision" ? `${nm} asked for changes on "${ttl}"` : `${nm} marked "${ttl}" ${(ST[status] || {}).label}`, body: note || "" }, { admins: true });
+    else if (cur.assignee && cur.assignee !== me.uid) notifyTask(id, { kind: "status", title: `"${ttl}" moved to ${ST[status].label}`, body: note || "" });
+    else if (cur.assignee === me.uid && ["qc", "review"].includes(status)) notifyTask(id, { kind: "status", title: `${nm} sent "${ttl}" to ${ST[status].label}` }, { editor: false, admins: true }); }
   if (status === "review" && by !== "client") {
     // Mark the newest version of every video as sent, and remember the main link (older pages read it).
     const videos = plainVideos(S.merged.get(id) || r), stamp = now();
@@ -1291,6 +1315,7 @@ function commitDraft() {
   S.tasks.set(id, task);
   Store.set("tasks", id, task);
   logAct("create", "Created the task" + (task.assignee ? " and assigned it to " + (personName(task.assignee) || "an editor") : ""), { id, title: task.title }, { every: 0 });
+  if (task.assignee) notify([task.assignee], { kind: "assign", title: `New task: "${task.title || "Untitled"}"`, body: task.due ? "Due " + fmtDate(task.due) : "", taskId: id });
   Store.set("reviews", id, { ...pick(task, MIRROR_FIELDS), status: r.status || "todo", history: r.history || [], updatedAt: now() });
   const d = S.dl.get(id); if (d && d.url) Store.set("downloads", id, { url: d.url, updatedAt: now() });
   merge(); render();
@@ -1594,8 +1619,9 @@ function render() {
   else if (view === "ratings") renderRatings(m);
   else if (view === "business") renderFinance(m);
   else if (view === "activity") renderActivity(m);
-  if (view !== "board" || client) document.body.classList.remove("boardview");
   else renderBoard(m);
+  if (view !== "board" || client) document.body.classList.remove("boardview");
+  drawBell();
   if (keep) { const n = document.getElementById(keep.id); if (n) { n.focus(); try { n.setSelectionRange(keep.s, keep.e); } catch (e) {} } }
   if ($("#peopleModal").classList.contains("on")) drawPeople();
   if (rv.id) rvHead();
@@ -1796,6 +1822,11 @@ function start(u, p) {
       Store.watch("work log", me.worklog === "all" ? col("worklog") : col("worklog").where("editor", "==", me.uid), onRows("worklog"));
     }
     if (me.role === "admin" || me.worklog === "all" || me.worklog === "own") Store.watchDoc(col("settings").doc("worklog"), (d) => { S.wlSettings = d; render(); });
+    Store.watch("notifications", col("notifications").where("to", "==", me.uid), (rows) => { S.notes = new Map(rows); drawBell(); });
+    if (me.role === "admin") {
+      Store.watch("notifications", col("notifications").where("to", "==", "admins"), (rows) => { S.notesAdm = new Map(rows); drawBell(); });
+      Store.watchDoc(col("settings").doc("ratings"), (d) => { S.rtSettings = d || {}; drawBell(); if (view === "ratings") render(); });
+    }
     if (actAccess()) Store.watch("activity", col("activity").orderBy("at", "desc").limit(300), (rows) => { S.activity = rows.map(([id, d]) => ({ id, ...d })); got.add("activity"); if (view === "activity") render(); });
     if (me.role === "admin" || me.finance === "view") {
       Store.watch("business", col("finance"), onRows("finance"));
@@ -2045,9 +2076,9 @@ function rvRender() {
     const tc = c.t == null ? "" : canSeek ? `<button class="tc" data-seek="${Number(c.t)}" type="button" title="Jump to ${fmtTC(c.t)}">${fmtTC(c.t)}</button>` : `<span class="tc">${fmtTC(c.t)}</span>`;
     const jump = c.t != null && !isReply;
     return `<div class="cm${c.done ? " done" : ""}${isReply ? " reply" : ""}${jump ? " jump" : ""}${rv.active === c.id ? " active" : ""}" data-id="${esc(c.id)}"${jump ? ` data-t="${Number(c.t)}" data-v="${c.v || 1}" title="Go to ${fmtTC(c.t)}"` : ""}>
-      <div class="cm-h"><span class="av">${esc(initials(c.name))}</span><b>${esc(c.name || "Someone")}</b>${c.by === "client" ? `<span class="tag">Client</span>` : ""}${old ? `<span class="tag">v${c.v || 1}</span>` : ""}<span class="cm-at">${esc(fmtTime(c.at))}</span></div>
+      <div class="cm-h"><span class="av">${esc(initials(c.name))}</span><b>${esc(c.name || "Someone")}</b>${c.by === "client" ? `<span class="tag">Client</span>` : ""}${c.mis && !isReply && !isClient() ? `<span class="tag mis" title="Counts as a mistake in the editor's rating">Mistake</span>` : ""}${old ? `<span class="tag">v${c.v || 1}</span>` : ""}<span class="cm-at">${esc(fmtTime(c.at))}</span></div>
       <div class="cm-b">${tc}<span class="cm-text">${esc(c.text)}</span></div>
-      <div class="cm-a">${isReply ? "" : `<button type="button" data-reply>Reply</button><button type="button" data-done>${c.done ? "↺ Reopen" : "✓ Done"}</button>`}${mine || isAdmin() ? `<button type="button" data-del>Delete</button>` : ""}${c.done && !isReply ? `<span class="muted">Done${c.doneBy ? " by " + esc(c.doneBy) : ""}</span>` : ""}</div>
+      <div class="cm-a">${isReply ? "" : `<button type="button" data-reply>Reply</button><button type="button" data-done>${c.done ? "↺ Reopen" : "✓ Done"}</button>${isAdmin() ? `<button type="button" data-mis class="${c.mis ? "on" : ""}" title="Mistakes lower the editor's rating">${c.mis ? "⚠ Mistake (undo)" : "Mark as mistake"}</button>` : ""}`}${mine || isAdmin() ? `<button type="button" data-del>Delete</button>` : ""}${c.done && !isReply ? `<span class="muted">Done${c.doneBy ? " by " + esc(c.doneBy) : ""}</span>` : ""}</div>
       ${isReply ? "" : replies(c.id).map((r) => one(r, true)).join("")}
       ${!isReply && rv.replyTo === c.id ? `<div class="cm-rbox"><textarea id="rvReply" rows="2" placeholder="Write a reply…" aria-label="Reply">${esc(rv.replyText)}</textarea><div><button class="btn sm ghost" type="button" data-rcancel>Cancel</button><button class="btn sm primary" type="button" data-rsend>Reply</button></div></div>` : ""}
     </div>`;
@@ -2062,6 +2093,9 @@ function rvAdd(text, t, parent) {
   const c = { text: text.slice(0, 2000), t: t == null ? null : Math.round(t * 10) / 10, v: rv.view, vid: rv.vid, by: isClient() ? "client" : "team", uid: me.uid, name: (me.name || me.email || "").slice(0, 80), at: now(), parent: parent || "", done: false, doneBy: "", doneAt: "" };
   rv.comments.set(id, c); rvRender();
   Store.set("reviews/" + rv.id + "/comments", id, c);
+  { const tk = S.merged.get(rv.id) || {}, ttl = tk.title || "a video", who = me.name || "Someone";
+    if (c.by === "client") notifyTask(rv.id, { kind: "comment", title: `${who} commented on "${ttl}"`, body: (c.t != null ? fmtTC(c.t) + " · " : "") + c.text.slice(0, 160) }, { admins: true });
+    else if (tk.assignee && tk.assignee !== me.uid) notifyTask(rv.id, { kind: "comment", title: `${who} commented on "${ttl}"`, body: (c.t != null ? fmtTC(c.t) + " · " : "") + c.text.slice(0, 160) }); }
   logAct("comment", `${parent ? "Replied" : "Commented"}${c.t != null ? " at " + fmtTC(c.t) : ""} on v${c.v}: “${c.text.slice(0, 110)}”`, { id: rv.id, title: (S.merged.get(rv.id) || {}).title }, { every: 0 });
 }
 
@@ -2094,6 +2128,14 @@ $("#rvList").addEventListener("click", (e) => {
     const pid = rv.replyTo; rv.replyTo = rv.replyText = ""; rvAdd(txt, null, pid); return;
   }
   if (!c) return;
+  if (e.target.closest("[data-mis]")) {
+    if (!isAdmin()) return;
+    const patch = { mis: !c.mis };
+    rv.comments.set(id, { ...c, ...patch }); rvRender(); Store.update("reviews/" + rv.id + "/comments", id, patch);
+    if (typeof rtCache !== "undefined") rtCache.delete(rv.id);
+    logAct("rating", `${patch.mis ? "Marked" : "Unmarked"} a comment as a mistake: “${String(c.text || "").slice(0, 80)}”`, { id: rv.id, title: (S.merged.get(rv.id) || {}).title }, { every: 0 });
+    toast(patch.mis ? "Marked as a mistake. It counts in the editor's rating." : "No longer counted as a mistake"); return;
+  }
   if (e.target.closest("[data-done]")) {
     const patch = c.done ? { done: false, doneBy: "", doneAt: "" } : { done: true, doneBy: (me.name || "").split(" ")[0] || "", doneAt: now() };
     logAct("comment", patch.done ? "Marked a comment as done" : "Reopened a comment", { id: rv.id, title: (S.merged.get(rv.id) || {}).title }, { every: 20000 });
@@ -2740,21 +2782,34 @@ function renderMyCount(m) {
 }
 
 /* ---------------- editor ratings ----------------
-   Worked out in the browser from the tasks, their history and their comments. Nothing extra is stored.
-   Revisions = client revision requests + internal revisions (QC sending it back).
-   Mistakes  = comments pointing something out (not replies, not the editor's own comments), from the client or the team.
-   Rating    = 5, minus 0.8 for each revision per video and 0.15 for each mistake per video, never below 1.
+   Worked out in the browser from the tasks, their history and their comments, one month at a time.
+   A task counts in the month it was first sent to the client (or first sent back by QC, or assigned).
+   Revisions: each client revision takes off 1.0 per video, each internal revision 0.5 per video.
+   Mistakes:  only comments an admin marked as a mistake (c.mis), 0.25 each per video.
+   Rating = 5 minus those, never below 1. Below 3.5 for a month = another month on probation.
    Admins see everyone. An editor sees only their own rating, and only if an admin allows it (users/{uid}.rating = "own"). */
 const rtAccess = () => (isAdmin() ? "all" : isEditor() && me.rating === "own" ? "own" : "");
-const rtui = { month: "", editor: "", q: "" };
+const rtui = { month: null, editor: "", q: "" };          // month null = this month on first open, "" = all time
 const rtCache = new Map();          // taskId -> { at, list }
 let rtLoading = false, rtLoadedAt = 0;
-const RT_REV = 0.8, RT_MIS = 0.15;
-const rtScore = (videos, revs, mis) => (videos ? Math.max(1, Math.min(5, 5 - (revs / videos) * RT_REV - (mis / videos) * RT_MIS)) : null);
+const RT_CREV = 1.0, RT_IREV = 0.5, RT_MIS = 0.25, RT_PASS = 3.5;
+const rtScore = (videos, cRev, iRev, mis) => (videos ? Math.max(1, Math.min(5, 5 - (cRev * RT_CREV + iRev * RT_IREV + mis * RT_MIS) / videos)) : null);
+const fmtScore = (x) => (Math.floor(x * 10 + 1e-9) / 10).toFixed(1);     // rounded down, so 3.45 shows 3.4 and never looks like a pass
+const curMonth = () => new Date().toLocaleDateString("en-CA").slice(0, 7);
+const nextMonth = (k) => { const [y, m] = k.split("-").map(Number); return m === 12 ? `${y + 1}-01` : `${y}-${String(m + 1).padStart(2, "0")}`; };
+const prevMonth = (k) => { const [y, m] = k.split("-").map(Number); return m === 1 ? `${y - 1}-12` : `${y}-${String(m - 1).padStart(2, "0")}`; };
+const monthName = (k) => new Date(k + "-01T00:00:00").toLocaleDateString("en-GB", { month: "long", year: "numeric" });
+const monthShort = (k) => new Date(k + "-01T00:00:00").toLocaleDateString("en-GB", { month: "long" });
+// The probation line for one editor and one month.
+function probation(score, k) {
+  if (score == null) return null;
+  const done = k < curMonth(), on = score < RT_PASS;
+  return { on, done, text: on ? (done ? `Probation continues in ${monthShort(nextMonth(k))}` : `Below ${RT_PASS} so far: probation risk`) : (done ? `No probation in ${monthShort(nextMonth(k))}` : `On track: no probation`) };
+}
 function stars(score) {
   if (score == null) return `<span class="muted">No videos yet</span>`;
   const full = Math.round(score * 2) / 2;
-  return `<span class="stars" aria-label="${score.toFixed(1)} out of 5">${[1, 2, 3, 4, 5].map((i) => `<i class="${full >= i ? "on" : full >= i - 0.5 ? "half" : ""}">★</i>`).join("")}</span><b class="score">${score.toFixed(1)}</b>`;
+  return `<span class="stars" aria-label="${fmtScore(score)} out of 5">${[1, 2, 3, 4, 5].map((i) => `<i class="${full >= i ? "on" : full >= i - 0.5 ? "half" : ""}">★</i>`).join("")}</span><b class="score">${fmtScore(score)}</b>`;
 }
 async function rtLoad(force) {
   if (rtLoading) return;
@@ -2778,7 +2833,7 @@ function rtRows() {
   return [...S.merged.entries()].filter(([id, t]) => id !== ui.draftId && t.assignee && (acc === "all" || t.assignee === me.uid)).map(([id, t]) => {
     const h = t.history || [], sent = h.find((x) => x.state === "review");
     const vids = videosOf(t).filter((v) => v.versions.length);
-    const comments = (rtCache.get(id) || { list: [] }).list.filter((c) => !c.parent && c.uid !== t.assignee);
+    const comments = (rtCache.get(id) || { list: [] }).list.filter((c) => !c.parent && c.mis);        // only comments marked as a mistake
     const firstVid = videosOf(t)[0].id;
     const perVideo = vids.map((v) => ({ name: v.name, versions: v.versions.length, mistakes: comments.filter((c) => (c.vid || firstVid) === v.id).length }));
     const aCRev = h.filter((x) => x.state === "revision").length, aIRev = h.filter((x) => x.state === "intrev").length;
@@ -2789,14 +2844,14 @@ function rtRows() {
     const fixed = Object.keys(auto).filter((k) => Number.isFinite(fix[k]) && fix[k] !== auto[k]);
     const cRev = eff("cRev"), iRev = eff("iRev"), cMis = eff("cMis"), tMis = eff("tMis");
     return { id, title: t.title || "Untitled task", editor: t.assignee, editorName: personName(t.assignee) || "Former member", client: personName(t.client),
-      delivered: sent ? isoDay(sent.at) : "", status: t.status || "todo", videos: eff("videos"), sentOnce: !!sent, reach: !!sent || aIRev > 0 || comments.length > 0 || fixed.length > 0, auto, fixed,
+      delivered: sent ? isoDay(sent.at) : "", month: (sent ? isoDay(sent.at) : isoDay((h.find((x) => x.state === "intrev") || {}).at || t.assignedAt || t.createdAt || "")).slice(0, 7), status: t.status || "todo", videos: eff("videos"), sentOnce: !!sent, reach: !!sent || aIRev > 0 || comments.length > 0 || fixed.length > 0, auto, fixed,
       cRev, iRev, revs: cRev + iRev, cMis, tMis, mis: cMis + tMis, perVideo, firstTime: t.status === "approved" && cRev === 0, approved: t.status === "approved" };
   }).filter((r) => r.reach);       // only work that reached review counts
 }
 function rtTotals(rows) {
   const t = { videos: 0, revs: 0, cRev: 0, iRev: 0, mis: 0, cMis: 0, tMis: 0, approved: 0, firstTime: 0, jobs: rows.length };
   rows.forEach((r) => { ["videos", "revs", "cRev", "iRev", "mis", "cMis", "tMis"].forEach((k) => (t[k] += r[k])); if (r.approved) t.approved++; if (r.firstTime) t.firstTime++; });
-  t.score = rtScore(t.videos, t.revs, t.mis);
+  t.score = rtScore(t.videos, t.cRev, t.iRev, t.mis);
   return t;
 }
 function rtSave(id, patch) {
@@ -2809,15 +2864,40 @@ function rtSave(id, patch) {
   logAct("rating", patch === null ? "Reset the rating corrections" : "Corrected " + Object.entries(patch).map(([k, v]) => `${LBL[k]} ${r.auto[k]} → ${v}`).join(", ") + " for " + (r.editorName || "an editor"), { id, title: r.title }, { every: 0 });
   S.tasks.set(id, { ...t, ratingFix }); Store.update("tasks", id, { ratingFix }); merge();
 }
+// Each editor's rating for each month, worked out from the same rows.
+function rtMonthly(all) {
+  const out = new Map();
+  all.forEach((r) => { if (!r.month) return; const e = out.get(r.editor) || { name: r.editorName, months: new Map() }; (e.months.get(r.month) || e.months.set(r.month, []).get(r.month)).push(r); out.set(r.editor, e); });
+  out.forEach((e) => e.months.forEach((rows, k) => e.months.set(k, rtTotals(rows))));
+  return out;
+}
+// Tell each editor (and the admins) how the month went. Ids are fixed per month and editor, so sending again replaces the old notice.
+function rtSendResults(k) {
+  if (!isAdmin()) return;
+  if (rtLoading) { toast("Still counting comments. Try again in a moment."); return; }
+  const mon = rtMonthly(rtRows()), lines = [];
+  mon.forEach((e, ed) => {
+    const t = e.months.get(k); if (!t || t.score == null) return;
+    const p = probation(t.score, k);
+    notify([ed], { kind: "probation", title: `Your ${monthName(k)} rating: ${fmtScore(t.score)} ★`, body: `${p.on ? `Below ${RT_PASS}, so your probation continues for another month (${monthName(nextMonth(k))}).` : `${RT_PASS} or above, so there's no probation in ${monthName(nextMonth(k))}. Well done.`} ${t.videos} video${t.videos === 1 ? "" : "s"}, ${t.cRev} client revision${t.cRev === 1 ? "" : "s"}, ${t.iRev} internal, ${t.mis} mistake${t.mis === 1 ? "" : "s"}.` }, `prob-${k}-${ed}`);
+    lines.push(`${e.name} ${fmtScore(t.score)} (${p.on ? "probation" : "no probation"})`);
+  });
+  if (!lines.length) { toast("No rated videos in " + monthName(k)); return; }
+  notify(["admins"], { kind: "probation", title: `${monthName(k)} ratings sent`, body: lines.join(" · ") }, `prob-${k}-admins`);
+  const sent = { ...((S.rtSettings && S.rtSettings.sent) || {}), [k]: now() };
+  S.rtSettings = { ...(S.rtSettings || {}), sent }; Store.set("settings", "ratings", S.rtSettings);
+  logAct("rating", `Sent ${monthName(k)} rating and probation results to ${lines.length} editor${lines.length === 1 ? "" : "s"}`, null, { every: 0 });
+  toast(`Sent to ${lines.length} editor${lines.length === 1 ? "" : "s"}`); render();
+}
 function renderRatings(m) {
   const acc = rtAccess();
   const fa = document.activeElement, keepRt = fa && fa.matches && fa.matches("#main input[data-rt]") ? { id: fa.dataset.id, k: fa.dataset.rt, val: fa.value, s: (() => { try { return [fa.selectionStart, fa.selectionEnd]; } catch (e) { return null; } })() } : null; if (!acc) { view = "board"; renderBoard(m); return; }
   rtLoad(false);
+  if (rtui.month === null) rtui.month = curMonth();
   const all = rtRows();
-  const months = [...new Set(all.map((r) => r.delivered.slice(0, 7)).filter(Boolean))].sort().reverse();
+  const months = [...new Set([curMonth(), ...all.map((r) => r.month).filter(Boolean)])].sort().reverse();
   const q = rtui.q.trim().toLowerCase();
-  const rows = all.filter((r) => (!rtui.month || r.delivered.slice(0, 7) === rtui.month) && (!rtui.editor || r.editor === rtui.editor) && (!q || (r.title + " " + r.client + " " + r.editorName).toLowerCase().includes(q)));
-  const monthName = (k) => new Date(k + "-01T00:00:00").toLocaleDateString("en-GB", { month: "long", year: "numeric" });
+  const rows = all.filter((r) => (!rtui.month || r.month === rtui.month) && (!rtui.editor || r.editor === rtui.editor) && (!q || (r.title + " " + r.client + " " + r.editorName).toLowerCase().includes(q)));
   const eds = [...new Set(rows.map((r) => r.editor))].map((ed) => { const rr = rows.filter((r) => r.editor === ed); return { ed, name: rr[0].editorName, t: rtTotals(rr) }; })
     .sort((a, b) => (b.t.score || 0) - (a.t.score || 0) || a.name.localeCompare(b.name));
   const allEds = [...new Map(all.map((r) => [r.editor, r.editorName])).entries()];
@@ -2825,29 +2905,39 @@ function renderRatings(m) {
     ? `<td class="num"><input class="wl-in num rt-in${r.fixed.includes(k) ? " edited" : ""}" type="number" min="0" max="999" step="1" data-rt="${k}" data-id="${esc(r.id)}" value="${r[k]}" title="${r.fixed.includes(k) ? "Corrected by you. Counted automatically: " + r.auto[k] : "Counted automatically. Type a number to correct it."}" aria-label="${k} for ${esc(r.title)}"></td>`
     : `<td class="num ${bad && r[k] ? "bad" : ""}">${r[k]}</td>`;
   const per = (n, d) => (d ? (n / d).toFixed(1) : "0");
+  const prob = (score) => { const p = rtui.month ? probation(score, rtui.month) : null; return p ? `<div class="rt-prob ${p.on ? "on" : "ok"}">${p.on ? "⚠" : "✓"} ${esc(p.text)}</div>` : ""; };
   const card = (e) => `<button class="rt-card${rtui.editor === e.ed ? " on" : ""}" data-ed="${esc(e.ed)}" type="button">
       <div class="rt-top"><span class="av">${esc(initials(e.name))}</span><b>${esc(e.name)}</b></div>
-      <div class="rt-stars">${stars(e.t.score)}</div>
+      <div class="rt-stars">${stars(e.t.score)}</div>${prob(e.t.score)}
       <dl><div><dt>Videos</dt><dd>${e.t.videos}</dd></div><div><dt>Revisions</dt><dd>${e.t.revs}<small>${e.t.cRev} client · ${e.t.iRev} internal</small></dd></div>
         <div><dt>Mistakes</dt><dd>${e.t.mis}<small>${e.t.cMis} client · ${e.t.tMis} team</small></dd></div>
         <div><dt>Per video</dt><dd>${per(e.t.revs, e.t.videos)} rev · ${per(e.t.mis, e.t.videos)} mistakes</dd></div>
         <div><dt>Approved first time</dt><dd>${e.t.approved ? Math.round((e.t.firstTime / e.t.approved) * 100) + "%" : "—"}<small>${e.t.firstTime} of ${e.t.approved} approved</small></dd></div></dl></button>`;
+  // Month-by-month results, newest first, with the probation decision for each finished month.
+  const mon = rtMonthly(all), histMonths = [...new Set(all.map((r) => r.month).filter(Boolean))].sort().reverse().slice(0, 6);
+  const hist = mon.size && histMonths.length ? `<div class="rt-hist"><h3 class="fi-h">Month by month</h3><div class="tablewrap"><table class="list wl"><thead><tr><th>Editor</th>${histMonths.map((k) => `<th>${esc(monthName(k))}${k === curMonth() ? " <small class='muted'>(so far)</small>" : ""}</th>`).join("")}</tr></thead><tbody>
+      ${[...mon.entries()].filter(([ed]) => !rtui.editor || ed === rtui.editor).map(([ed, e]) => `<tr><td><b>${esc(e.name)}</b></td>${histMonths.map((k) => { const t = e.months.get(k); if (!t || t.score == null) return `<td class="muted">—</td>`; const p = probation(t.score, k); return `<td><b class="num">${fmtScore(t.score)}</b> <span class="rt-prob sm ${p.on ? "on" : "ok"}">${p.on ? (p.done ? "Probation" : "At risk") : (p.done ? "No probation" : "On track")}</span></td>`; }).join("")}</tr>`).join("")}</tbody></table></div></div>` : "";
+  const sentAt = rtui.month && S.rtSettings && S.rtSettings.sent && S.rtSettings.sent[rtui.month];
+  const canSend = acc === "all" && isAdmin() && rtui.month && rtui.month < curMonth() && eds.length;
   m.innerHTML = `<div class="bar"><h1>${acc === "own" ? "My rating" : "Editor ratings"}</h1>
       <input type="search" id="rtq" placeholder="Search videos or clients" value="${esc(rtui.q)}" aria-label="Search ratings">
-      <select id="rtMonth" aria-label="Month"><option value="">All time</option>${months.map((k) => `<option value="${k}" ${k === rtui.month ? "selected" : ""}>${esc(monthName(k))}</option>`).join("")}</select>
+      <select id="rtMonth" aria-label="Month">${months.map((k) => `<option value="${k}" ${k === rtui.month ? "selected" : ""}>${esc(monthName(k))}${k === curMonth() ? " (this month)" : ""}</option>`).join("")}<option value="" ${!rtui.month ? "selected" : ""}>All time</option></select>
       ${acc === "all" ? `<select id="rtEd" aria-label="Editor"><option value="">All editors</option>${allEds.map(([id, n]) => `<option value="${esc(id)}" ${id === rtui.editor ? "selected" : ""}>${esc(n)}</option>`).join("")}</select>` : ""}
       <button class="btn" id="rtRefresh" type="button">${rtLoading ? "Counting comments…" : "↻ Refresh"}</button></div>
+    ${canSend ? `<div class="rt-send"><span>${sentAt ? `${esc(monthName(rtui.month))} results were sent on ${esc(fmtTime(sentAt))}.` : `${esc(monthName(rtui.month))} is finished. Check the numbers below, then send each editor their rating and probation result.`}</span><button class="btn ${sentAt ? "" : "primary"} sm" id="rtSend" type="button">${sentAt ? "Send again" : "🔔 Send results to editors"}</button></div>` : ""}
     ${eds.length ? `<div class="rt-cards">${eds.map(card).join("")}</div>` : ""}
     ${rows.length ? `<div class="tablewrap"><table class="list wl" style="min-width:900px"><thead><tr>${acc === "all" ? "<th>Editor</th>" : ""}<th>Video</th><th>Client</th><th>Delivered</th><th>Videos</th><th>Client revisions</th><th>Internal revisions</th><th>Client mistakes</th><th>Team mistakes</th><th>Status</th></tr></thead><tbody>
       ${rows.sort((a, b) => String(b.delivered).localeCompare(String(a.delivered))).map((r) => `<tr>${acc === "all" ? `<td>${esc(r.editorName)}</td>` : ""}<td class="wl-title"><b>${esc(r.title)}</b>${r.perVideo.length > 1 ? `<small class="muted" style="display:block">${r.perVideo.map((v) => `${esc(v.name)}: ${v.mistakes} mistake${v.mistakes === 1 ? "" : "s"}, v${v.versions}`).join(" · ")}</small>` : ""}</td>
         <td>${esc(r.client) || '<span class="muted">—</span>'}</td><td class="num">${esc(fmtDate(r.delivered)) || '<span class="muted">—</span>'}</td>${cell(r, "videos")}${cell(r, "cRev", 1)}${cell(r, "iRev")}${cell(r, "cMis", 1)}${cell(r, "tMis")}
         <td><span class="pill" data-st="${esc(r.status)}">${esc(ST[r.status]?.label || r.status)}</span>${r.firstTime ? ` <span class="ok" title="Approved without any client revision">✓ first time</span>` : ""}${acc === "all" && r.fixed.length ? ` <button class="btn sm" data-rtreset="${esc(r.id)}" type="button" title="Go back to the automatic count">↺ Reset</button>` : ""}</td></tr>`).join("")}</tbody></table></div>`
-      : `<div class="empty"><b>${loaded ? "No rated videos yet" : "Loading…"}</b>${loaded ? "Videos count here once they've been sent to the client or through internal QC." : ""}</div>`}
-    <p class="muted" style="font-size:12.5px;margin-top:10px">How it's worked out: every editor starts at 5 stars. Each revision per video takes off ${RT_REV}, each mistake per video takes off ${RT_MIS}, and it never goes below 1. Revisions = client revision requests + internal revisions. Mistakes = comments on the video from the client or the team (replies and the editor's own comments don't count).${acc === "all" ? " You can correct any number in the table (for example when a card was dragged to the wrong board). Corrected numbers are highlighted, and ↺ Reset goes back to the automatic count." : ""}</p>`;
+      : `<div class="empty"><b>${loaded ? "No rated videos " + (rtui.month ? "in " + esc(monthName(rtui.month)) : "yet") : "Loading…"}</b>${loaded ? "Videos count here once they've been sent to the client or through internal QC." : ""}</div>`}
+    ${hist}
+    <p class="muted" style="font-size:12.5px;margin-top:10px">How it's worked out, per month: every editor starts at 5 stars. Per video, each client revision takes off ${RT_CREV.toFixed(1)}, each internal revision ${RT_IREV}, and each mistake ${RT_MIS}. It never goes below 1. Mistakes are only the comments an admin marked as a mistake in the video review. Below ${RT_PASS} in a month means another month on probation; ${RT_PASS} or above means no probation.${acc === "all" ? " You can correct any number in the table (for example when a card was dragged to the wrong board). Corrected numbers are highlighted, and ↺ Reset goes back to the automatic count." : ""}</p>`;
   $("#rtq").addEventListener("input", (e) => { rtui.q = e.target.value; render(); });
   $("#rtMonth").addEventListener("change", (e) => { rtui.month = e.target.value; render(); });
   $("#rtEd")?.addEventListener("change", (e) => { rtui.editor = e.target.value; render(); });
   $("#rtRefresh").addEventListener("click", () => rtLoad(true));
+  $("#rtSend")?.addEventListener("click", () => rtSendResults(rtui.month));
   $$(".rt-card", m).forEach((c) => c.addEventListener("click", () => { if (acc !== "all") return; rtui.editor = rtui.editor === c.dataset.ed ? "" : c.dataset.ed; render(); }));
   $$("[data-rt]", m).forEach((i) => i.addEventListener("change", () => { const n = Math.max(0, Math.min(999, Math.round(Number(i.value) || 0))); rtSave(i.dataset.id, { [i.dataset.rt]: n }); setTimeout(render, 0); }));
   $$("[data-rtreset]", m).forEach((b) => b.addEventListener("click", () => { rtSave(b.dataset.rtreset, null); setTimeout(render, 0); }));
@@ -3033,6 +3123,7 @@ function logTaskDiff(id, a, b) {
   if (!a || !b || id === ui.draftId) return;
   const t = { id, title: b.title || a.title }, nm = (x) => personName(x) || "nobody";
   if ((a.title || "") !== (b.title || "") && a.title) logAct("edit", `Renamed "${a.title}" to "${b.title}"`, t, { every: 5000 });
+  if ((a.assignee || "") !== (b.assignee || "") && b.assignee) notify([b.assignee], { kind: "assign", title: `New task: "${b.title || "Untitled"}"`, body: b.due ? "Due " + fmtDate(b.due) : "", taskId: id });
   if ((a.assignee || "") !== (b.assignee || "")) logAct("assign", b.assignee ? `Assigned to ${nm(b.assignee)}${a.assignee ? ` (was ${nm(a.assignee)})` : ""}` : `Unassigned (was ${nm(a.assignee)})`, t, { every: 0 });
   if ((a.client || "") !== (b.client || "")) logAct("edit", `Client changed to ${b.client ? nm(b.client) : "none"}`, t, { every: 5000 });
   if ((a.due || "") !== (b.due || "")) logAct("edit", `Due date ${a.due || "none"} → ${b.due || "none"}`, t, { every: 5000 });
@@ -3062,6 +3153,82 @@ function renderActivity(m) {
   $("#acType").addEventListener("change", (e) => { actui.type = e.target.value; render(); });
   $$("[data-actopen]", m).forEach((a) => a.addEventListener("click", (e) => { e.preventDefault(); openTask(a.dataset.actopen); }));
 }
+
+/* ---------------- notifications (the bell) ----------------
+   notifications/{id} = { to: uid or "admins", by, byName, at, kind, title, body, taskId, readBy: [uid] }.
+   Whoever does something writes the notice for the people it concerns; only the person it's for (or any admin,
+   for "admins" notices) can read it. Clients don't get a bell. */
+S.notes = new Map(); S.notesAdm = new Map();
+const adminIds = () => [...S.users.entries()].filter(([, u]) => u.role === "admin" && !u.actsAs).map(([id]) => id);
+function notify(to, n, fixedId) {
+  try {
+    if (!me) return;
+    [...new Set(to)].filter((u) => u && u !== me.uid).forEach((u) => {
+      const d = { to: u, by: me.uid, byName: String(me.name || me.email || "Someone").slice(0, 80), at: now(), kind: n.kind || "info", title: String(n.title || "").slice(0, 200), body: String(n.body || "").slice(0, 500), taskId: String(n.taskId || ""), readBy: [] };
+      fs.collection("notifications").doc(fixedId ? (u === "admins" ? fixedId : fixedId.replace(/-admins$/, "")) : uid()).set(d).catch(() => {});
+    });
+  } catch (e) {}
+}
+// Who should hear about something that happened on a task.
+function notifyTask(id, n, opts) {
+  const t = S.merged.get(id) || {}; opts = opts || {};
+  const to = [];
+  if (opts.editor !== false && t.assignee) to.push(t.assignee);
+  if (opts.admins) to.push("admins");
+  notify(to, { ...n, taskId: id });
+}
+const noteList = () => [...S.notes.entries(), ...S.notesAdm.entries()].map(([id, d]) => ({ id, ...d })).sort((a, b) => String(b.at).localeCompare(String(a.at)));
+const isRead = (n) => (n.readBy || []).includes(me.uid);
+// Admins also get a reminder (not stored) when last month's ratings haven't been sent yet.
+function rtReminder() {
+  if (!isAdmin() || typeof rtRows !== "function") return null;
+  const k = prevMonth(curMonth());
+  if (S.rtSettings && S.rtSettings.sent && S.rtSettings.sent[k]) return null;
+  if (!rtRows().some((r) => r.month === k)) return null;
+  return { id: "rt-reminder", kind: "probation", title: `${monthName(k)} ratings are ready`, body: "Check the numbers, then send each editor their rating and probation result.", at: k + "-28T00:00:00", readBy: [], local: true };
+}
+function drawBell() {
+  const b = $("#bellBtn"); if (!b) return;
+  const team = !!me && !isClient(); b.hidden = !team; if (!team) { $("#bellPanel").hidden = true; return; }
+  const rem = rtReminder(), list = noteList(), unread = list.filter((n) => !isRead(n)).length + (rem ? 1 : 0);
+  $("#bellN").textContent = unread > 99 ? "99+" : String(unread); $("#bellN").hidden = !unread;
+  b.setAttribute("aria-label", unread ? `Notifications, ${unread} new` : "Notifications");
+  if ($("#bellPanel").hidden) return;
+  const items = (rem ? [rem] : []).concat(list.slice(0, 60));
+  $("#bellList").innerHTML = items.length ? items.map((n) => `<button class="nt${isRead(n) && !n.local ? "" : " new"}" data-nid="${esc(n.id)}" type="button">
+      <span class="nt-ic ${esc(n.kind)}" aria-hidden="true">${{ probation: "★", assign: "＋", decision: "✓", comment: "💬", status: "→" }[n.kind] || "•"}</span>
+      <span class="nt-b"><b>${esc(n.title)}</b>${n.body ? `<span>${esc(n.body)}</span>` : ""}<small>${n.local ? "Reminder" : esc((n.byName ? n.byName + " · " : "") + fmtTime(n.at))}</small></span></button>`).join("")
+    : `<div class="nt-empty">No notifications yet. You'll see new tasks, client decisions, comments and monthly ratings here.</div>`;
+}
+function markRead(ids) {
+  ids.forEach((id) => {
+    const map = S.notes.has(id) ? S.notes : S.notesAdm.has(id) ? S.notesAdm : null; if (!map) return;
+    const n = map.get(id); if (isRead(n)) return;
+    const readBy = [...(n.readBy || []), me.uid].slice(-50); map.set(id, { ...n, readBy });
+    fs.collection("notifications").doc(id).update({ readBy }).catch(() => {});
+  });
+  drawBell();
+}
+function openBell(on) {
+  const p = $("#bellPanel"); p.hidden = !on; $("#bellBtn").setAttribute("aria-expanded", String(on));
+  if (on) { drawBell(); setTimeout(() => $("#bellList .nt")?.focus(), 0); }
+}
+$("#bellBtn").addEventListener("click", (e) => { e.stopPropagation(); openBell($("#bellPanel").hidden); });
+$("#bellAll").addEventListener("click", () => markRead(noteList().filter((n) => !isRead(n)).map((n) => n.id)));
+$("#bellClear").addEventListener("click", () => {
+  const gone = [...S.notes.entries()].filter(([, n]) => isRead(n)).map(([id]) => id);
+  gone.forEach((id) => { S.notes.delete(id); fs.collection("notifications").doc(id).delete().catch(() => {}); });
+  drawBell(); toast(gone.length ? `Cleared ${gone.length}` : "Nothing to clear");
+});
+$("#bellList").addEventListener("click", (e) => {
+  const b = e.target.closest("[data-nid]"); if (!b) return;
+  const id = b.dataset.nid, n = noteList().find((x) => x.id === id) || (id === "rt-reminder" ? rtReminder() : null); if (!n) return;
+  markRead([id]); openBell(false);
+  if (n.kind === "probation" && rtAccess()) { view = "ratings"; if (id === "rt-reminder") rtui.month = prevMonth(curMonth()); render(); return; }
+  if (n.taskId && S.merged.has(n.taskId)) { view = view === "board" || view === "tasks" ? view : "board"; render(); openTask(n.taskId); }
+});
+document.addEventListener("click", (e) => { if (!$("#bellPanel").hidden && !e.target.closest("#bellPanel, #bellBtn")) openBell(false); });
+addEventListener("keydown", (e) => { if (e.key === "Escape" && !$("#bellPanel").hidden) { openBell(false); $("#bellBtn").focus(); } });
 
 /* ---------------- loading screen ---------------- */
 const bootAt = performance.now();
