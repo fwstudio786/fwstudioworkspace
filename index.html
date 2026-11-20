@@ -414,7 +414,7 @@ body.boardview main { padding-bottom: 0; }
 .board .col.got { animation: got 1.1s ease-out; }
 @keyframes got { 0% { box-shadow: 0 0 0 2px var(--accent); } 100% { box-shadow: 0 0 0 0 transparent; } }
 @media (prefers-reduced-motion: reduce) { .card.landed, .board .col.got { animation: none; } }
-.board .col.drop .cards::after { content: "Drop here"; display: grid; place-items: center; min-height: 64px; border-radius: 10px; border: 1px dashed var(--accent); color: var(--accent); font-weight: 600; font-size: 13px; }
+.board .col.drop .cards::after { content: "Drop here"; display: grid; place-items: end center; padding-bottom: 20px; box-sizing: border-box; min-height: var(--slot, 64px); transition: min-height .16s ease-out; border-radius: 10px; border: 1px dashed var(--accent); color: var(--accent); font-weight: 600; font-size: 13px; }
 .col[data-st="cancelled"] .card { opacity: .7; }
 /* ---- work log ---- */
 .wl-tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 8px; margin-bottom: 14px; }
@@ -1091,7 +1091,7 @@ function renderBoard(m) {
   $$(".card", m).forEach((c) => {
     c.addEventListener("click", () => openTask(c.dataset.id));
     c.addEventListener("dragstart", (e) => { e.dataTransfer.setData("text/plain", c.dataset.id); e.dataTransfer.effectAllowed = "move"; c.classList.add("dragging"); });
-    c.addEventListener("dragend", () => { c.classList.remove("dragging"); $$(".col.drop").forEach((x) => x.classList.remove("drop")); });
+    c.addEventListener("dragend", () => { c.classList.remove("dragging"); $$(".col.drop").forEach((x) => { x.classList.remove("drop"); x.style.removeProperty("--slot"); }); });
   });
   // Dropping works anywhere in a column's strip, even below a short column, so a card at the bottom of a long list
   // can go straight across. The column under the mouse lights up; near the edges the board scrolls sideways.
@@ -1100,14 +1100,20 @@ function renderBoard(m) {
   board?.addEventListener("dragover", (e) => {
     e.preventDefault(); e.dataTransfer.dropEffect = "move";
     const col = colAt(e.clientX);
-    $$(".col.drop", board).forEach((x) => { if (x !== col) x.classList.remove("drop"); });
-    col && col.classList.add("drop");
+    $$(".col.drop", board).forEach((x) => { if (x !== col) { x.classList.remove("drop"); x.style.removeProperty("--slot"); } });
+    if (col) {
+      col.classList.add("drop");
+      // The "Drop here" slot stretches down to the card you're holding, so the box follows it.
+      const cards = $(".cards", col), last = $$(".card", cards).pop(), top = last ? last.getBoundingClientRect().bottom + 8 : cards.getBoundingClientRect().top + 10;
+      col.style.setProperty("--slot", Math.round(Math.min(Math.max(64, e.clientY - top + 46), board.getBoundingClientRect().bottom - top - 24)) + "px");
+    }
     const r = board.getBoundingClientRect();
     if (e.clientX > r.right - 70) board.scrollLeft += 18; else if (e.clientX < r.left + 70) board.scrollLeft -= 18;
   });
-  board?.addEventListener("dragleave", (e) => { if (!board.contains(e.relatedTarget)) $$(".col.drop", board).forEach((x) => x.classList.remove("drop")); });
+  const clearDrop = () => $$(".col.drop", board).forEach((x) => { x.classList.remove("drop"); x.style.removeProperty("--slot"); });
+  board?.addEventListener("dragleave", (e) => { if (!board.contains(e.relatedTarget)) clearDrop(); });
   board?.addEventListener("drop", (e) => {
-    e.preventDefault(); const col = colAt(e.clientX); $$(".col.drop", board).forEach((x) => x.classList.remove("drop"));
+    e.preventDefault(); const col = colAt(e.clientX); clearDrop();
     const id = e.dataTransfer.getData("text/plain"); if (!id || !col) return;
     const t = S.merged.get(id); if (t && boardCol(t) === col.dataset.st) return;
     ui.landed = { id, from: t ? boardCol(t) : "", until: Date.now() + 1100 }; dropOn(id, col.dataset.st);
