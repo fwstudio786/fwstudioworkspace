@@ -439,7 +439,7 @@ table.list.wl tr.is-paid td { background: color-mix(in srgb, var(--st-approved) 
 .nt { display: flex; gap: 10px; width: 100%; text-align: left; padding: 11px 12px; border: 0; border-bottom: 1px solid var(--line); background: none; color: var(--fg); font: inherit; cursor: pointer; }
 .nt:hover, .nt:focus-visible { background: var(--panel-2); } .nt.new { background: color-mix(in srgb, var(--panel) 88%, var(--accent) 12%); }
 .nt-ic { flex: none; width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center; background: var(--panel-2); font-size: 13px; }
-.nt-ic.probation { color: #f5c84c; } .nt-ic.decision { color: #3ecf8e; }
+.nt-ic.probation { color: #f5c84c; } .nt-ic.intrev { color: #ff8a3d; } .nt-ic.decision { color: #3ecf8e; }
 .nt-b { display: grid; gap: 2px; min-width: 0; font-size: 13px; } .nt-b span { color: var(--muted); overflow-wrap: anywhere; } .nt-b small { color: var(--faint); font-size: 11.5px; }
 .nt-empty { padding: 18px 14px; color: var(--muted); font-size: 13px; }
 .rt-prob { font-size: 12.5px; font-weight: 600; padding: 5px 8px; border-radius: 7px; } .rt-prob.on { color: #ff6b6b; background: rgba(255, 107, 107, .12); } .rt-prob.ok { color: #3ecf8e; background: rgba(62, 207, 142, .12); }
@@ -1239,6 +1239,7 @@ function setStatus(id, status, note, by, quiet) {
     else logAct("status", `${(ST[boardCol(cur)] || {}).label || r.status} → ${ST[status].label}${note ? ": " + note.slice(0, 120) : ""}`, lt, { every: 0 });
     const nm = me.name || "Someone", ttl = cur.title || r.title || "a video";
     if (by === "client") notifyTask(id, { kind: "decision", title: status === "approved" ? `${nm} approved "${ttl}"` : status === "revision" ? `${nm} asked for changes on "${ttl}"` : `${nm} marked "${ttl}" ${(ST[status] || {}).label}`, body: note || "" }, { admins: true });
+    else if (status === "intrev" && cur.assignee && cur.assignee !== me.uid) notifyTask(id, { kind: "intrev", title: `${nm} gave internal revisions on "${ttl}"`, body: note || "Open the video to see what needs changing." });
     else if (cur.assignee && cur.assignee !== me.uid) notifyTask(id, { kind: "status", title: `"${ttl}" moved to ${ST[status].label}`, body: note || "" });
     else if (cur.assignee === me.uid && ["qc", "review"].includes(status)) notifyTask(id, { kind: "status", title: `${nm} sent "${ttl}" to ${ST[status].label}` }, { editor: false, admins: true }); }
   if (status === "review" && by !== "client") {
@@ -2095,6 +2096,12 @@ function rvAdd(text, t, parent) {
   Store.set("reviews/" + rv.id + "/comments", id, c);
   { const tk = S.merged.get(rv.id) || {}, ttl = tk.title || "a video", who = me.name || "Someone";
     if (c.by === "client") notifyTask(rv.id, { kind: "comment", title: `${who} commented on "${ttl}"`, body: (c.t != null ? fmtTC(c.t) + " · " : "") + c.text.slice(0, 160) }, { admins: true });
+    else if ((tk.status || "todo") === "intrev" || (tk.status || "todo") === "qc") {
+      // Internal review: the reviewer's notes go to the editor; the editor's answers go to the admins.
+      const body = (c.t != null ? fmtTC(c.t) + " · " : "") + c.text.slice(0, 160), stage = tk.status === "qc" ? "Internal QC" : "internal revisions";
+      if (tk.assignee && tk.assignee !== me.uid) notifyTask(rv.id, { kind: "intrev", title: `${who} added ${parent ? "a reply" : "an internal revision note"} on "${ttl}"`, body });
+      else if (tk.assignee === me.uid) notifyTask(rv.id, { kind: "intrev", title: `${who} ${parent ? "replied" : "commented"} in ${stage} on "${ttl}"`, body }, { editor: false, admins: true });
+    }
     else if (tk.assignee && tk.assignee !== me.uid) notifyTask(rv.id, { kind: "comment", title: `${who} commented on "${ttl}"`, body: (c.t != null ? fmtTC(c.t) + " · " : "") + c.text.slice(0, 160) }); }
   logAct("comment", `${parent ? "Replied" : "Commented"}${c.t != null ? " at " + fmtTC(c.t) : ""} on v${c.v}: “${c.text.slice(0, 110)}”`, { id: rv.id, title: (S.merged.get(rv.id) || {}).title }, { every: 0 });
 }
@@ -3196,7 +3203,7 @@ function drawBell() {
   if ($("#bellPanel").hidden) return;
   const items = (rem ? [rem] : []).concat(list.slice(0, 60));
   $("#bellList").innerHTML = items.length ? items.map((n) => `<button class="nt${isRead(n) && !n.local ? "" : " new"}" data-nid="${esc(n.id)}" type="button">
-      <span class="nt-ic ${esc(n.kind)}" aria-hidden="true">${{ probation: "★", assign: "＋", decision: "✓", comment: "💬", status: "→" }[n.kind] || "•"}</span>
+      <span class="nt-ic ${esc(n.kind)}" aria-hidden="true">${{ probation: "★", assign: "＋", decision: "✓", comment: "💬", status: "→", intrev: "↻" }[n.kind] || "•"}</span>
       <span class="nt-b"><b>${esc(n.title)}</b>${n.body ? `<span>${esc(n.body)}</span>` : ""}<small>${n.local ? "Reminder" : esc((n.byName ? n.byName + " · " : "") + fmtTime(n.at))}</small></span></button>`).join("")
     : `<div class="nt-empty">No notifications yet. You'll see new tasks, client decisions, comments and monthly ratings here.</div>`;
 }
