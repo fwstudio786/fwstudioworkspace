@@ -436,8 +436,18 @@ table.list.wl tr.is-paid td { background: color-mix(in srgb, var(--st-approved) 
 .bell-panel { position: absolute; right: 0; top: calc(100% + 8px); width: min(380px, calc(100vw - 24px)); max-height: min(70vh, 560px); display: flex; flex-direction: column; background: var(--panel); border: 1px solid var(--line-2); border-radius: 12px; box-shadow: 0 18px 50px rgba(0, 0, 0, .45); z-index: 60; overflow: hidden; }
 .bell-h { display: flex; align-items: center; gap: 6px; padding: 10px 12px; border-bottom: 1px solid var(--line); } .bell-h b { margin-right: auto; font-size: 14px; }
 .bell-list { overflow-y: auto; }
-.nt { display: flex; gap: 10px; width: 100%; text-align: left; padding: 11px 12px; border: 0; border-bottom: 1px solid var(--line); background: none; color: var(--fg); font: inherit; cursor: pointer; }
-.nt:hover, .nt:focus-visible { background: var(--panel-2); } .nt.new { background: color-mix(in srgb, var(--panel) 88%, var(--accent) 12%); }
+.nt-row { position: relative; border-bottom: 1px solid var(--line); transition: opacity .18s, transform .18s; }
+.nt-row.new { background: color-mix(in srgb, var(--panel) 88%, var(--accent) 12%); } .nt-row.gone { opacity: 0; transform: translateX(24px); }
+.nt { display: flex; gap: 10px; width: 100%; text-align: left; padding: 11px 44px 11px 12px; border: 0; background: none; color: var(--fg); font: inherit; cursor: pointer; }
+.nt:hover, .nt:focus-visible { background: color-mix(in srgb, var(--panel-2) 70%, transparent); }
+.nt-del { position: absolute; right: 8px; top: 50%; transform: translateY(-50%); width: 28px; height: 28px; border-radius: 7px; border: 1px solid var(--line-2); background: var(--panel); color: var(--muted); font-size: 12px; cursor: pointer; opacity: 0; transition: opacity .12s; }
+.nt-row:hover .nt-del, .nt-del:focus-visible { opacity: 1; } .nt-del:hover { color: #ff6b6b; border-color: #ff6b6b; }
+@media (hover: none) { .nt-del { opacity: .8; } }
+.bell.ring svg { transform-origin: 50% 4px; animation: ring 2.6s ease-in-out infinite; }
+@keyframes ring { 0%, 62%, 100% { transform: rotate(0); } 66% { transform: rotate(16deg); } 70% { transform: rotate(-14deg); } 74% { transform: rotate(11deg); } 78% { transform: rotate(-8deg); } 82% { transform: rotate(5deg); } 86% { transform: rotate(-2deg); } }
+.bell.ring .bell-n { animation: pulse-n 2.6s ease-in-out infinite; }
+@keyframes pulse-n { 0%, 62%, 100% { transform: scale(1); } 70% { transform: scale(1.18); } }
+@media (prefers-reduced-motion: reduce) { .bell.ring svg, .bell.ring .bell-n { animation: none; } }
 .nt-ic { flex: none; width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center; background: var(--panel-2); font-size: 13px; }
 .nt-ic.probation { color: #f5c84c; } .nt-ic.intrev { color: #ff8a3d; } .nt-ic.decision { color: #3ecf8e; }
 .nt-b { display: grid; gap: 2px; min-width: 0; font-size: 13px; } .nt-b span { color: var(--muted); overflow-wrap: anywhere; } .nt-b small { color: var(--faint); font-size: 11.5px; }
@@ -3184,31 +3194,47 @@ function notifyTask(id, n, opts) {
   if (opts.admins) to.push("admins");
   notify(to, { ...n, taskId: id });
 }
-const noteList = () => [...S.notes.entries(), ...S.notesAdm.entries()].map(([id, d]) => ({ id, ...d })).sort((a, b) => String(b.at).localeCompare(String(a.at)));
-const isRead = (n) => (n.readBy || []).includes(me.uid);
+// Admin notices are shared by every admin, so "deleting" one only hides it for you (hiddenBy); your own notices are really deleted.
+const noteList = () => [...S.notes.entries(), ...S.notesAdm.entries()].map(([id, d]) => ({ id, ...d })).filter((n) => !(n.hiddenBy || []).includes(me.uid)).sort((a, b) => String(b.at).localeCompare(String(a.at)));
+const remKey = () => "fw-rt-rem-" + (me ? me.uid : "") + "-" + prevMonth(curMonth());
+function removeNotes(ids) {
+  ids.forEach((id) => {
+    if (id === "rt-reminder") { try { localStorage.setItem(remKey(), "1"); } catch (e) {} return; }
+    if (S.notes.has(id)) { S.notes.delete(id); fs.collection("notifications").doc(id).delete().catch(() => {}); return; }
+    const n = S.notesAdm.get(id); if (!n) return;
+    const hiddenBy = [...(n.hiddenBy || []), me.uid].slice(-50), readBy = [...new Set([...(n.readBy || []), me.uid])].slice(-50);
+    S.notesAdm.set(id, { ...n, hiddenBy, readBy }); fs.collection("notifications").doc(id).update({ hiddenBy, readBy }).catch(() => {});
+  });
+  drawBell();
+}
+const isRead = (n) => (n.local ? lsGet(remKey() + "-seen") === "1" : (n.readBy || []).includes(me.uid));
+const lsGet = (k) => { try { return localStorage.getItem(k); } catch (e) { return null; } };
+const lsSet = (k, v) => { try { localStorage.setItem(k, v); } catch (e) {} };
 // Admins also get a reminder (not stored) when last month's ratings haven't been sent yet.
 function rtReminder() {
   if (!isAdmin() || typeof rtRows !== "function") return null;
   const k = prevMonth(curMonth());
   if (S.rtSettings && S.rtSettings.sent && S.rtSettings.sent[k]) return null;
+  try { if (localStorage.getItem(remKey()) === "1") return null; } catch (e) {}
   if (!rtRows().some((r) => r.month === k)) return null;
   return { id: "rt-reminder", kind: "probation", title: `${monthName(k)} ratings are ready`, body: "Check the numbers, then send each editor their rating and probation result.", at: k + "-28T00:00:00", readBy: [], local: true };
 }
 function drawBell() {
   const b = $("#bellBtn"); if (!b) return;
   const team = !!me && !isClient(); b.hidden = !team; if (!team) { $("#bellPanel").hidden = true; return; }
-  const rem = rtReminder(), list = noteList(), unread = list.filter((n) => !isRead(n)).length + (rem ? 1 : 0);
-  $("#bellN").textContent = unread > 99 ? "99+" : String(unread); $("#bellN").hidden = !unread;
+  const rem = rtReminder(), list = noteList(), unread = list.filter((n) => !isRead(n)).length + (rem && !isRead(rem) ? 1 : 0);
+  $("#bellN").textContent = unread > 99 ? "99+" : String(unread); $("#bellN").hidden = !unread; b.classList.toggle("ring", !!unread);
   b.setAttribute("aria-label", unread ? `Notifications, ${unread} new` : "Notifications");
   if ($("#bellPanel").hidden) return;
   const items = (rem ? [rem] : []).concat(list.slice(0, 60));
-  $("#bellList").innerHTML = items.length ? items.map((n) => `<button class="nt${isRead(n) && !n.local ? "" : " new"}" data-nid="${esc(n.id)}" type="button">
+  $("#bellList").innerHTML = items.length ? items.map((n) => `<div class="nt-row${isRead(n) ? "" : " new"}"><button class="nt" data-nid="${esc(n.id)}" type="button">
       <span class="nt-ic ${esc(n.kind)}" aria-hidden="true">${{ probation: "★", assign: "＋", decision: "✓", comment: "💬", status: "→", intrev: "↻" }[n.kind] || "•"}</span>
-      <span class="nt-b"><b>${esc(n.title)}</b>${n.body ? `<span>${esc(n.body)}</span>` : ""}<small>${n.local ? "Reminder" : esc((n.byName ? n.byName + " · " : "") + fmtTime(n.at))}</small></span></button>`).join("")
+      <span class="nt-b"><b>${esc(n.title)}</b>${n.body ? `<span>${esc(n.body)}</span>` : ""}<small>${n.local ? "Reminder" : esc((n.byName ? n.byName + " · " : "") + fmtTime(n.at))}</small></span></button><button class="nt-del" data-ndel="${esc(n.id)}" type="button" title="Delete this notification" aria-label="Delete notification: ${esc(n.title)}">✕</button></div>`).join("")
     : `<div class="nt-empty">No notifications yet. You'll see new tasks, client decisions, comments and monthly ratings here.</div>`;
 }
 function markRead(ids) {
   ids.forEach((id) => {
+    if (id === "rt-reminder") { lsSet(remKey() + "-seen", "1"); return; }
     const map = S.notes.has(id) ? S.notes : S.notesAdm.has(id) ? S.notesAdm : null; if (!map) return;
     const n = map.get(id); if (isRead(n)) return;
     const readBy = [...(n.readBy || []), me.uid].slice(-50); map.set(id, { ...n, readBy });
@@ -3221,13 +3247,14 @@ function openBell(on) {
   if (on) { drawBell(); setTimeout(() => $("#bellList .nt")?.focus(), 0); }
 }
 $("#bellBtn").addEventListener("click", (e) => { e.stopPropagation(); openBell($("#bellPanel").hidden); });
-$("#bellAll").addEventListener("click", () => markRead(noteList().filter((n) => !isRead(n)).map((n) => n.id)));
+$("#bellAll").addEventListener("click", () => markRead([...noteList().filter((n) => !isRead(n)).map((n) => n.id), "rt-reminder"]));
 $("#bellClear").addEventListener("click", () => {
-  const gone = [...S.notes.entries()].filter(([, n]) => isRead(n)).map(([id]) => id);
-  gone.forEach((id) => { S.notes.delete(id); fs.collection("notifications").doc(id).delete().catch(() => {}); });
-  drawBell(); toast(gone.length ? `Cleared ${gone.length}` : "Nothing to clear");
+  const rem = rtReminder(), gone = [...noteList().filter((n) => isRead(n)).map((n) => n.id), ...(rem && isRead(rem) ? ["rt-reminder"] : [])];
+  removeNotes(gone); toast(gone.length ? `Cleared ${gone.length}` : "No read notifications to clear");
 });
 $("#bellList").addEventListener("click", (e) => {
+  const del = e.target.closest("[data-ndel]");
+  if (del) { e.stopPropagation(); const row = del.closest(".nt-row"); row.classList.add("gone"); setTimeout(() => removeNotes([del.dataset.ndel]), 180); return; }
   const b = e.target.closest("[data-nid]"); if (!b) return;
   const id = b.dataset.nid, n = noteList().find((x) => x.id === id) || (id === "rt-reminder" ? rtReminder() : null); if (!n) return;
   markRead([id]); openBell(false);
