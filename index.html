@@ -2498,9 +2498,9 @@ function exportsTab(t, id) {
     return `<section class="vcard" data-vid="${esc(v.id)}">
       <div class="vc-h"><input class="vname" value="${esc(v.name)}" maxlength="60" aria-label="Video name">${n ? `<span class="tag">v${top}</span>` : ""}
         ${n ? `<button class="btn sm primary" data-watch="${esc(v.id)}|${top}" type="button">▶ Watch &amp; comments</button>` : ""}
-        ${editable && (n || vids.length > 1) ? `<button class="btn sm ghost danger" data-vdel type="button" title="Delete this video and all its versions">🗑 Delete video</button>` : ""}</div>
+        ${isAdmin() && (n || vids.length > 1) ? `<button class="btn sm ghost danger" data-vdel type="button" title="Delete this video and all its versions">🗑 Delete video</button>` : ""}</div>
       ${n ? `<div class="vlist">${v.versions.slice().reverse().map((x) => `<div class="vrow"><span class="tag">v${x.v}</span>${x.v === top ? `<span class="now">Latest</span>` : ""}<span class="muted">${x.sent ? "Sent " + esc(fmtTime(x.sent)) : "Not sent yet"}</span>
-          <a class="vlink" href="${esc(safeUrl(x.url))}" target="_blank" rel="noopener" title="${esc(x.url)}">${esc(x.url.replace(/^https?:\/\/(www\.)?/, ""))}</a><button class="btn sm" data-watch="${esc(v.id)}|${x.v}" type="button">▶ Watch</button>${editable ? `<button class="btn sm ghost danger vdel-ver" data-verdel="${x.v}" type="button" title="Delete v${x.v}" aria-label="Delete v${x.v} of ${esc(v.name)}">🗑</button>` : ""}</div>`).join("")}${v.removed.length ? `<div class="vrow muted vgone">Deleted: ${v.removed.map((k) => "v" + k).join(", ")}</div>` : ""}</div>` : (v.removed.length ? `<div class="vlist"><div class="vrow muted vgone">Deleted: ${v.removed.map((k) => "v" + k).join(", ")}</div></div>` : "")}
+          <a class="vlink" href="${esc(safeUrl(x.url))}" target="_blank" rel="noopener" title="${esc(x.url)}">${esc(x.url.replace(/^https?:\/\/(www\.)?/, ""))}</a><button class="btn sm" data-watch="${esc(v.id)}|${x.v}" type="button">▶ Watch</button>${isAdmin() || (editable && x.v !== top) ? `<button class="btn sm ghost danger vdel-ver" data-verdel="${x.v}" type="button" title="Delete v${x.v}" aria-label="Delete v${x.v} of ${esc(v.name)}">🗑</button>` : ""}</div>`).join("")}${v.removed.length ? `<div class="vrow muted vgone">Deleted: ${v.removed.map((k) => "v" + k).join(", ")}</div>` : ""}</div>` : (v.removed.length ? `<div class="vlist"><div class="vrow muted vgone">Deleted: ${v.removed.map((k) => "v" + k).join(", ")}</div></div>` : "")}
       <div class="f"><label>${n ? `Link of v${top}. Only change it to fix a wrong link` : "Export link"}</label><div class="linkrow"><input class="vlatest" value="${esc(n ? l.url : "")}" placeholder="Unlisted YouTube, Google Drive or Dropbox link (WeTransfer works too, comments only)" inputmode="url" aria-label="Export link for ${esc(v.name)}">${n ? `<a class="btn" href="${esc(safeUrl(l.url))}" target="_blank" rel="noopener">Open ↗</a>` : ""}</div>
         ${n ? "" : `<small class="muted" style="font-size:12px">Paste the export here when it's ready. For Drive, set sharing to “Anyone with the link”.</small>`}</div>
       ${n ? `<div><button class="btn" data-nvopen type="button">+ Add new version (v${nx})</button>
@@ -2524,6 +2524,7 @@ function bindExports(body, id) {
     const val = e.target.value.trim(), pv = parseVideo(val), last = latestOf(v);
     if (val && !pv) { toast("Paste a full link starting with https://"); return; }
     if (pv && pv.kind === "notvideo") { toast("That's a document, not a video. Put it under Footage & links in Overview."); return; }
+    if (!val && last && !isAdmin()) { e.target.value = last.url; toast("Only an admin can delete the latest version. To fix a wrong link, paste the right one instead."); return; }
     let msg = "";
     if (!last) { if (val) v.versions.push({ url: val, at: now(), note: "", sentAt: "" }); }
     else if (val && last.sentAt && last.url !== val) { v.versions.push({ url: val, at: now(), note: "", sentAt: "" }); msg = `Saved as v${v.versions.length}. The client already saw v${v.versions.length - 1}.`; }
@@ -2546,6 +2547,7 @@ function bindExports(body, id) {
     if (e.target.closest("[data-nvcancel]")) { box.hidden = true; $("[data-nvopen]", c).hidden = false; return; }
     const del = e.target.closest("[data-vdel]");
     if (del) {
+      if (!isAdmin()) return;
       if (del.dataset.armed !== "1") { del.dataset.armed = "1"; del.textContent = "Click again to delete the video"; setTimeout(() => { if (del.isConnected) { del.dataset.armed = ""; del.textContent = "🗑 Delete video"; } }, 3000); return; }
       const all = vids(), gone = all.find((x) => x.id === c.dataset.vid), left = all.filter((x) => x.id !== c.dataset.vid);
       logAct("export", `Deleted ${gone ? gone.name : "a video"} and its versions`, { id, title: (S.merged.get(id) || {}).title }, { every: 0 });
@@ -2555,6 +2557,7 @@ function bindExports(body, id) {
     if (vd) {
       if (vd.dataset.armed !== "1") { vd.dataset.armed = "1"; vd.textContent = "Delete?"; vd.classList.add("armed"); setTimeout(() => { if (vd.isConnected) { vd.dataset.armed = ""; vd.textContent = "🗑"; vd.classList.remove("armed"); } }, 3000); return; }
       const all = vids(), v = all.find((x) => x.id === c.dataset.vid), k = Number(vd.dataset.verdel), slot = v && v.versions[k - 1]; if (!slot) return;
+      if (!isAdmin() && (latestOf(v) || {}) === slot) { toast("Only an admin can delete the latest version."); return; }
       v.versions[k - 1] = { url: "", at: slot.at || now(), note: "", sentAt: "", removed: true };
       logAct("export", `${v.name}: deleted v${k}`, { id, title: (S.merged.get(id) || {}).title }, { every: 0 });
       saveVideos(id, all); toast(`v${k} deleted`); setTimeout(drawTask, 30); return;
