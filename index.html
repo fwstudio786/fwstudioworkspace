@@ -458,6 +458,7 @@ table.list.wl tr.is-paid td { background: color-mix(in srgb, var(--st-approved) 
 .rt-hist { margin-top: 18px; }
 .tag.mis { color: #ff6b6b; border-color: rgba(255, 107, 107, .4); }
 .cm-a button[data-mis].on { color: #ff6b6b; }
+.cm-no { flex: none; min-width: 26px; height: 22px; padding: 0 6px; border-radius: 6px; display: inline-grid; place-items: center; background: var(--panel-2); border: 1px solid var(--line-2); color: var(--fg); font: 700 12px/1 var(--mono); }
 .vdel-ver { min-width: 34px; } .vdel-ver.armed { color: #ff6b6b; border-color: #ff6b6b; } .vgone { font-size: 12px; font-style: italic; }
 .rt-in { width: 64px; text-align: right; } .rt-in.edited { border-color: var(--accent); background: rgba(255, 90, 31, .12); }
 .wl-date { display: flex; align-items: center; gap: 3px; }
@@ -2080,6 +2081,9 @@ function rvRender() {
   const shown = tops.filter((c) => rv.filter === "all" || (rv.filter === "open" ? cur(c) && !c.done : cur(c)))
     .sort((a, b) => (b.v || 1) - (a.v || 1) || (a.t == null) - (b.t == null) || (a.t || 0) - (b.t || 0) || String(a.at).localeCompare(String(b.at)));
   const replies = (pid) => all.filter((c) => c.parent === pid).sort((a, b) => String(a.at).localeCompare(String(b.at)));
+  // Each comment gets a number within its version, in the order it was written, so "same as #1" always means the same comment.
+  const num = new Map();
+  [...new Set(tops.map((c) => c.v || 1))].forEach((v) => tops.filter((c) => (c.v || 1) === v).sort((a, b) => String(a.at).localeCompare(String(b.at)) || String(a.id).localeCompare(String(b.id))).forEach((c, i) => num.set(c.id, i + 1)));
   const list = $("#rvList");
   const focused = document.activeElement && document.activeElement.id === "rvReply";
   if (focused) rv.replyText = document.activeElement.value;
@@ -2088,7 +2092,7 @@ function rvRender() {
     const tc = c.t == null ? "" : canSeek ? `<button class="tc" data-seek="${Number(c.t)}" type="button" title="Jump to ${fmtTC(c.t)}">${fmtTC(c.t)}</button>` : `<span class="tc">${fmtTC(c.t)}</span>`;
     const jump = c.t != null && !isReply;
     return `<div class="cm${c.done ? " done" : ""}${isReply ? " reply" : ""}${jump ? " jump" : ""}${rv.active === c.id ? " active" : ""}" data-id="${esc(c.id)}"${jump ? ` data-t="${Number(c.t)}" data-v="${c.v || 1}" title="Go to ${fmtTC(c.t)}"` : ""}>
-      <div class="cm-h"><span class="av">${esc(initials(c.name))}</span><b>${esc(c.name || "Someone")}</b>${c.by === "client" ? `<span class="tag">Client</span>` : ""}${c.mis && !isReply && !isClient() ? `<span class="tag mis" title="Counts as a mistake in the editor's rating">Mistake</span>` : ""}${old ? `<span class="tag">v${c.v || 1}</span>` : ""}<span class="cm-at">${esc(fmtTime(c.at))}</span></div>
+      <div class="cm-h">${isReply ? "" : `<span class="cm-no" title="Comment ${num.get(c.id)}${rv.filter === "all" ? " on v" + (c.v || 1) : ""}">${rv.filter === "all" && (c.v || 1) !== rv.view ? "v" + (c.v || 1) + " " : ""}#${num.get(c.id)}</span>`}<span class="av">${esc(initials(c.name))}</span><b>${esc(c.name || "Someone")}</b>${c.by === "client" ? `<span class="tag">Client</span>` : ""}${c.mis && !isReply && !isClient() ? `<span class="tag mis" title="Counts as a mistake in the editor's rating">Mistake</span>` : ""}${old ? `<span class="tag">v${c.v || 1}</span>` : ""}<span class="cm-at">${esc(fmtTime(c.at))}</span></div>
       <div class="cm-b">${tc}<span class="cm-text">${esc(c.text)}</span></div>
       <div class="cm-a">${isReply ? "" : `<button type="button" data-reply>Reply</button><button type="button" data-done>${c.done ? "↺ Reopen" : "✓ Done"}</button>${isAdmin() ? `<button type="button" data-mis class="${c.mis ? "on" : ""}" title="Mistakes lower the editor's rating">${c.mis ? "⚠ Mistake (undo)" : "Mark as mistake"}</button>` : ""}`}${mine || isAdmin() ? `<button type="button" data-del>Delete</button>` : ""}${c.done && !isReply ? `<span class="muted">Done${c.doneBy ? " by " + esc(c.doneBy) : ""}</span>` : ""}</div>
       ${isReply ? "" : replies(c.id).map((r) => one(r, true)).join("")}
