@@ -2377,6 +2377,13 @@ function upReq(u, method, path, o) {
   }));
 }
 const wait = (ms) => new Promise((ok) => setTimeout(ok, ms));
+// Moves files made by uploads to the Drive bin (kept 30 days there). Links pasted by hand have no file id and are only removed here.
+function driveTrash(fids) {
+  fids = [...new Set((fids || []).filter(Boolean))]; if (!fids.length) return Promise.resolve();
+  return auth.currentUser.getIdToken().then((tok) => Promise.all(fids.map((f) =>
+    fetch(UPLOAD_API + "/file/" + encodeURIComponent(f), { method: "DELETE", headers: { Authorization: "Bearer " + tok } }).then((r) => { if (!r.ok) throw new Error(r.status); }))))
+    .catch(() => toast("Removed here, but Google Drive didn't delete the file. You can delete it in Drive."));
+}
 // Sends one piece (a Blob or bytes) that starts at byte `off`. total is the file size, or "*" while a zip is still being made.
 async function sendPiece(u, q, body, off, total) {
   let len = body.size ?? body.length, fails = 0;
@@ -2531,13 +2538,13 @@ document.addEventListener("click", (e) => {
   if (d) { const id = d.closest("[data-upid]").dataset.upid, u = UP.get(id); UP.delete(id); u && upRefresh(u); return; }
   const del = e.target.closest("[data-pfdel]");
   if (del) {
-    if (!isAdmin()) return;
+    if (isClient()) return;
     if (del.dataset.armed !== "1") { del.dataset.armed = "1"; del.textContent = "Delete?"; setTimeout(() => { if (del.isConnected) { del.dataset.armed = ""; del.textContent = "🗑"; } }, 3000); return; }
     const id = ui.openId, t = S.merged.get(id) || S.tasks.get(id) || {}, pid = del.closest("[data-pf]").dataset.pf, p = (t.projectFiles || []).find((x) => x.id === pid); if (!p) return;
     commitTaskPatch(id, { projectFiles: t.projectFiles.filter((x) => x.id !== pid) });
     logAct("export", `Removed a project file: ${p.name}`, { id, title: t.title }, { every: 0 });
-    if (p.fid) auth.currentUser.getIdToken().then((tok) => fetch(UPLOAD_API + "/file/" + encodeURIComponent(p.fid), { method: "DELETE", headers: { Authorization: "Bearer " + tok } })).catch(() => {});
-    toast("Project file removed"); setTimeout(drawTask, 30);
+    driveTrash([p.fid]);
+    toast("Project file removed and moved to the Drive bin"); setTimeout(drawTask, 30);
   }
 });
 document.addEventListener("change", async (e) => {
@@ -2798,7 +2805,7 @@ function exportSummary(t) {
 }
 function projectBox(t, id) {
   const list = Array.isArray(t.projectFiles) ? t.projectFiles : [];
-  const rows = list.map((p) => `<div class="pfrow" data-pf="${esc(p.id)}"><span class="pf-n" title="${esc(p.name)}">${esc(p.name)}</span><span class="muted">${p.size ? esc(fmtSize(p.size)) + " · " : ""}${esc(fmtTime(p.at))}</span><a class="btn sm" href="${esc(safeUrl(p.url))}" target="_blank" rel="noopener">Open ↗</a>${isAdmin() ? `<button class="btn sm ghost danger" data-pfdel type="button" title="Remove and delete from Drive" aria-label="Remove ${esc(p.name)}">🗑</button>` : ""}</div>`).join("");
+  const rows = list.map((p) => `<div class="pfrow" data-pf="${esc(p.id)}"><span class="pf-n" title="${esc(p.name)}">${esc(p.name)}</span><span class="muted">${p.size ? esc(fmtSize(p.size)) + " · " : ""}${esc(fmtTime(p.at))}</span><a class="btn sm" href="${esc(safeUrl(p.url))}" target="_blank" rel="noopener">Open ↗</a>${!isClient() ? `<button class="btn sm ghost danger" data-pfdel type="button" title="Remove and move the file to the Drive bin" aria-label="Remove ${esc(p.name)}">🗑</button>` : ""}</div>`).join("");
   return `<div class="sec pfbox"><h4>Project files <span class="muted" style="font:500 12px var(--body)">· team only, the client never sees these</span></h4>
     <div class="pflist">${rows || `<p class="muted" style="margin:0">No project file yet.</p>`}</div>
     <div class="dz">Drag a project file or a whole folder here <span class="muted">· a folder is zipped for you</span></div>
@@ -2813,9 +2820,9 @@ function exportsTab(t, id) {
     return `<section class="vcard" data-vid="${esc(v.id)}">
       <div class="vc-h"><input class="vname" value="${esc(v.name)}" maxlength="60" aria-label="Video name">${n ? `<span class="tag">v${top}</span>` : ""}
         ${n ? `<button class="btn sm primary" data-watch="${esc(v.id)}|${top}" type="button">▶ Watch &amp; comments</button>` : ""}
-        ${isAdmin() && (n || vids.length > 1) ? `<button class="btn sm ghost danger" data-vdel type="button" title="Delete this video and all its versions">🗑 Delete video</button>` : ""}</div>
+        ${isAdmin() && (n || vids.length > 1) ? `<button class="btn sm ghost danger" data-vdel type="button" title="Delete this video and all its versions (uploaded files go to the Drive bin)">🗑 Delete video</button>` : ""}</div>
       ${n ? `<div class="vlist">${v.versions.slice().reverse().map((x) => `<div class="vrow"><span class="tag">v${x.v}</span>${x.v === top ? `<span class="now">Latest</span>` : ""}<span class="muted">${x.sent ? "Sent " + esc(fmtTime(x.sent)) : "Not sent yet"}</span>
-          <a class="vlink" href="${esc(safeUrl(x.url))}" target="_blank" rel="noopener" title="${esc(x.url)}">${esc(x.url.replace(/^https?:\/\/(www\.)?/, ""))}</a><button class="btn sm" data-watch="${esc(v.id)}|${x.v}" type="button">▶ Watch</button>${isAdmin() || (editable && x.v !== top) ? `<button class="btn sm ghost danger vdel-ver" data-verdel="${x.v}" type="button" title="Delete v${x.v}" aria-label="Delete v${x.v} of ${esc(v.name)}">🗑</button>` : ""}</div>`).join("")}${v.removed.length ? `<div class="vrow muted vgone">Deleted: ${v.removed.map((k) => "v" + k).join(", ")}</div>` : ""}</div>` : (v.removed.length ? `<div class="vlist"><div class="vrow muted vgone">Deleted: ${v.removed.map((k) => "v" + k).join(", ")}</div></div>` : "")}
+          <a class="vlink" href="${esc(safeUrl(x.url))}" target="_blank" rel="noopener" title="${esc(x.url)}">${esc(x.url.replace(/^https?:\/\/(www\.)?/, ""))}</a><button class="btn sm" data-watch="${esc(v.id)}|${x.v}" type="button">▶ Watch</button>${isAdmin() || (editable && x.v !== top) ? `<button class="btn sm ghost danger vdel-ver" data-verdel="${x.v}" type="button" title="Delete v${x.v} (an uploaded file goes to the Drive bin)" aria-label="Delete v${x.v} of ${esc(v.name)}">🗑</button>` : ""}</div>`).join("")}${v.removed.length ? `<div class="vrow muted vgone">Deleted: ${v.removed.map((k) => "v" + k).join(", ")}</div>` : ""}</div>` : (v.removed.length ? `<div class="vlist"><div class="vrow muted vgone">Deleted: ${v.removed.map((k) => "v" + k).join(", ")}</div></div>` : "")}
       <div class="f"><label>${n ? `Link of v${top}. Only change it to fix a wrong link` : "Export link"}</label><div class="linkrow"><input class="vlatest" value="${esc(n ? l.url : "")}" placeholder="Unlisted YouTube, Google Drive or Dropbox link (WeTransfer works too, comments only)" inputmode="url" aria-label="Export link for ${esc(v.name)}">${n ? `<a class="btn" href="${esc(safeUrl(l.url))}" target="_blank" rel="noopener">Open ↗</a>` : ""}</div>
         ${n ? "" : `<small class="muted" style="font-size:12px">Paste the export here when it's ready. For Drive, set sharing to “Anyone with the link”.</small>`}</div>
       ${editable ? `<div class="upwrap"><button class="btn" data-upv type="button">⬆ Upload ${n ? "v" + nx : "video"} from your computer</button><input class="upfile" data-scope="video" type="file" accept="video/*,.mp4,.mov,.m4v,.mkv,.webm,.avi,.mxf" hidden><small class="muted">Saved to Google Drive, no link needed. You can also drag a video onto this card. Keep this tab open until it finishes. Big videos need a few minutes in Drive before they play.</small></div><div class="uplist" data-uplist="${esc(v.id)}">${upHtml(id, v.id)}</div>` : ""}
@@ -2868,16 +2875,18 @@ function bindExports(body, id) {
       if (del.dataset.armed !== "1") { del.dataset.armed = "1"; del.textContent = "Click again to delete the video"; setTimeout(() => { if (del.isConnected) { del.dataset.armed = ""; del.textContent = "🗑 Delete video"; } }, 3000); return; }
       const all = vids(), gone = all.find((x) => x.id === c.dataset.vid), left = all.filter((x) => x.id !== c.dataset.vid);
       logAct("export", `Deleted ${gone ? gone.name : "a video"} and its versions`, { id, title: (S.merged.get(id) || {}).title }, { every: 0 });
-      saveVideos(id, left.length ? left : [{ id: uid(), name: "Video 1", versions: [] }]); toast("Video deleted"); setTimeout(drawTask, 30); return;
+      const fids = gone ? gone.versions.map((x) => x.fid) : [];
+      saveVideos(id, left.length ? left : [{ id: uid(), name: "Video 1", versions: [] }]); driveTrash(fids); toast("Video deleted" + (fids.some(Boolean) ? " and its files moved to the Drive bin" : "")); setTimeout(drawTask, 30); return;
     }
     const vd = e.target.closest("[data-verdel]");
     if (vd) {
       if (vd.dataset.armed !== "1") { vd.dataset.armed = "1"; vd.textContent = "Delete?"; vd.classList.add("armed"); setTimeout(() => { if (vd.isConnected) { vd.dataset.armed = ""; vd.textContent = "🗑"; vd.classList.remove("armed"); } }, 3000); return; }
       const all = vids(), v = all.find((x) => x.id === c.dataset.vid), k = Number(vd.dataset.verdel), slot = v && v.versions[k - 1]; if (!slot) return;
       if (!isAdmin() && (latestOf(v) || {}) === slot) { toast("Only an admin can delete the latest version."); return; }
+      const gone = slot.fid;
       v.versions[k - 1] = { url: "", at: slot.at || now(), note: "", sentAt: "", removed: true };
       logAct("export", `${v.name}: deleted v${k}`, { id, title: (S.merged.get(id) || {}).title }, { every: 0 });
-      saveVideos(id, all); toast(`v${k} deleted`); setTimeout(drawTask, 30); return;
+      saveVideos(id, all); driveTrash([gone]); toast(`v${k} deleted${gone ? " and moved to the Drive bin" : ""}`); setTimeout(drawTask, 30); return;
     }
     const send = !!e.target.closest("[data-nvsend]");
     if (send || e.target.closest("[data-nvsave]")) {
