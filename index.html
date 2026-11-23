@@ -2457,11 +2457,20 @@ function stripLinksHtml(html, known, norm) {
     if (!rest || labelOnly(rest)) {                                                    // "Footage:" + its link -> gone
       const li = blk.tagName === "LI" ? blk : null, parent = blk.parentElement;
       if (!rest && prev && prev.isConnected && labelOnly(text(prev))) prev.remove();   // label sat in the line above the link
+      const head = (() => { let n = li ? parent : blk; while (n && n !== doc.body) { let s = n.previousElementSibling; while (s) { if (/^H[1-3]$/.test(s.tagName)) return s; s = s.previousElementSibling; } n = n.parentElement; } return null; })();
+      if (head) head.dataset.had = "1";
       blk.remove(); if (li && parent && !parent.children.length) parent.remove();
       return;
     }
     prev = blk;
   });
+  doc.body.querySelectorAll("h1,h2,h3").forEach((hd) => {                                // a heading whose only content was links that moved out
+    if (!hd.dataset.had) return;
+    let n = hd.nextElementSibling, empty = true;
+    while (n && !/^H[1-3]$/.test(n.tagName)) { if (text(n)) { empty = false; break; } n = n.nextElementSibling; }
+    if (empty) hd.remove();
+  });
+  doc.body.querySelectorAll("[data-had]").forEach((e) => e.removeAttribute("data-had"));
   return doc.body.innerHTML.replace(/(<p>\s*(<br>)?\s*<\/p>\s*){2,}/g, "<p><br></p>");
 }
 // Take links that now live in Footage & links / Exports out of the brief, with their "Label :" lines.
