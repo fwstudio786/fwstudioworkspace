@@ -133,6 +133,20 @@ table.list tr:last-child td { border-bottom: 0; }
 .f textarea { min-height: 70px; resize: vertical; }
 .f.full { grid-column: 1 / -1; }
 .linkrow { display: flex; gap: 8px; }
+.upwrap { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin: 10px 0 4px; }
+.upwrap small { font-size: 12px; flex: 1 1 220px; }
+.uplist:empty { display: none; }
+.uplist { display: grid; gap: 8px; margin: 8px 0; }
+.upl { border: 1px solid var(--line-2); background: var(--panel-2); border-radius: 10px; padding: 9px 11px; }
+.upl-t { display: flex; align-items: center; gap: 10px; font-size: 13px; }
+.upl-t b { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.upl-t .muted { font-size: 12px; white-space: nowrap; }
+.upl-bar { height: 6px; border-radius: 4px; background: var(--line-2); margin-top: 7px; overflow: hidden; }
+.upl-bar i { display: block; height: 100%; width: 0; background: var(--accent); transition: width .25s; }
+.upl.done .upl-bar i { background: #3fb950; }
+.upl.err { border-color: var(--st-rejected); }
+.upl.err .upl-bar { display: none; }
+.upl.err .upl-t .muted { color: var(--st-rejected); white-space: normal; }
 .linkrow input { flex: 1; min-width: 0; }
 .sec { margin-top: 22px; }
 .sec h4 { margin: 0 0 10px; font: 700 14px/1.2 var(--display); letter-spacing: -.01em; display: flex; align-items: center; gap: 8px; }
@@ -1414,7 +1428,7 @@ function drawTask() {
       <div class="f"><label for="fPr">Priority</label><select id="fPr">${Object.entries(PRIORITY).map(([k, l]) => `<option value="${k}" ${k === (t.priority || "normal") ? "selected" : ""}>${l}</option>`).join("")}</select></div>
       <div class="f full"><label>Brief for the editor <span class="muted" style="font:500 12px var(--body)">· paste from Word or Google Docs and it keeps its headings, bullets and links</span></label><div id="fBr" class="briefed"></div></div>
     </div>
-    ${filesBox(t)}
+    ${filesBox(t, id)}
     ${exportSummary(t)}
     <div class="sec"><h4>Message for the client</h4><div class="f"><textarea id="fCn" placeholder="Shown to the client next to the video, e.g. Here's the first cut. Music is a placeholder.">${esc(t.clientNote)}</textarea></div></div>
     ${taskActions(t, id)}`;
@@ -2324,12 +2338,132 @@ $("#rvVidSel").addEventListener("change", (e) => {
   rvHead(); rvRender();
 });
 
+/* ---------------- uploads straight to Google Drive (through the fw-uploads Worker) ----------------
+   The browser sends 16 MB pieces; if the connection drops it asks where it stopped and carries on.
+   The file lands in the owner's Drive and the "Anyone with the link" address is added like a pasted link. */
+const UPLOAD_API = "https://fw-uploads.rageopppp.workers.dev";
+const UP = new Map(), UP_CHUNK = 16 * 1024 * 1024;
+const fmtSize = (b) => (b >= 1e9 ? (b / 1e9).toFixed(1) + " GB" : b >= 1e6 ? Math.round(b / 1e6) + " MB" : Math.max(1, Math.round(b / 1e3)) + " KB");
+function upItem(u) {
+  const pct = u.size ? Math.min(100, Math.floor((u.sent / u.size) * 100)) : 0;
+  const msg = u.state === "err" ? esc(u.msg) : u.state === "done" ? "Uploaded ✓" : u.state === "wait" ? "Starting…" : `${pct}% · ${fmtSize(u.sent)} of ${fmtSize(u.size)}${u.retry ? " · reconnecting…" : ""}`;
+  return `<div class="upl ${u.state}" data-upid="${u.id}"><div class="upl-t"><b title="${esc(u.name)}">${esc(u.name)}</b><span class="muted">${msg}</span>` +
+    `<button class="btn sm ghost" ${u.state === "err" || u.state === "done" ? "data-updismiss" : "data-upcancel"} type="button">${u.state === "err" || u.state === "done" ? "OK" : "Cancel"}</button></div>` +
+    `<div class="upl-bar"><i style="width:${u.state === "done" ? 100 : pct}%"></i></div></div>`;
+}
+const upHtml = (task, scope) => [...UP.values()].filter((u) => u.task === task && u.scope === scope).map(upItem).join("");
+function upRefresh(u) { if (ui.openId !== u.task) return; const el = document.querySelector(`[data-uplist="${CSS.escape(u.scope)}"]`); if (el) el.innerHTML = upHtml(u.task, u.scope); }
+function upPaint(u) {
+  if (u.painted && Date.now() - u.painted < 200) return; u.painted = Date.now();
+  const el = document.querySelector(`[data-upid="${u.id}"]`); if (!el) return;
+  const pct = u.size ? Math.min(100, Math.floor((u.sent / u.size) * 100)) : 0;
+  el.querySelector(".upl-bar i").style.width = pct + "%";
+  el.querySelector(".muted").textContent = `${pct}% · ${fmtSize(u.sent)} of ${fmtSize(u.size)}${u.retry ? " · reconnecting…" : ""}`;
+}
+function upReq(u, method, path, o) {
+  return auth.currentUser.getIdToken().then((tok) => new Promise((resolve, reject) => {
+    const x = new XMLHttpRequest(); u.xhr = x;
+    x.open(method, UPLOAD_API + path); x.setRequestHeader("Authorization", "Bearer " + tok);
+    Object.entries(o.headers || {}).forEach(([k, v]) => x.setRequestHeader(k, v));
+    if (o.onProgress) x.upload.onprogress = (e) => o.onProgress(e.loaded);
+    x.onload = () => { let d = {}; try { d = JSON.parse(x.responseText || "{}"); } catch (e) {} resolve({ status: x.status, data: d }); };
+    x.onerror = () => reject(new Error("network")); x.onabort = () => reject(new Error("cancelled")); x.ontimeout = () => reject(new Error("network"));
+    x.send(o.body || null);
+  }));
+}
+async function runUpload(u, file) {
+  let r = await upReq(u, "POST", "/upload/init", { headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: u.driveName, size: file.size, type: file.type || "application/octet-stream" }) });
+  if (r.status !== 200) throw new Error(r.data.error || "Couldn't start the upload.");
+  const session = encodeURIComponent(r.data.session), q = "/upload/chunk?session=" + session;
+  let off = 0, fails = 0;
+  while (true) {
+    if (u.cancelled) throw new Error("cancelled");
+    const end = Math.min(off + UP_CHUNK, file.size) - 1;
+    try {
+      r = await upReq(u, "PUT", q, { headers: { "X-Content-Range": `bytes ${off}-${end}/${file.size}` }, body: file.slice(off, end + 1), onProgress: (l) => { u.sent = off + l; upPaint(u); } });
+    } catch (e) { if (u.cancelled) throw new Error("cancelled"); r = { status: 0, data: {} }; }
+    const d = r.data || {};
+    if (r.status === 200 && d.status === "done") return d;
+    if (r.status === 200 && d.status === "more") { off = d.next; u.sent = off; u.retry = false; fails = 0; upPaint(u); continue; }
+    if (r.status === 410) throw new Error("The upload expired. Please start it again.");
+    if (r.status === 403) throw new Error("You don't have permission to upload.");
+    if (r.status === 400) throw new Error(d.error || "The upload was rejected.");
+    // a dropped connection or a Google hiccup: wait, ask where we stopped, carry on
+    if (++fails > 8) throw new Error("The connection kept dropping. Check your internet and try again.");
+    u.retry = true; upPaint(u);
+    await new Promise((ok) => setTimeout(ok, Math.min(15000, 1000 * 2 ** fails)));
+    if (u.cancelled) throw new Error("cancelled");
+    try {
+      const s = await upReq(u, "PUT", q, { headers: { "X-Content-Range": `bytes */${file.size}` } });
+      if (s.status === 200 && s.data.status === "done") return s.data;
+      if (s.status === 200 && s.data.status === "more") off = s.data.next;
+    } catch (e) {}
+  }
+}
+// Saves a change to a task whether or not it's the one open right now.
+function commitTaskPatch(id, patch) {
+  if (ui.openKind === "task" && ui.openId === id) { patchTask(patch, true); return; }
+  const base = S.tasks.get(id); if (!base) return;
+  const t = { ...base, ...patch, updatedAt: now() }; S.tasks.set(id, t);
+  Store.set("tasks", id, pick(t, TASK_FIELDS)); Store.update("reviews", id, { ...pick(t, MIRROR_FIELDS), updatedAt: now() });
+  merge(); render();
+}
+function attachUpload(u, res) {
+  const t = S.merged.get(u.task) || S.tasks.get(u.task); if (!t) return;
+  const info = { id: u.task, title: t.title };
+  if (u.scope === "files") {
+    let files = filesOf(t); if (files.length === 1 && !files[0].url) files = [];
+    files.push({ id: uid(), label: u.name.slice(0, 60), url: res.url, fid: res.id });
+    logAct("export", `Uploaded a file: ${u.name}`, info, { every: 0 });
+    commitTaskPatch(u.task, { files });
+  } else {
+    const all = plainVideos(t), v = all.find((x) => x.id === u.scope); if (!v) return;
+    v.versions.push({ url: res.url, at: now(), note: "", sentAt: "", fid: res.id });
+    logAct("export", `${v.name}: v${v.versions.length} uploaded`, info, { every: 0 });
+    const first = all.find((x) => liveCount(x));
+    commitTaskPatch(u.task, { videos: all, videoUrl: first ? latestOf(first).url : "" });
+  }
+  toast(`“${u.name}” uploaded`);
+  if (ui.openKind === "task" && ui.openId === u.task) setTimeout(drawTask, 30);
+}
+async function startUpload(taskId, scope, file) {
+  if (!file) return;
+  if (!file.size) { toast("That file is empty."); return; }
+  const t = S.merged.get(taskId) || S.tasks.get(taskId) || {};
+  const u = { id: uid(), task: taskId, scope, name: file.name, size: file.size, sent: 0, state: "wait", msg: "", driveName: `${(t.title || "Task").slice(0, 60)} - ${file.name}`.slice(0, 200) };
+  UP.set(u.id, u); upRefresh(u);
+  u.state = "up"; upRefresh(u);
+  try {
+    const res = await runUpload(u, file);
+    u.state = "done"; u.sent = u.size; attachUpload(u, res);
+    upRefresh(u); setTimeout(() => { UP.delete(u.id); upRefresh(u); }, 3500);
+  } catch (e) {
+    if (e.message === "cancelled") { UP.delete(u.id); upRefresh(u); return; }
+    u.state = "err"; u.msg = e.message || "Upload failed."; upRefresh(u);
+  }
+}
+document.addEventListener("click", (e) => {
+  const pick = e.target.closest("[data-upv],[data-upf]");
+  if (pick) { const box = pick.closest(".vcard, .sec"); const inp = box && box.querySelector(".upfile"); if (inp) inp.click(); return; }
+  const c = e.target.closest("[data-upcancel]");
+  if (c) { const u = UP.get(c.closest("[data-upid]").dataset.upid); if (u) { u.cancelled = true; u.xhr && u.xhr.abort(); } return; }
+  const d = e.target.closest("[data-updismiss]");
+  if (d) { const id = d.closest("[data-upid]").dataset.upid, u = UP.get(id); UP.delete(id); u && upRefresh(u); }
+});
+document.addEventListener("change", async (e) => {
+  const inp = e.target.closest(".upfile"); if (!inp) return;
+  const files = [...inp.files], id = ui.openId, scope = inp.dataset.scope === "files" ? "files" : inp.closest(".vcard")?.dataset.vid;
+  inp.value = ""; if (!id || !scope) return;
+  for (const f of files) await startUpload(id, scope, f);
+});
+addEventListener("beforeunload", (e) => { if ([...UP.values()].some((u) => u.state === "up" || u.state === "wait")) { e.preventDefault(); e.returnValue = ""; } });
+
 /* ---------------- named links (raw footage, reference, music…) ----------------
    task.files = [{ id, label, url }]. Older tasks had rawUrl / docUrl / sheetUrl; those show as rows until the first edit. */
-const FILE_PRESETS = ["Raw footage for the editor", "Reference", "Music", "Logo / brand assets", "Script", "Google Doc", "Google Sheet"];
+const FILE_PRESETS = ["Raw footage for the editor", "Project file", "Reference", "Music", "Logo / brand assets", "Script", "Google Doc", "Google Sheet"];
 function filesOf(t) {
   t = t || {};
-  if (Array.isArray(t.files)) return t.files.map((f, i) => ({ id: f.id || "f" + i, label: f.label || "", url: f.url || "" }));
+  if (Array.isArray(t.files)) return t.files.map((f, i) => ({ id: f.id || "f" + i, label: f.label || "", url: f.url || "", fid: f.fid || "" }));
   const out = [];
   if (t.rawUrl) out.push({ id: "raw", label: "Raw footage for the editor", url: t.rawUrl });
   if (t.docUrl) out.push({ id: "doc", label: "Google Doc", url: t.docUrl });
@@ -2339,10 +2473,10 @@ function filesOf(t) {
 }
 const WT_NOTE = "WeTransfer saved. It can't play here, so people open it on WeTransfer and comment with a typed time. Free links expire after about 7 days. Use Drive, YouTube or Dropbox for full review and compare.";
 const playable = (url) => { const v = parseVideo(url); return !!v && ["yt", "drive", "file"].includes(v.kind); };
-function filesBox(t) {
+function filesBox(t, tid) {
   const rows = filesOf(t).map((f) => {
     const url = safeUrl(f.url);
-    return `<div class="frow" data-fid="${esc(f.id)}">
+    return `<div class="frow" data-fid="${esc(f.id)}" data-drv="${esc(f.fid || "")}">
       <input class="flabel" list="fPresets" value="${esc(f.label)}" placeholder="What is this? e.g. Reference" maxlength="60" aria-label="Link name">
       <div class="linkrow"><input class="furl" value="${esc(f.url)}" placeholder="Paste the link (Google Drive, YouTube, Dropbox…)" inputmode="url" aria-label="${esc(f.label || "Link")}">
         ${url && playable(url) ? `<button class="btn" data-fwatch type="button" title="Play it here">▶ Watch</button>` : ""}
@@ -2352,7 +2486,8 @@ function filesBox(t) {
   }).join("");
   return `<div class="sec"><h4>Footage &amp; links <span class="muted" style="font:500 12px var(--body)">· team only, the client never sees these</span></h4>
     <div class="flist">${rows}</div>
-    <div class="fadd"><span class="muted">Add:</span>${["Raw footage for the editor", "Reference", "Music"].map((l) => `<button class="btn sm" data-fadd="${esc(l)}" type="button">+ ${esc(l === "Raw footage for the editor" ? "Raw footage" : l)}</button>`).join("")}<button class="btn sm" data-fadd="" type="button">+ Other link</button></div>
+    <div class="fadd"><span class="muted">Add:</span>${["Raw footage for the editor", "Reference", "Music"].map((l) => `<button class="btn sm" data-fadd="${esc(l)}" type="button">+ ${esc(l === "Raw footage for the editor" ? "Raw footage" : l)}</button>`).join("")}<button class="btn sm" data-fadd="" type="button">+ Other link</button><button class="btn sm primary" data-upf type="button" title="Upload a project file, footage or anything else to Google Drive">⬆ Upload file</button><input class="upfile" data-scope="files" type="file" hidden multiple></div>
+    <div class="uplist" data-uplist="files">${tid ? upHtml(tid, "files") : ""}</div>
     <datalist id="fPresets">${FILE_PRESETS.map((x) => `<option value="${esc(x)}">`).join("")}</datalist></div>`;
 }
 /* ---------------- links written inside the brief ----------------
@@ -2427,7 +2562,7 @@ function briefLinks(id, pasted) {
   patchTask(moved ? { files: clean, briefHtml: newHtml, brief: clipText(newHtml) } : { files: clean }, true);
   if (moved && briefEd) briefEd.set(newHtml);
   setTimeout(() => {
-    const t2 = { ...(S.merged.get(id) || {}), ...(taskDraft || {}) }, box = document.createElement("div"); box.innerHTML = filesBox(t2);
+    const t2 = { ...(S.merged.get(id) || {}), ...(taskDraft || {}) }, box = document.createElement("div"); box.innerHTML = filesBox(t2, id);
     const fl = $("#tBody .flist"); if (fl) fl.innerHTML = $(".flist", box).innerHTML;
     $$(".frow").slice(-added).forEach((r) => { r.classList.add("fresh"); setTimeout(() => r.classList.remove("fresh"), 1600); });
     const miss = titleOnlyLines(t.brief);
@@ -2492,7 +2627,7 @@ function stripLinks(text, known, norm) {
   return out.join("\n").replace(/\n{3,}/g, "\n\n").replace(/\s+$/, "");
 }
 function bindFiles(body, id) {
-  const read = () => $$(".frow", body).map((r) => ({ id: r.dataset.fid, label: $(".flabel", r).value.trim().slice(0, 60), url: $(".furl", r).value.trim() }));
+  const read = () => $$(".frow", body).map((r) => ({ id: r.dataset.fid, label: $(".flabel", r).value.trim().slice(0, 60), url: $(".furl", r).value.trim(), fid: r.dataset.drv || "" }));
   const save = (files, focusId) => {
     patchTask({ files }, true);
     setTimeout(() => { drawTask(); if (focusId) { const i = $(`.frow[data-fid="${CSS.escape(focusId)}"] .furl`); i && i.focus(); } }, 30);
@@ -2538,7 +2673,7 @@ function videosOf(t) {
     return t.videos.map((x, i) => {
       const raw = x.versions || [];
       return { id: x.id || "v" + i, name: x.name || "Video " + (i + 1), next: raw.length + 1, removed: raw.map((y, j) => (isGone(y) ? j + 1 : 0)).filter(Boolean),
-        versions: raw.map((y, j) => (isGone(y) ? null : { v: j + 1, url: y.url, at: y.at || "", note: y.note || "", sentAt: y.sentAt || "", sent: y.sentAt || "" })).filter(Boolean) };
+        versions: raw.map((y, j) => (isGone(y) ? null : { v: j + 1, url: y.url, at: y.at || "", note: y.note || "", sentAt: y.sentAt || "", sent: y.sentAt || "", fid: y.fid || "" })).filter(Boolean) };
     });
   }
   const vs = versionsOf(t).filter((x) => x.url);
@@ -2548,7 +2683,7 @@ function videosOf(t) {
 const plainVideos = (t) => {
   t = t || {};
   if (Array.isArray(t.videos) && t.videos.length) return t.videos.map((x, i) => ({ id: x.id || "v" + i, name: x.name || "Video " + (i + 1),
-    versions: (x.versions || []).map((y) => (isGone(y) ? { url: "", at: (y && y.at) || now(), note: "", sentAt: "", removed: true } : { url: y.url, at: y.at || now(), note: y.note || "", sentAt: y.sentAt || "" })) }));
+    versions: (x.versions || []).map((y) => (isGone(y) ? { url: "", at: (y && y.at) || now(), note: "", sentAt: "", removed: true } : { url: y.url, at: y.at || now(), note: y.note || "", sentAt: y.sentAt || "", fid: y.fid || "" })) }));
   return videosOf(t).map((x) => ({ id: x.id, name: x.name, versions: x.versions.map((y) => ({ url: y.url, at: y.at || now(), note: y.note || "", sentAt: y.sentAt || "" })) }));
 };
 const latestOf = (v) => [...(v.versions || [])].reverse().find((x) => !isGone(x));          // newest version that wasn't deleted
@@ -2582,6 +2717,7 @@ function exportsTab(t, id) {
           <a class="vlink" href="${esc(safeUrl(x.url))}" target="_blank" rel="noopener" title="${esc(x.url)}">${esc(x.url.replace(/^https?:\/\/(www\.)?/, ""))}</a><button class="btn sm" data-watch="${esc(v.id)}|${x.v}" type="button">▶ Watch</button>${isAdmin() || (editable && x.v !== top) ? `<button class="btn sm ghost danger vdel-ver" data-verdel="${x.v}" type="button" title="Delete v${x.v}" aria-label="Delete v${x.v} of ${esc(v.name)}">🗑</button>` : ""}</div>`).join("")}${v.removed.length ? `<div class="vrow muted vgone">Deleted: ${v.removed.map((k) => "v" + k).join(", ")}</div>` : ""}</div>` : (v.removed.length ? `<div class="vlist"><div class="vrow muted vgone">Deleted: ${v.removed.map((k) => "v" + k).join(", ")}</div></div>` : "")}
       <div class="f"><label>${n ? `Link of v${top}. Only change it to fix a wrong link` : "Export link"}</label><div class="linkrow"><input class="vlatest" value="${esc(n ? l.url : "")}" placeholder="Unlisted YouTube, Google Drive or Dropbox link (WeTransfer works too, comments only)" inputmode="url" aria-label="Export link for ${esc(v.name)}">${n ? `<a class="btn" href="${esc(safeUrl(l.url))}" target="_blank" rel="noopener">Open ↗</a>` : ""}</div>
         ${n ? "" : `<small class="muted" style="font-size:12px">Paste the export here when it's ready. For Drive, set sharing to “Anyone with the link”.</small>`}</div>
+      ${editable ? `<div class="upwrap"><button class="btn" data-upv type="button">⬆ Upload ${n ? "v" + nx : "video"} from your computer</button><input class="upfile" data-scope="video" type="file" accept="video/*,.mp4,.mov,.m4v,.mkv,.webm,.avi,.mxf" hidden><small class="muted">Saved to Google Drive, no link needed. Keep this tab open until it finishes. Big videos need a few minutes in Drive before they play.</small></div><div class="uplist" data-uplist="${esc(v.id)}">${upHtml(id, v.id)}</div>` : ""}
       ${n ? `<div><button class="btn" data-nvopen type="button">+ Add new version (v${nx})</button>
         <div class="nv-box" hidden><label style="font-weight:600">Link to v${nx} of ${esc(v.name)}</label><input class="nvurl" placeholder="Link of the new export" inputmode="url">
           <textarea class="nvnote" rows="2" placeholder="What changed? (optional, the client sees this)" maxlength="500"></textarea>
@@ -2607,7 +2743,7 @@ function bindExports(body, id) {
     let msg = "";
     if (!last) { if (val) v.versions.push({ url: val, at: now(), note: "", sentAt: "" }); }
     else if (val && last.sentAt && last.url !== val) { v.versions.push({ url: val, at: now(), note: "", sentAt: "" }); msg = `Saved as v${v.versions.length}. The client already saw v${v.versions.length - 1}.`; }
-    else if (val) last.url = val;
+    else if (val) { last.url = val; if (last.fid && !val.includes(last.fid)) last.fid = ""; }
     else { last.url = ""; last.removed = true; }
     if (pv && pv.kind === "wetransfer") msg = (msg ? msg + " " : "") + WT_NOTE;
     logAct("export", `${v.name}: ${!val ? "removed the latest version" : !last ? "added v1" : msg && !/WeTransfer saved/.test(msg) || (last && last.url !== val && last.sentAt) ? "added v" + v.versions.length : "corrected the export link"}`, { id, title: (S.merged.get(id) || {}).title }, { every: 0 });
