@@ -133,6 +133,11 @@ table.list tr:last-child td { border-bottom: 0; }
 .f textarea { min-height: 70px; resize: vertical; }
 .f.full { grid-column: 1 / -1; }
 .linkrow { display: flex; gap: 8px; }
+.dz { border: 1.5px dashed var(--line-2); border-radius: 10px; padding: 14px; text-align: center; color: var(--muted); font-size: 13px; margin: 8px 0; }
+.vcard.dz-on, .pfbox.dz-on { outline: 2px dashed var(--accent); outline-offset: -2px; }
+.pfbox.dz-on .dz { border-color: var(--accent); color: var(--fg); }
+.pfrow { display: flex; align-items: center; gap: 10px; padding: 7px 0; border-bottom: 1px solid var(--line-2); font-size: 13px; }
+.pf-n { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
 .upwrap { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin: 10px 0 4px; }
 .upwrap small { font-size: 12px; flex: 1 1 220px; }
 .uplist:empty { display: none; }
@@ -741,6 +746,8 @@ button.tc:hover { background: var(--accent); color: var(--accent-ink); }
 <script src="https://www.gstatic.com/firebasejs/13.2.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/13.2.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/13.2.0/firebase-firestore-compat.js"></script>
+<script>/* client-zip 2.5.1, MIT licence, (c) 2020 David Junger. Zips dropped folders in the browser without filling memory. */
+(function(){"stream"in Blob.prototype||Object.defineProperty(Blob.prototype,"stream",{value(){return new Response(this).body}}),"setBigUint64"in DataView.prototype||Object.defineProperty(DataView.prototype,"setBigUint64",{value(e,n,t){const i=Number(0xffffffffn&n),r=Number(n>>32n);this.setUint32(e+(t?0:4),i,t),this.setUint32(e+(t?4:0),r,t)}});var e=e=>new DataView(new ArrayBuffer(e)),n=e=>new Uint8Array(e.buffer||e),t=e=>(new TextEncoder).encode(String(e)),i=e=>Math.min(4294967295,Number(e)),r=e=>Math.min(65535,Number(e));function o(e,i,r){void 0===i||i instanceof Date||(i=new Date(i));const o=void 0!==e;if(r||(r=o?436:509),e instanceof File)return{isFile:o,t:i||new Date(e.lastModified),bytes:e.stream(),mode:r};if(e instanceof Response)return{isFile:o,t:i||new Date(e.headers.get("Last-Modified")||Date.now()),bytes:e.body,mode:r};if(void 0===i)i=new Date;else if(isNaN(i))throw new Error("Invalid modification date.");if(!o)return{isFile:o,t:i,mode:r};if("string"==typeof e)return{isFile:o,t:i,bytes:t(e),mode:r};if(e instanceof Blob)return{isFile:o,t:i,bytes:e.stream(),mode:r};if(e instanceof Uint8Array||e instanceof ReadableStream)return{isFile:o,t:i,bytes:e,mode:r};if(e instanceof ArrayBuffer||ArrayBuffer.isView(e))return{isFile:o,t:i,bytes:n(e),mode:r};if(Symbol.asyncIterator in e)return{isFile:o,t:i,bytes:f(e[Symbol.asyncIterator]()),mode:r};throw new TypeError("Unsupported input format.")}function f(e,n=e){return new ReadableStream({async pull(n){let t=0;for(;n.desiredSize>t;){const i=await e.next();if(!i.value){n.close();break}{const e=a(i.value);n.enqueue(e),t+=e.byteLength}}},async cancel(e){await(n.throw?.(e))}})}function a(e){return"string"==typeof e?t(e):e instanceof Uint8Array?e:n(e)}function s(e,i,r){let[o,f]=function(e){return e?e instanceof Uint8Array?[e,1]:ArrayBuffer.isView(e)||e instanceof ArrayBuffer?[n(e),1]:[t(e),0]:[void 0,0]}(i);if(e instanceof File)return{i:d(o||t(e.name)),o:BigInt(e.size),u:f};if(e instanceof Response){const n=e.headers.get("content-disposition"),i=n&&n.match(/;\s*filename\*?\s*=\s*(?:UTF-\d+''|)["']?([^;"'\r\n]*)["']?(?:;|$)/i),a=i&&i[1]||e.url&&new URL(e.url).pathname.split("/").findLast(Boolean),s=a&&decodeURIComponent(a),u=r||+e.headers.get("content-length");return{i:d(o||t(s)),o:BigInt(u),u:f}}return o=d(o,void 0!==e||void 0!==r),"string"==typeof e?{i:o,o:BigInt(t(e).length),u:f}:e instanceof Blob?{i:o,o:BigInt(e.size),u:f}:e instanceof ArrayBuffer||ArrayBuffer.isView(e)?{i:o,o:BigInt(e.byteLength),u:f}:{i:o,o:u(e,r),u:f}}function u(e,n){return n>-1?BigInt(n):e?void 0:0n}function d(e,n=1){if(!e||e.every((c=>47===c)))throw new Error("The file must have a name.");if(n)for(;47===e[e.length-1];)e=e.subarray(0,-1);else 47!==e[e.length-1]&&(e=new Uint8Array([...e,47]));return e}var l=new Uint32Array(256);for(let e=0;e<256;++e){let n=e;for(let e=0;e<8;++e)n=n>>>1^(1&n&&3988292384);l[e]=n}function y(e,n=0){n=~n;for(var t=0,i=e.length;t<i;t++)n=n>>>8^l[255&n^e[t]];return~n>>>0}function w(e,n,t=0){const i=e.getSeconds()>>1|e.getMinutes()<<5|e.getHours()<<11,r=e.getDate()|e.getMonth()+1<<5|e.getFullYear()-1980<<9;n.setUint16(t,i,1),n.setUint16(t+2,r,1)}function B({i:e,u:n},t){return 8*(!n||(t??function(e){try{b.decode(e)}catch{return 0}return 1}(e)))}var b=new TextDecoder("utf8",{fatal:1});function p(t,i=0){const r=e(30);return r.setUint32(0,1347093252),r.setUint32(4,754976768|i),w(t.t,r,10),r.setUint16(26,t.i.length,1),n(r)}async function*g(e){let{bytes:n}=e;if("then"in n&&(n=await n),n instanceof Uint8Array)yield n,e.l=y(n,0),e.o=BigInt(n.length);else{e.o=0n;const t=n.getReader();for(;;){const{value:n,done:i}=await t.read();if(i)break;e.l=y(n,e.l),e.o+=BigInt(n.length),yield n}}}function I(t,r){const o=e(16+(r?8:0));return o.setUint32(0,1347094280),o.setUint32(4,t.isFile?t.l:0,1),r?(o.setBigUint64(8,t.o,1),o.setBigUint64(16,t.o,1)):(o.setUint32(8,i(t.o),1),o.setUint32(12,i(t.o),1)),n(o)}function v(t,r,o=0,f=0){const a=e(46);return a.setUint32(0,1347092738),a.setUint32(4,755182848),a.setUint16(8,2048|o),w(t.t,a,12),a.setUint32(16,t.isFile?t.l:0,1),a.setUint32(20,i(t.o),1),a.setUint32(24,i(t.o),1),a.setUint16(28,t.i.length,1),a.setUint16(30,f,1),a.setUint16(40,t.mode|(t.isFile?32768:16384),1),a.setUint32(42,i(r),1),n(a)}function h(t,i,r){const o=e(r);return o.setUint16(0,1,1),o.setUint16(2,r-4,1),16&r&&(o.setBigUint64(4,t.o,1),o.setBigUint64(12,t.o,1)),o.setBigUint64(r-8,i,1),n(o)}function D(e){return e instanceof File||e instanceof Response?[[e],[e]]:[[e.input,e.name,e.size],[e.input,e.lastModified,e.mode]]}var S=e=>function(e){let n=BigInt(22),t=0n,i=0;for(const r of e){if(!r.i)throw new Error("Every file must have a non-empty name.");if(void 0===r.o)throw new Error(`Missing size for file "${(new TextDecoder).decode(r.i)}".`);const e=r.o>=0xffffffffn,o=t>=0xffffffffn;t+=BigInt(46+r.i.length+(e&&8))+r.o,n+=BigInt(r.i.length+46+(12*o|28*e)),i||(i=e)}return(i||t>=0xffffffffn)&&(n+=BigInt(76)),n+t}(function*(e){for(const n of e)yield s(...D(n)[0])}(e));function A(e,n={}){const t={"Content-Type":"application/zip","Content-Disposition":"attachment"};return("bigint"==typeof n.length||Number.isInteger(n.length))&&n.length>0&&(t["Content-Length"]=String(n.length)),n.metadata&&(t["Content-Length"]=String(S(n.metadata))),new Response(N(e,n),{headers:t})}function N(t,a={}){const u=function(e){const n=e[Symbol.iterator in e?Symbol.iterator:Symbol.asyncIterator]();return{async next(){const e=await n.next();if(e.done)return e;const[t,i]=D(e.value);return{done:0,value:Object.assign(o(...i),s(...t))}},throw:n.throw?.bind(n),[Symbol.asyncIterator](){return this}}}(t);return f(async function*(t,o){const f=[];let a=0n,s=0n,u=0;for await(const e of t){const n=B(e,o.buffersAreUTF8);yield p(e,n),yield new Uint8Array(e.i),e.isFile&&(yield*g(e));const t=e.o>=0xffffffffn,i=12*(a>=0xffffffffn)|28*t;yield I(e,t),f.push(v(e,a,n,i)),f.push(e.i),i&&f.push(h(e,a,i)),t&&(a+=8n),s++,a+=BigInt(46+e.i.length)+e.o,u||(u=t)}let d=0n;for(const e of f)yield e,d+=BigInt(e.length);if(u||a>=0xffffffffn){const t=e(76);t.setUint32(0,1347094022),t.setBigUint64(4,BigInt(44),1),t.setUint32(12,755182848),t.setBigUint64(24,s,1),t.setBigUint64(32,s,1),t.setBigUint64(40,d,1),t.setBigUint64(48,a,1),t.setUint32(56,1347094023),t.setBigUint64(64,a+d,1),t.setUint32(72,1,1),yield n(t)}const l=e(22);l.setUint32(0,1347093766),l.setUint16(8,r(s),1),l.setUint16(10,r(s),1),l.setUint32(12,i(d),1),l.setUint32(16,i(a),1),yield n(l)}(u,a),u)}window.clientZip={makeZip:N,predictLength:S};})();</script>
 <script>
 /* =====================================================================
    FW Studio Workspace (GitHub + Firebase version)
@@ -1061,7 +1068,7 @@ ST.unassigned = { id: "unassigned", label: "Unassigned" };          // not a sto
 const boardCol = (t) => { const s = (t && t.status) || "todo"; return s === "todo" && !(t && t.assignee) ? "unassigned" : s; };
 const PRIORITY = { high: "High", normal: "Normal", low: "Low" };
 const ROLE_LABEL = { admin: "Admin", editor: "Editor", client: "Client", guest: "Guest" };
-const TASK_FIELDS = ["title", "assignee", "client", "due", "type", "priority", "brief", "briefHtml", "notes", "sheet", "assignedAt", "videoUrl", "versions", "videos", "files", "rawUrl", "docUrl", "sheetUrl", "clientNote", "order", "ratingFix", "createdAt", "updatedAt"];
+const TASK_FIELDS = ["title", "assignee", "client", "due", "type", "priority", "brief", "briefHtml", "notes", "sheet", "assignedAt", "videoUrl", "versions", "videos", "files", "projectFiles", "drive", "rawUrl", "docUrl", "sheetUrl", "clientNote", "order", "ratingFix", "createdAt", "updatedAt"];
 const MIRROR_FIELDS = ["title", "assignee", "client", "due", "type", "videoUrl", "versions", "videos", "clientNote"];   // what the client is allowed to see
 const pick = (o, keys) => Object.fromEntries(keys.filter((k) => o[k] !== undefined).map((k) => [k, o[k]]));
 
@@ -2057,10 +2064,7 @@ function openReview(id, ver, vid) {
   rvHead(); rvLoadPlayer(); rvRender();
   rv.unsub = fs.collection("reviews/" + id + "/comments").onSnapshot((s) => {
     rv.comments = new Map(s.docs.map((d) => [d.id, d.data()]));
-    if (rv.first) {        // a new version with no comments yet: show the earlier ones so fixes can be checked
-      rv.first = false; const t0 = S.merged.get(rv.id) || {}; const tops = [...rv.comments.values()].filter((c) => !c.parent && cVid(c, t0) === rv.vid);
-      if (tops.length && !tops.some((c) => (c.v || 1) === rv.view)) { rv.filter = "all"; $("#rvFilter").value = "all"; }
-    }
+    rv.first = false;        // the panel opens on the version being watched; "All versions" shows the earlier mistakes
     rvRender();
   }, (e) => { console.warn("comments", e); $("#rvList").innerHTML = `<p class="muted">Comments couldn't be loaded. Close this and try again.</p>`; });
   rv.tick = setInterval(rvTick, 250);
@@ -2151,7 +2155,7 @@ function rvRender() {
     </div>`;
   };
   list.innerHTML = shown.length ? shown.map((c) => one(c, false)).join("")
-    : `<div class="rv-empty"><b>${counts.all && rv.filter !== "all" ? (rv.filter === "open" ? "Everything is done" : "No comments on this version yet") : "No comments yet"}</b><span>${isClient() ? "Play the video, pause where you want a change, and write it below." : "Comments from the client and the team show up here."}</span></div>`;
+    : `<div class="rv-empty"><b>${counts.all && rv.filter !== "all" ? (rv.filter === "open" ? "Everything is done" : "No comments on this version yet") : "No comments yet"}</b><span>${counts.all && rv.filter === "current" && !isClient() ? "To check the earlier mistakes, choose “All versions” above." : isClient() ? "Play the video, pause where you want a change, and write it below." : "Comments from the client and the team show up here."}</span></div>`;
   if (focused || rv.replyTo) { const r = $("#rvReply"); if (r && focused) { r.focus(); r.setSelectionRange(r.value.length, r.value.length); } }
 }
 
@@ -2339,14 +2343,15 @@ $("#rvVidSel").addEventListener("change", (e) => {
 });
 
 /* ---------------- uploads straight to Google Drive (through the fw-uploads Worker) ----------------
+   Files go to: FW Workspace Uploads / Client / Task / Exports (videos) or Project File (project files).
    The browser sends 16 MB pieces; if the connection drops it asks where it stopped and carries on.
-   The file lands in the owner's Drive and the "Anyone with the link" address is added like a pasted link. */
+   A dropped folder is zipped on the fly (no compression, nothing held in memory) and uploaded as it is made. */
 const UPLOAD_API = "https://fw-uploads.rageopppp.workers.dev";
 const UP = new Map(), UP_CHUNK = 16 * 1024 * 1024;
 const fmtSize = (b) => (b >= 1e9 ? (b / 1e9).toFixed(1) + " GB" : b >= 1e6 ? Math.round(b / 1e6) + " MB" : Math.max(1, Math.round(b / 1e3)) + " KB");
 function upItem(u) {
-  const pct = u.size ? Math.min(100, Math.floor((u.sent / u.size) * 100)) : 0;
-  const msg = u.state === "err" ? esc(u.msg) : u.state === "done" ? "Uploaded ✓" : u.state === "wait" ? "Starting…" : `${pct}% · ${fmtSize(u.sent)} of ${fmtSize(u.size)}${u.retry ? " · reconnecting…" : ""}`;
+  const pct = u.size ? Math.min(99, Math.floor((u.sent / u.size) * 100)) : 0;
+  const msg = u.state === "err" ? esc(u.msg) : u.state === "done" ? "Uploaded ✓" : u.state === "wait" ? "Starting…" : `${u.zip ? "Zipping and uploading · " : ""}${pct}% · ${fmtSize(Math.min(u.sent, u.size))} of ${fmtSize(u.size)}${u.retry ? " · reconnecting…" : ""}`;
   return `<div class="upl ${u.state}" data-upid="${u.id}"><div class="upl-t"><b title="${esc(u.name)}">${esc(u.name)}</b><span class="muted">${msg}</span>` +
     `<button class="btn sm ghost" ${u.state === "err" || u.state === "done" ? "data-updismiss" : "data-upcancel"} type="button">${u.state === "err" || u.state === "done" ? "OK" : "Cancel"}</button></div>` +
     `<div class="upl-bar"><i style="width:${u.state === "done" ? 100 : pct}%"></i></div></div>`;
@@ -2356,9 +2361,9 @@ function upRefresh(u) { if (ui.openId !== u.task) return; const el = document.qu
 function upPaint(u) {
   if (u.painted && Date.now() - u.painted < 200) return; u.painted = Date.now();
   const el = document.querySelector(`[data-upid="${u.id}"]`); if (!el) return;
-  const pct = u.size ? Math.min(100, Math.floor((u.sent / u.size) * 100)) : 0;
+  const pct = u.size ? Math.min(99, Math.floor((u.sent / u.size) * 100)) : 0;
   el.querySelector(".upl-bar i").style.width = pct + "%";
-  el.querySelector(".muted").textContent = `${pct}% · ${fmtSize(u.sent)} of ${fmtSize(u.size)}${u.retry ? " · reconnecting…" : ""}`;
+  el.querySelector(".muted").textContent = `${u.zip ? "Zipping and uploading · " : ""}${pct}% · ${fmtSize(Math.min(u.sent, u.size))} of ${fmtSize(u.size)}${u.retry ? " · reconnecting…" : ""}`;
 }
 function upReq(u, method, path, o) {
   return auth.currentUser.getIdToken().then((tok) => new Promise((resolve, reject) => {
@@ -2371,34 +2376,60 @@ function upReq(u, method, path, o) {
     x.send(o.body || null);
   }));
 }
-async function runUpload(u, file) {
-  let r = await upReq(u, "POST", "/upload/init", { headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: u.driveName, size: file.size, type: file.type || "application/octet-stream" }) });
-  if (r.status !== 200) throw new Error(r.data.error || "Couldn't start the upload.");
-  const session = encodeURIComponent(r.data.session), q = "/upload/chunk?session=" + session;
-  let off = 0, fails = 0;
+const wait = (ms) => new Promise((ok) => setTimeout(ok, ms));
+// Sends one piece (a Blob or bytes) that starts at byte `off`. total is the file size, or "*" while a zip is still being made.
+async function sendPiece(u, q, body, off, total) {
+  let len = body.size ?? body.length, fails = 0;
   while (true) {
     if (u.cancelled) throw new Error("cancelled");
-    const end = Math.min(off + UP_CHUNK, file.size) - 1;
-    try {
-      r = await upReq(u, "PUT", q, { headers: { "X-Content-Range": `bytes ${off}-${end}/${file.size}` }, body: file.slice(off, end + 1), onProgress: (l) => { u.sent = off + l; upPaint(u); } });
-    } catch (e) { if (u.cancelled) throw new Error("cancelled"); r = { status: 0, data: {} }; }
-    const d = r.data || {};
-    if (r.status === 200 && d.status === "done") return d;
-    if (r.status === 200 && d.status === "more") { off = d.next; u.sent = off; u.retry = false; fails = 0; upPaint(u); continue; }
+    let r;
+    try { r = await upReq(u, "PUT", q, { headers: { "X-Content-Range": len ? `bytes ${off}-${off + len - 1}/${total}` : `bytes */${total}` }, body: len ? body : null, onProgress: (l) => { u.sent = off + l; upPaint(u); } }); }
+    catch (e) { if (u.cancelled) throw new Error("cancelled"); r = { status: 0, data: {} }; }
+    let d = r.data || {};
     if (r.status === 410) throw new Error("The upload expired. Please start it again.");
     if (r.status === 403) throw new Error("You don't have permission to upload.");
     if (r.status === 400) throw new Error(d.error || "The upload was rejected.");
-    // a dropped connection or a Google hiccup: wait, ask where we stopped, carry on
-    if (++fails > 8) throw new Error("The connection kept dropping. Check your internet and try again.");
-    u.retry = true; upPaint(u);
-    await new Promise((ok) => setTimeout(ok, Math.min(15000, 1000 * 2 ** fails)));
-    if (u.cancelled) throw new Error("cancelled");
-    try {
-      const s = await upReq(u, "PUT", q, { headers: { "X-Content-Range": `bytes */${file.size}` } });
-      if (s.status === 200 && s.data.status === "done") return s.data;
-      if (s.status === 200 && s.data.status === "more") off = s.data.next;
-    } catch (e) {}
+    if (r.status !== 200) {         // a dropped connection or a Google hiccup: wait, ask where we stopped, carry on
+      if (++fails > 8) throw new Error("The connection kept dropping. Check your internet and try again.");
+      u.retry = true; upPaint(u); await wait(Math.min(15000, 1000 * 2 ** fails));
+      if (u.cancelled) throw new Error("cancelled");
+      try { const s = await upReq(u, "PUT", q, { headers: { "X-Content-Range": `bytes */${total}` } }); if (s.status === 200) d = s.data || {}; else continue; } catch (e) { continue; }
+    }
+    if (d.status === "done") return { done: d };
+    if (d.status === "more") {
+      if (d.next >= off + len) { u.retry = false; u.sent = off + len; return { more: true }; }
+      if (d.next < off) throw new Error("Google lost part of the upload. Please start it again.");
+      if (d.next > off) { body = body.slice(d.next - off); len -= d.next - off; off = d.next; }      // Google kept only part of it: send the rest
+    }
   }
+}
+async function runUpload(u, job) {
+  const f = job.file;
+  const r = await upReq(u, "POST", "/upload/init", { headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ name: u.name, size: f ? f.size : 0, type: f ? f.type || "application/octet-stream" : "application/zip", client: u.drive.client, task: u.drive.task, sub: u.sub }) });
+  if (r.status !== 200) throw new Error(r.data.error || "Couldn't start the upload.");
+  const q = "/upload/chunk?session=" + encodeURIComponent(r.data.session);
+  if (f) {
+    for (let off = 0; ; off += UP_CHUNK) {
+      const res = await sendPiece(u, q, f.slice(off, Math.min(off + UP_CHUNK, f.size)), off, String(f.size));
+      if (res.done) return res.done;
+    }
+  }
+  // a folder: zip it as it goes. Pieces are kept only until Google has them.
+  const stream = clientZip.makeZip(job.zip.entries.map((e) => ({ name: e.path, lastModified: e.file.lastModified, input: e.file })));
+  const reader = stream.getReader(); let pieces = [], have = 0, off = 0, ended = false;
+  const join = (n) => {           // takes the first n bytes (all of them if n is omitted)
+    const out = new Uint8Array(n === undefined ? have : n); let at = 0;
+    while (at < out.length) { const p = pieces[0], k = Math.min(p.length, out.length - at); out.set(p.subarray(0, k), at); at += k; if (k === p.length) pieces.shift(); else pieces[0] = p.subarray(k); }
+    have -= out.length; return out;
+  };
+  try {
+    while (true) {
+      while (have <= UP_CHUNK && !ended) { const { value, done } = await reader.read(); if (done) ended = true; else { pieces.push(value); have += value.length; } if (u.cancelled) throw new Error("cancelled"); }
+      if (ended) { const last = join(); const res = await sendPiece(u, q, last, off, String(off + last.length)); if (res.done) return res.done; throw new Error("Google didn't finish the upload."); }
+      await sendPiece(u, q, join(UP_CHUNK), off, "*"); off += UP_CHUNK;
+    }
+  } finally { try { reader.cancel(); } catch (e) {} }
 }
 // Saves a change to a task whether or not it's the one open right now.
 function commitTaskPatch(id, patch) {
@@ -2410,31 +2441,30 @@ function commitTaskPatch(id, patch) {
 }
 function attachUpload(u, res) {
   const t = S.merged.get(u.task) || S.tasks.get(u.task); if (!t) return;
-  const info = { id: u.task, title: t.title };
-  if (u.scope === "files") {
-    let files = filesOf(t); if (files.length === 1 && !files[0].url) files = [];
-    files.push({ id: uid(), label: u.name.slice(0, 60), url: res.url, fid: res.id });
-    logAct("export", `Uploaded a file: ${u.name}`, info, { every: 0 });
-    commitTaskPatch(u.task, { files });
+  const info = { id: u.task, title: t.title }, keep = t.drive ? {} : { drive: u.drive };       // the folder names are fixed on the first upload, so renaming the task later doesn't split its files
+  if (u.scope === "project") {
+    const projectFiles = [...(Array.isArray(t.projectFiles) ? t.projectFiles : []), { id: uid(), name: u.name, url: res.url, fid: res.id, size: res.size || u.size, at: now() }];
+    logAct("export", `Uploaded a project file: ${u.name}`, info, { every: 0 });
+    commitTaskPatch(u.task, { projectFiles, ...keep });
   } else {
     const all = plainVideos(t), v = all.find((x) => x.id === u.scope); if (!v) return;
     v.versions.push({ url: res.url, at: now(), note: "", sentAt: "", fid: res.id });
     logAct("export", `${v.name}: v${v.versions.length} uploaded`, info, { every: 0 });
     const first = all.find((x) => liveCount(x));
-    commitTaskPatch(u.task, { videos: all, videoUrl: first ? latestOf(first).url : "" });
+    commitTaskPatch(u.task, { videos: all, videoUrl: first ? latestOf(first).url : "", ...keep });
   }
   toast(`“${u.name}” uploaded`);
   if (ui.openKind === "task" && ui.openId === u.task) setTimeout(drawTask, 30);
 }
-async function startUpload(taskId, scope, file) {
-  if (!file) return;
-  if (!file.size) { toast("That file is empty."); return; }
+async function startUpload(taskId, scope, job) {
   const t = S.merged.get(taskId) || S.tasks.get(taskId) || {};
-  const u = { id: uid(), task: taskId, scope, name: file.name, size: file.size, sent: 0, state: "wait", msg: "", driveName: `${(t.title || "Task").slice(0, 60)} - ${file.name}`.slice(0, 200) };
-  UP.set(u.id, u); upRefresh(u);
-  u.state = "up"; upRefresh(u);
+  const name = job.file ? job.file.name : job.zip.name, size = job.file ? job.file.size : job.zip.entries.reduce((a, e) => a + e.file.size, 0);
+  if (!size) { toast("That file is empty."); return; }
+  const drive = t.drive || { client: personName(t.client) || "No client", task: String(t.title || "").trim() || "Untitled task" };
+  const u = { id: uid(), task: taskId, scope, name, size, sent: 0, state: "wait", msg: "", zip: !!job.zip, drive, sub: scope === "project" ? "Project File" : "Exports" };
+  UP.set(u.id, u); upRefresh(u); u.state = "up"; upRefresh(u);
   try {
-    const res = await runUpload(u, file);
+    const res = await runUpload(u, job);
     u.state = "done"; u.sent = u.size; attachUpload(u, res);
     upRefresh(u); setTimeout(() => { UP.delete(u.id); upRefresh(u); }, 3500);
   } catch (e) {
@@ -2442,19 +2472,81 @@ async function startUpload(taskId, scope, file) {
     u.state = "err"; u.msg = e.message || "Upload failed."; upRefresh(u);
   }
 }
+const isVideoFile = (f) => /^video\//.test(f.type) || /\.(mp4|mov|m4v|mkv|webm|avi|mxf)$/i.test(f.name);
+async function uploadVideos(id, vid, files) {
+  for (const f of files) {
+    if (!isVideoFile(f)) { toast(`“${f.name}” doesn't look like a video. Project files go in the Project files box below.`); continue; }
+    await startUpload(id, vid, { file: f });
+  }
+}
+// entries = [{ path, file }]. One loose file goes up as it is; a folder or several files become one zip.
+async function uploadProject(id, entries, dirName) {
+  entries = entries.filter((e) => !/^(\.DS_Store|Thumbs\.db|desktop\.ini)$/i.test(e.path.split("/").pop()));
+  if (!entries.length) { toast("There's nothing to upload there."); return; }
+  if (entries.length === 1 && !dirName) { await startUpload(id, "project", { file: entries[0].file }); return; }
+  const total = entries.reduce((a, e) => a + e.file.size, 0), t = S.merged.get(id) || S.tasks.get(id) || {};
+  if (total > 2e9 && !confirm(`This is ${fmtSize(total)} in ${entries.length} files. Upload it all as one zip?`)) return;
+  await startUpload(id, "project", { zip: { name: dirName ? dirName + ".zip" : `${String(t.title || "Task").slice(0, 60)} - Project Files.zip`, entries } });
+}
+async function walkEntry(en, prefix, out) {
+  if (en.isFile) { const f = await new Promise((ok, no) => en.file(ok, no)); out.push({ path: prefix + en.name, file: f }); return; }
+  const rd = en.createReader(); let batch;
+  do { batch = await new Promise((ok, no) => rd.readEntries(ok, no)); for (const c of batch) await walkEntry(c, prefix + en.name + "/", out); } while (batch.length);
+}
+async function handleDrop(id, zone, ents, plain) {
+  const list = [];
+  try { if (ents.length) for (const en of ents) await walkEntry(en, "", list); else plain.forEach((f) => list.push({ path: f.name, file: f })); }
+  catch (e) { toast("Couldn't read that. Try the upload buttons instead."); return; }
+  const dirs = ents.filter((en) => en.isDirectory);
+  if (zone.classList.contains("vcard")) {
+    if (dirs.length) { toast("That's a folder. Drop a video here, or use the Project files box for folders."); return; }
+    await uploadVideos(id, zone.dataset.vid, list.map((x) => x.file)); return;
+  }
+  await uploadProject(id, list, ents.length === 1 && dirs.length === 1 ? dirs[0].name : null);
+}
+const hasFiles = (e) => [...((e.dataTransfer && e.dataTransfer.types) || [])].includes("Files");
+let dzEl = null;
+document.addEventListener("dragover", (e) => {
+  if (!hasFiles(e)) return; e.preventDefault();
+  const z = e.target.closest ? e.target.closest(".vcard, .pfbox") : null;
+  if (z !== dzEl) { dzEl && dzEl.classList.remove("dz-on"); dzEl = z; dzEl && dzEl.classList.add("dz-on"); }
+  e.dataTransfer.dropEffect = z ? "copy" : "none";
+});
+document.addEventListener("dragleave", (e) => { if (!e.relatedTarget && dzEl) { dzEl.classList.remove("dz-on"); dzEl = null; } });
+document.addEventListener("drop", (e) => {
+  if (!hasFiles(e)) return; e.preventDefault();                       // also stops the browser opening a file that was dropped in the wrong place
+  const z = e.target.closest ? e.target.closest(".vcard, .pfbox") : null;
+  dzEl && dzEl.classList.remove("dz-on"); dzEl = null;
+  if (!z || !ui.openId || ui.openKind !== "task") return;
+  const items = [...((e.dataTransfer && e.dataTransfer.items) || [])];
+  const ents = items.map((i) => (i.kind === "file" && i.webkitGetAsEntry ? i.webkitGetAsEntry() : null)).filter(Boolean);   // must be read now, before the event ends
+  handleDrop(ui.openId, z, ents, [...e.dataTransfer.files]);
+});
 document.addEventListener("click", (e) => {
-  const pick = e.target.closest("[data-upv],[data-upf]");
-  if (pick) { const box = pick.closest(".vcard, .sec"); const inp = box && box.querySelector(".upfile"); if (inp) inp.click(); return; }
+  const pickBtn = e.target.closest("[data-upv],[data-upp],[data-uppd]");
+  if (pickBtn) { const box = pickBtn.closest(".vcard, .pfbox"), sc = pickBtn.hasAttribute("data-uppd") ? "projectdir" : pickBtn.hasAttribute("data-upp") ? "project" : "video"; const inp = box && box.querySelector(`.upfile[data-scope="${sc}"]`); if (inp) inp.click(); return; }
   const c = e.target.closest("[data-upcancel]");
   if (c) { const u = UP.get(c.closest("[data-upid]").dataset.upid); if (u) { u.cancelled = true; u.xhr && u.xhr.abort(); } return; }
   const d = e.target.closest("[data-updismiss]");
-  if (d) { const id = d.closest("[data-upid]").dataset.upid, u = UP.get(id); UP.delete(id); u && upRefresh(u); }
+  if (d) { const id = d.closest("[data-upid]").dataset.upid, u = UP.get(id); UP.delete(id); u && upRefresh(u); return; }
+  const del = e.target.closest("[data-pfdel]");
+  if (del) {
+    if (!isAdmin()) return;
+    if (del.dataset.armed !== "1") { del.dataset.armed = "1"; del.textContent = "Delete?"; setTimeout(() => { if (del.isConnected) { del.dataset.armed = ""; del.textContent = "🗑"; } }, 3000); return; }
+    const id = ui.openId, t = S.merged.get(id) || S.tasks.get(id) || {}, pid = del.closest("[data-pf]").dataset.pf, p = (t.projectFiles || []).find((x) => x.id === pid); if (!p) return;
+    commitTaskPatch(id, { projectFiles: t.projectFiles.filter((x) => x.id !== pid) });
+    logAct("export", `Removed a project file: ${p.name}`, { id, title: t.title }, { every: 0 });
+    if (p.fid) auth.currentUser.getIdToken().then((tok) => fetch(UPLOAD_API + "/file/" + encodeURIComponent(p.fid), { method: "DELETE", headers: { Authorization: "Bearer " + tok } })).catch(() => {});
+    toast("Project file removed"); setTimeout(drawTask, 30);
+  }
 });
 document.addEventListener("change", async (e) => {
   const inp = e.target.closest(".upfile"); if (!inp) return;
-  const files = [...inp.files], id = ui.openId, scope = inp.dataset.scope === "files" ? "files" : inp.closest(".vcard")?.dataset.vid;
-  inp.value = ""; if (!id || !scope) return;
-  for (const f of files) await startUpload(id, scope, f);
+  const files = [...inp.files], id = ui.openId, sc = inp.dataset.scope; inp.value = "";
+  if (!id || !files.length) return;
+  if (sc === "video") await uploadVideos(id, inp.closest(".vcard")?.dataset.vid, files);
+  else if (sc === "project") await uploadProject(id, files.map((f) => ({ path: f.name, file: f })), null);
+  else if (sc === "projectdir") await uploadProject(id, files.map((f) => ({ path: f.webkitRelativePath || f.name, file: f })), (files[0].webkitRelativePath || "x").split("/")[0]);
 });
 addEventListener("beforeunload", (e) => { if ([...UP.values()].some((u) => u.state === "up" || u.state === "wait")) { e.preventDefault(); e.returnValue = ""; } });
 
@@ -2486,8 +2578,7 @@ function filesBox(t, tid) {
   }).join("");
   return `<div class="sec"><h4>Footage &amp; links <span class="muted" style="font:500 12px var(--body)">· team only, the client never sees these</span></h4>
     <div class="flist">${rows}</div>
-    <div class="fadd"><span class="muted">Add:</span>${["Raw footage for the editor", "Reference", "Music"].map((l) => `<button class="btn sm" data-fadd="${esc(l)}" type="button">+ ${esc(l === "Raw footage for the editor" ? "Raw footage" : l)}</button>`).join("")}<button class="btn sm" data-fadd="" type="button">+ Other link</button><button class="btn sm primary" data-upf type="button" title="Upload a project file, footage or anything else to Google Drive">⬆ Upload file</button><input class="upfile" data-scope="files" type="file" hidden multiple></div>
-    <div class="uplist" data-uplist="files">${tid ? upHtml(tid, "files") : ""}</div>
+    <div class="fadd"><span class="muted">Add:</span>${["Raw footage for the editor", "Reference", "Music"].map((l) => `<button class="btn sm" data-fadd="${esc(l)}" type="button">+ ${esc(l === "Raw footage for the editor" ? "Raw footage" : l)}</button>`).join("")}<button class="btn sm" data-fadd="" type="button">+ Other link</button></div>
     <datalist id="fPresets">${FILE_PRESETS.map((x) => `<option value="${esc(x)}">`).join("")}</datalist></div>`;
 }
 /* ---------------- links written inside the brief ----------------
@@ -2705,6 +2796,16 @@ function exportSummary(t) {
       : `<p class="muted" style="margin:0">No export yet. The editor adds it in the <b>Exports</b> tab when the edit is ready.</p>`}
     <div><button class="btn" data-goto="exports" type="button">Open Exports →</button></div></div>`;
 }
+function projectBox(t, id) {
+  const list = Array.isArray(t.projectFiles) ? t.projectFiles : [];
+  const rows = list.map((p) => `<div class="pfrow" data-pf="${esc(p.id)}"><span class="pf-n" title="${esc(p.name)}">${esc(p.name)}</span><span class="muted">${p.size ? esc(fmtSize(p.size)) + " · " : ""}${esc(fmtTime(p.at))}</span><a class="btn sm" href="${esc(safeUrl(p.url))}" target="_blank" rel="noopener">Open ↗</a>${isAdmin() ? `<button class="btn sm ghost danger" data-pfdel type="button" title="Remove and delete from Drive" aria-label="Remove ${esc(p.name)}">🗑</button>` : ""}</div>`).join("");
+  return `<div class="sec pfbox"><h4>Project files <span class="muted" style="font:500 12px var(--body)">· team only, the client never sees these</span></h4>
+    <div class="pflist">${rows || `<p class="muted" style="margin:0">No project file yet.</p>`}</div>
+    <div class="dz">Drag a project file or a whole folder here <span class="muted">· a folder is zipped for you</span></div>
+    <div class="upwrap"><button class="btn" data-upp type="button">⬆ Upload file</button><button class="btn" data-uppd type="button">⬆ Upload folder (zipped)</button>
+      <input class="upfile" data-scope="project" type="file" hidden multiple><input class="upfile" data-scope="projectdir" type="file" hidden webkitdirectory></div>
+    <div class="uplist" data-uplist="project">${upHtml(id, "project")}</div></div>`;
+}
 function exportsTab(t, id) {
   const vids = videosOf(t), dl = S.dl.get(id) || {}, editable = !isClient();
   return `<div class="vcards">${vids.map((v, i) => {
@@ -2717,7 +2818,7 @@ function exportsTab(t, id) {
           <a class="vlink" href="${esc(safeUrl(x.url))}" target="_blank" rel="noopener" title="${esc(x.url)}">${esc(x.url.replace(/^https?:\/\/(www\.)?/, ""))}</a><button class="btn sm" data-watch="${esc(v.id)}|${x.v}" type="button">▶ Watch</button>${isAdmin() || (editable && x.v !== top) ? `<button class="btn sm ghost danger vdel-ver" data-verdel="${x.v}" type="button" title="Delete v${x.v}" aria-label="Delete v${x.v} of ${esc(v.name)}">🗑</button>` : ""}</div>`).join("")}${v.removed.length ? `<div class="vrow muted vgone">Deleted: ${v.removed.map((k) => "v" + k).join(", ")}</div>` : ""}</div>` : (v.removed.length ? `<div class="vlist"><div class="vrow muted vgone">Deleted: ${v.removed.map((k) => "v" + k).join(", ")}</div></div>` : "")}
       <div class="f"><label>${n ? `Link of v${top}. Only change it to fix a wrong link` : "Export link"}</label><div class="linkrow"><input class="vlatest" value="${esc(n ? l.url : "")}" placeholder="Unlisted YouTube, Google Drive or Dropbox link (WeTransfer works too, comments only)" inputmode="url" aria-label="Export link for ${esc(v.name)}">${n ? `<a class="btn" href="${esc(safeUrl(l.url))}" target="_blank" rel="noopener">Open ↗</a>` : ""}</div>
         ${n ? "" : `<small class="muted" style="font-size:12px">Paste the export here when it's ready. For Drive, set sharing to “Anyone with the link”.</small>`}</div>
-      ${editable ? `<div class="upwrap"><button class="btn" data-upv type="button">⬆ Upload ${n ? "v" + nx : "video"} from your computer</button><input class="upfile" data-scope="video" type="file" accept="video/*,.mp4,.mov,.m4v,.mkv,.webm,.avi,.mxf" hidden><small class="muted">Saved to Google Drive, no link needed. Keep this tab open until it finishes. Big videos need a few minutes in Drive before they play.</small></div><div class="uplist" data-uplist="${esc(v.id)}">${upHtml(id, v.id)}</div>` : ""}
+      ${editable ? `<div class="upwrap"><button class="btn" data-upv type="button">⬆ Upload ${n ? "v" + nx : "video"} from your computer</button><input class="upfile" data-scope="video" type="file" accept="video/*,.mp4,.mov,.m4v,.mkv,.webm,.avi,.mxf" hidden><small class="muted">Saved to Google Drive, no link needed. You can also drag a video onto this card. Keep this tab open until it finishes. Big videos need a few minutes in Drive before they play.</small></div><div class="uplist" data-uplist="${esc(v.id)}">${upHtml(id, v.id)}</div>` : ""}
       ${n ? `<div><button class="btn" data-nvopen type="button">+ Add new version (v${nx})</button>
         <div class="nv-box" hidden><label style="font-weight:600">Link to v${nx} of ${esc(v.name)}</label><input class="nvurl" placeholder="Link of the new export" inputmode="url">
           <textarea class="nvnote" rows="2" placeholder="What changed? (optional, the client sees this)" maxlength="500"></textarea>
@@ -2725,6 +2826,7 @@ function exportsTab(t, id) {
     </section>`;
   }).join("")}</div>
     <div class="vadd"><button class="btn" data-vadd type="button">+ Add another video</button><span class="muted">For a batch, e.g. 5 reels for the same client. Each video keeps its own versions and comments.</span></div>
+    ${editable ? projectBox(t, id) : ""}
     <div class="sec"><h4>Final file for the client</h4><div class="f"><label for="fFin">Download link (a file or a folder with all the finals)</label><div class="linkrow"><input id="fFin" placeholder="${S.dl.has(id) ? "https://drive.google.com/… (full quality)" : "Loading…"}" inputmode="url" value="${esc(dl.url || "")}">${safeUrl(dl.url) ? `<a class="btn" href="${esc(safeUrl(dl.url))}" target="_blank" rel="noopener">Open ↗</a>` : ""}</div>
       <small class="muted" style="font-size:12px">The client only gets this after approving.</small></div></div>`;
 }
