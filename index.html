@@ -363,7 +363,12 @@ body.rv-lock { overflow: hidden; }
 .frow .flabel { justify-self: start; width: min(320px, 100%); background: transparent; border: 1px dashed transparent; border-radius: 6px; padding: 2px 6px; margin-left: -6px; color: var(--muted); font: 600 11.5px/1.4 var(--body); letter-spacing: .06em; text-transform: uppercase; }
 .frow .flabel:hover, .frow .flabel:focus { border-color: var(--line-2); color: var(--fg); outline: none; }
 .fdel { padding-inline: 10px; }
-#fBr { field-sizing: content; min-height: 90px; max-height: 420px; }
+#fBr.briefed .rt-doc { min-height: 150px; max-height: 460px; overflow: auto; padding: 12px 14px; font-size: 14px; }
+.briefed .rt-doc h1, .briefed .rt-doc h2, .briefed .rt-doc h3 { margin: .8em 0 .25em; }
+.briefed .rt-doc ul, .briefed .rt-doc ol { margin: .3em 0 .3em 1.2em; padding: 0; }
+.briefed .rt-doc p { margin: .35em 0; }
+.briefed .rt-doc a { color: var(--accent); word-break: break-all; }
+.briefed .rt-foot { display: none; }
 .frow.fresh .furl { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); transition: box-shadow .3s; }
 .frow .furl { width: 100%; background: var(--panel); border: 1px solid var(--line-2); border-radius: 8px; padding: 8px 10px; color: var(--fg); }
 .drawer .sec > .flist { margin-top: 2px; }
@@ -747,6 +752,31 @@ const initials = (n) => (n || "?").split(/\s+/).map((w) => w[0]).join("").slice(
 
 /* ---------------- rich text sanitizing (shared data is untrusted) ---------------- */
 const ALLOW = { P: [], DIV: [], BR: [], H1: [], H2: [], H3: [], B: [], STRONG: [], I: [], EM: [], U: [], S: [], STRIKE: [], UL: ["class"], OL: [], LI: ["class"], BLOCKQUOTE: [], A: ["href"], SPAN: [] };
+// Word / Google Docs copy: turn style-only bold/italic into real tags and Word's fake bullet paragraphs into real lists.
+function normalizeRich(html) {
+  const doc = new DOMParser().parseFromString("<body>" + (html || "") + "</body>", "text/html");
+  doc.querySelectorAll("b,strong").forEach((n) => { if (/font-weight\s*:\s*(normal|400)/i.test(n.getAttribute("style") || "")) n.replaceWith(...n.childNodes); });   // Google Docs wraps everything in <b style="font-weight:normal">
+  doc.querySelectorAll("[style]").forEach((n) => {
+    if (!/^(SPAN|P|DIV|LI|H[1-6]|A)$/.test(n.tagName)) return;
+    const st = n.getAttribute("style") || "", bold = /font-weight\s*:\s*(bold|[6-9]00)/i.test(st), it = /font-style\s*:\s*italic/i.test(st), un = /text-decoration[^;]*underline/i.test(st) && n.tagName !== "A";
+    if (!(bold || it || un) || n.tagName !== "SPAN") return;
+    let inner = n.innerHTML; if (un) inner = "<u>" + inner + "</u>"; if (it) inner = "<i>" + inner + "</i>"; if (bold) inner = "<b>" + inner + "</b>"; n.innerHTML = inner;
+  });
+  const items = [...doc.body.querySelectorAll("p,div")].filter((p) => /MsoList/i.test(p.className || "") || /mso-list\s*:\s*(?!none)/i.test(p.getAttribute("style") || ""));
+  items.forEach((p) => {
+    const lead = [...p.querySelectorAll("span")].find((s) => /mso-list\s*:\s*Ignore/i.test(s.getAttribute("style") || ""));
+    const glyph = lead ? lead.textContent.trim() : ""; if (lead) lead.remove();
+    p.dataset.ord = /^\d+[.)]|^[a-z][.)]/i.test(glyph) ? "1" : "";
+  });
+  const seen = new Set();
+  items.forEach((p) => {
+    if (seen.has(p)) return;
+    const list = doc.createElement(p.dataset.ord ? "ol" : "ul"); p.before(list);
+    let n = p; while (n && items.includes(n) && !!n.dataset.ord === !!p.dataset.ord) { const next = n.nextElementSibling, li = doc.createElement("li"); li.innerHTML = n.innerHTML; list.append(li); seen.add(n); n.remove(); n = next; }
+  });
+  doc.querySelectorAll("p.MsoTitle,p.MsoHeading1,p.MsoHeading2,h1,h2,h3").forEach((p) => { if (p.tagName === "P") { const hh = doc.createElement("h2"); hh.innerHTML = p.innerHTML; p.replaceWith(hh); } });
+  return doc.body.innerHTML;
+}
 function cleanHTML(html) {
   const doc = new DOMParser().parseFromString("<body>" + (html || "") + "</body>", "text/html");
   (function walk(n) {
@@ -959,7 +989,7 @@ function makeEditor(host, html, onChange, opts = {}) {
   });
   doc.addEventListener("paste", (e) => {      // paste as clean text-with-formatting
     const html2 = e.clipboardData?.getData("text/html"); if (!html2) return;
-    e.preventDefault(); document.execCommand("insertHTML", false, cleanHTML(html2));
+    e.preventDefault(); document.execCommand("insertHTML", false, cleanHTML(normalizeRich(html2)));
   });
   const keepSel = () => { const s = getSelection(); if (s.rangeCount && doc.contains(s.anchorNode)) savedRange = s.getRangeAt(0).cloneRange(); };
   const restoreSel = () => { if (!savedRange) return; doc.focus(); const s = getSelection(); s.removeAllRanges(); s.addRange(savedRange); };
@@ -1001,7 +1031,7 @@ ST.unassigned = { id: "unassigned", label: "Unassigned" };          // not a sto
 const boardCol = (t) => { const s = (t && t.status) || "todo"; return s === "todo" && !(t && t.assignee) ? "unassigned" : s; };
 const PRIORITY = { high: "High", normal: "Normal", low: "Low" };
 const ROLE_LABEL = { admin: "Admin", editor: "Editor", client: "Client", guest: "Guest" };
-const TASK_FIELDS = ["title", "assignee", "client", "due", "type", "priority", "brief", "notes", "sheet", "assignedAt", "videoUrl", "versions", "videos", "files", "rawUrl", "docUrl", "sheetUrl", "clientNote", "order", "ratingFix", "createdAt", "updatedAt"];
+const TASK_FIELDS = ["title", "assignee", "client", "due", "type", "priority", "brief", "briefHtml", "notes", "sheet", "assignedAt", "videoUrl", "versions", "videos", "files", "rawUrl", "docUrl", "sheetUrl", "clientNote", "order", "ratingFix", "createdAt", "updatedAt"];
 const MIRROR_FIELDS = ["title", "assignee", "client", "due", "type", "videoUrl", "versions", "videos", "clientNote"];   // what the client is allowed to see
 const pick = (o, keys) => Object.fromEntries(keys.filter((k) => o[k] !== undefined).map((k) => [k, o[k]]));
 
@@ -1365,7 +1395,7 @@ function drawTask() {
       <div class="f"><label for="fDue">Due date</label><input type="date" id="fDue" value="${esc(t.due)}"></div>
       <div class="f"><label for="fTy">Type</label><select id="fTy">${["Reel", "Short", "YouTube video", "Podcast", "Ad", "Thumbnail", "Other"].map((x) => `<option ${x === t.type ? "selected" : ""}>${x}</option>`).join("")}</select></div>
       <div class="f"><label for="fPr">Priority</label><select id="fPr">${Object.entries(PRIORITY).map(([k, l]) => `<option value="${k}" ${k === (t.priority || "normal") ? "selected" : ""}>${l}</option>`).join("")}</select></div>
-      <div class="f full"><label for="fBr">Brief for the editor</label><textarea id="fBr" placeholder="Style, length, music, captions, reference videos…">${esc(t.brief)}</textarea></div>
+      <div class="f full"><label>Brief for the editor <span class="muted" style="font:500 12px var(--body)">· paste from Word or Google Docs and it keeps its headings, bullets and links</span></label><div id="fBr" class="briefed"></div></div>
     </div>
     ${filesBox(t)}
     ${exportSummary(t)}
@@ -1394,19 +1424,9 @@ function drawTask() {
     $("#fDue").addEventListener("change", (e) => patchTask({ due: e.target.value }, true));
     $("#fTy").addEventListener("change", (e) => patchTask({ type: e.target.value }, true));
     $("#fPr").addEventListener("change", (e) => patchTask({ priority: e.target.value }, true));
-    $("#fBr").addEventListener("input", (e) => patchTask({ brief: e.target.value }));
-    // links written in the brief ("Raw : https://…") go into Footage & links by themselves
-    $("#fBr").addEventListener("paste", (e) => {
-      // Google Docs / Drive chips paste as their title only; the real address is in the copied HTML
-      const html = e.clipboardData && e.clipboardData.getData("text/html");
-      const txt = html && /<a\s[^>]*href=["']?https?:/i.test(html) ? clipText(html) : "";
-      if (txt) {
-        e.preventDefault(); const b = e.target;
-        b.setRangeText(txt, b.selectionStart, b.selectionEnd, "end"); b.dispatchEvent(new Event("input", { bubbles: true }));
-      }
-      setTimeout(() => briefLinks(id, true), 0);
-    });
-    $("#fBr").addEventListener("change", () => briefLinks(id, false));
+    // the brief keeps its formatting; links in it are copied into Footage & links by themselves (and stay in the brief too)
+    makeEditor($("#fBr"), briefHtmlOf(t), (html) => { patchTask({ briefHtml: html, brief: clipText(html) }); briefLinks(id, false); }, { placeholder: "Style, length, music, captions, reference videos…" });
+    $("#fBr .rt-doc").addEventListener("paste", () => setTimeout(() => briefLinks(id, true), 900));
     $("#fCn").addEventListener("input", (e) => patchTask({ clientNote: e.target.value }));
   } else if (ui.subtab === "exports") {
     body.innerHTML = exportsTab(t, id) + taskActions(t, id);
@@ -2334,6 +2354,9 @@ function guessLabel(url) {
   if (/tiktok\.com$/.test(h)) return "TikTok reference";
   return h;
 }
+// the brief as formatted text: new tasks store it, old plain-text briefs are shown line by line
+const briefHtmlOf = (t) => (typeof t.briefHtml === "string" && t.briefHtml !== "") ? t.briefHtml
+  : String(t.brief || "").split(/\r?\n/).map((l) => l.trim() ? "<p>" + esc(l).replace(/(https?:\/\/[^\s<>"']+)/g, '<a href="$1">$1</a>') + "</p>" : "").join("");
 // Copied rich text -> plain text, with each link's address written after its title.
 function clipText(html) {
   const doc = new DOMParser().parseFromString(html, "text/html");          // inert: nothing in it runs
@@ -2382,16 +2405,13 @@ function briefLinks(id, pasted) {
     have.add(norm(url)); added++;
   });
   const clean = files.filter((f) => f.url || f.label !== "Raw footage for the editor" || files.filter((x) => x.url).length === 0);   // drop the empty starter row once real links are in
-  const brief = stripLinks(t.brief, have, norm), moved = brief !== t.brief;
-  if (!added && !moved) return;
-  const a = document.activeElement, keep = a && a.id === "fBr" ? [a.selectionStart, a.selectionEnd] : null;
-  patchTask(moved ? { files: clean, brief } : { files: clean }, true);
+  if (!added) { if (pasted) { const miss = titleOnlyLines(t.brief); if (miss.length) toast(`“${miss[0]}” has no web address, only its title.`); } return; }
+  patchTask({ files: clean }, true);
   setTimeout(() => {
-    drawTask();
-    if (keep) { const b = $("#fBr"); if (b) { b.focus(); const end = moved ? b.value.length : keep[1]; try { b.setSelectionRange(moved ? end : keep[0], end); } catch (e) {} } }
+    const t2 = { ...(S.merged.get(id) || {}), ...(taskDraft || {}) }, box = document.createElement("div"); box.innerHTML = filesBox(t2);
+    const fl = $("#tBody .flist"); if (fl) fl.innerHTML = $(".flist", box).innerHTML;
     $$(".frow").slice(-added).forEach((r) => { r.classList.add("fresh"); setTimeout(() => r.classList.remove("fresh"), 1600); });
-    const miss = titleOnlyLines(t.brief);
-    toast(added ? `Moved ${added} link${added > 1 ? "s" : ""} from the brief into Footage & links${miss.length ? `. “${miss[0]}” had no web address, only its title.` : ""}` : "Links already in Footage & links or Exports were taken out of the brief");
+    toast(`Added ${added} link${added > 1 ? "s" : ""} to Footage & links (they stay in the brief too)`);
   }, 30);
 }
 // Take links that now live in Footage & links / Exports out of the brief, with their "Label :" lines.
