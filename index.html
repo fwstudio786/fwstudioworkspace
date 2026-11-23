@@ -364,6 +364,11 @@ body.rv-lock { overflow: hidden; }
 .frow .flabel:hover, .frow .flabel:focus { border-color: var(--line-2); color: var(--fg); outline: none; }
 .fdel { padding-inline: 10px; }
 #fBr.briefed .rt-doc { min-height: 150px; max-height: 460px; overflow: auto; padding: 12px 14px; font-size: 14px; }
+.briefed .rt-doc h1 { font: 800 22px/1.25 var(--display); }
+.briefed .rt-doc h2 { font: 700 18px/1.3 var(--display); margin-top: 1em; }
+.briefed .rt-doc h3 { font: 700 15px/1.35 var(--display); color: var(--muted); }
+.briefed .rt-doc p, .briefed .rt-doc li { font-size: 13.5px; }
+.briefed .rt-doc a { font-size: 12.5px; }
 .briefed .rt-doc h1, .briefed .rt-doc h2, .briefed .rt-doc h3 { margin: .8em 0 .25em; }
 .briefed .rt-doc ul, .briefed .rt-doc ol { margin: .3em 0 .3em 1.2em; padding: 0; }
 .briefed .rt-doc p { margin: .35em 0; }
@@ -774,7 +779,17 @@ function normalizeRich(html) {
     const list = doc.createElement(p.dataset.ord ? "ol" : "ul"); p.before(list);
     let n = p; while (n && items.includes(n) && !!n.dataset.ord === !!p.dataset.ord) { const next = n.nextElementSibling, li = doc.createElement("li"); li.innerHTML = n.innerHTML; list.append(li); seen.add(n); n.remove(); n = next; }
   });
-  doc.querySelectorAll("p.MsoTitle,p.MsoHeading1,p.MsoHeading2,h1,h2,h3").forEach((p) => { if (p.tagName === "P") { const hh = doc.createElement("h2"); hh.innerHTML = p.innerHTML; p.replaceWith(hh); } });
+  doc.querySelectorAll("p.MsoTitle,p.MsoHeading1,p.MsoHeading2").forEach((p) => { const hh = doc.createElement("h2"); hh.innerHTML = p.innerHTML; p.replaceWith(hh); });
+  // a short line that is all bold is a heading: "1. Project Goal" = big, "Footage:" = medium, the first title line = biggest
+  let firstDone = false;
+  [...doc.body.children].forEach((p, i) => {
+    if (p.tagName !== "P") return;
+    const txt = p.textContent.replace(/[\s\u00a0]+/g, " ").trim(); if (!txt || txt.length > 90) return;
+    const boldTxt = [...p.querySelectorAll("b,strong")].map((b) => b.textContent).join("").replace(/[\s\u00a0]+/g, " ").trim();
+    if (boldTxt !== txt || p.querySelector("a")) return;
+    const lvl = /^\d+[.)]\s+/.test(txt) ? "h2" : (!firstDone && i === 0) ? "h1" : "h3"; firstDone = true;
+    const hh = doc.createElement(lvl); hh.textContent = txt; p.replaceWith(hh);
+  });
   return doc.body.innerHTML;
 }
 function cleanHTML(html) {
@@ -977,11 +992,12 @@ function makeEditor(host, html, onChange, opts = {}) {
       <div class="rt-foot"><span class="wc"></span><span class="saved"></span></div>
     </div>`;
   const doc = $(".rt-doc", host), bar = $(".rt-bar", host), linkBox = $(".rt-link", host), linkIn = $("input", linkBox), wc = $(".wc", host), saved = $(".saved", host);
-  let last = cleanHTML(html), t = 0, savedRange = null;
+  let last = cleanHTML(html), t = 0, savedRange = null, pending = false;
   doc.innerHTML = last;
   const words = () => { const n = (doc.innerText || "").trim().split(/\s+/).filter(Boolean).length; wc.textContent = n + " word" + (n === 1 ? "" : "s"); };
   words();
-  function changed() { clearTimeout(t); saved.textContent = "Saving…"; t = setTimeout(() => { last = cleanHTML(doc.innerHTML); onChange(last); saved.textContent = "Saved"; }, 700); words(); }
+  function flush() { if (!pending) return; clearTimeout(t); pending = false; last = cleanHTML(doc.innerHTML); onChange(last); saved.textContent = "Saved"; }
+  function changed() { clearTimeout(t); pending = true; saved.textContent = "Saving…"; t = setTimeout(flush, 700); words(); }
   doc.addEventListener("input", changed);
   doc.addEventListener("click", (e) => {      // tick a checklist item by clicking its box
     const li = e.target.closest("ul.check > li"); if (!li || opts.readOnly) return;
@@ -1012,7 +1028,7 @@ function makeEditor(host, html, onChange, opts = {}) {
   linkBox.addEventListener("click", (e) => { const l = e.target.closest("[data-l]")?.dataset.l; if (l === "ok") addLink(); else if (l === "x") { linkBox.classList.remove("on"); restoreSel(); } });
   doc.addEventListener("keyup", keepSel); doc.addEventListener("mouseup", keepSel);
   doc.addEventListener("click", (e) => { const a = e.target.closest("a[href]"); if (a && (e.ctrlKey || e.metaKey)) window.open(a.href, "_blank", "noopener"); });
-  return { refresh(h) { const c = cleanHTML(h); if (c === last || document.activeElement === doc) return; last = c; doc.innerHTML = c; words(); } };
+  return { flush, set(h) { const c = cleanHTML(h); last = c; pending = false; clearTimeout(t); doc.innerHTML = c; words(); if (document.activeElement === doc) { const r = document.createRange(); r.selectNodeContents(doc); r.collapse(false); const s = getSelection(); s.removeAllRanges(); s.addRange(r); } }, refresh(h) { const c = cleanHTML(h); if (c === last || document.activeElement === doc) return; last = c; doc.innerHTML = c; words(); } };
 }
 
 
@@ -1303,7 +1319,7 @@ function setStatus(id, status, note, by, quiet) {
 
 /* ---------------- drawers ---------------- */
 const drawer = $("#drawer"), scrim = $("#scrim");
-let liveEditor = null, liveGrid = null;
+let liveEditor = null, liveGrid = null, briefEd = null;
 function openDrawer(wide) { drawer.classList.toggle("wide", !!wide); drawer.classList.add("on"); scrim.classList.add("on"); drawer.setAttribute("aria-hidden", "false"); }
 let draftArmed = 0;
 function closeDrawer(force) {
@@ -1328,6 +1344,7 @@ function patchTask(patch, quick) {
   clearTimeout(taskTimer); taskTimer = setTimeout(flushTask, quick ? 0 : 600);
 }
 function flushTask() {
+  if (briefEd) briefEd.flush();
   clearTimeout(taskTimer);
   if (!taskDraft || ui.openKind !== "task") return;
   const id = ui.openId, t = taskDraft; taskDraft = null;
@@ -1385,7 +1402,7 @@ function drawTask() {
   $("#tTitle").addEventListener("input", (e) => patchTask({ title: e.target.value }));
   $$(".subtabs button", drawer).forEach((b) => b.addEventListener("click", () => { flushTask(); ui.subtab = b.dataset.t; drawTask(); }));
   const body = $("#tBody");
-  liveEditor = liveGrid = null;
+  if (briefEd) briefEd.flush(); liveEditor = liveGrid = briefEd = null;
   if (ui.subtab === "overview") {
     body.innerHTML = `<div class="fields">
       <div class="f"><label for="fSt">Status</label><select id="fSt">${!t.assignee && boardCol(t) === "unassigned" ? `<option value="unassigned" selected>Unassigned</option>` : ""}${STATUSES.filter((s) => !s.rare || s.id === t.status).map((s) => `<option value="${s.id}" ${s.id === (t.status || "todo") && boardCol(t) !== "unassigned" ? "selected" : ""}>${s.label}</option>`).join("")}</select></div>
@@ -1425,7 +1442,7 @@ function drawTask() {
     $("#fTy").addEventListener("change", (e) => patchTask({ type: e.target.value }, true));
     $("#fPr").addEventListener("change", (e) => patchTask({ priority: e.target.value }, true));
     // the brief keeps its formatting; links in it are copied into Footage & links by themselves (and stay in the brief too)
-    makeEditor($("#fBr"), briefHtmlOf(t), (html) => { patchTask({ briefHtml: html, brief: clipText(html) }); briefLinks(id, false); }, { placeholder: "Style, length, music, captions, reference videos…" });
+    briefEd = makeEditor($("#fBr"), briefHtmlOf(t), (html) => { patchTask({ briefHtml: html, brief: clipText(html) }); briefLinks(id, false); }, { placeholder: "Style, length, music, captions, reference videos…" });
     $("#fBr .rt-doc").addEventListener("paste", () => setTimeout(() => briefLinks(id, true), 900));
     $("#fCn").addEventListener("input", (e) => patchTask({ clientNote: e.target.value }));
   } else if (ui.subtab === "exports") {
@@ -2405,14 +2422,47 @@ function briefLinks(id, pasted) {
     have.add(norm(url)); added++;
   });
   const clean = files.filter((f) => f.url || f.label !== "Raw footage for the editor" || files.filter((x) => x.url).length === 0);   // drop the empty starter row once real links are in
-  if (!added) { if (pasted) { const miss = titleOnlyLines(t.brief); if (miss.length) toast(`“${miss[0]}” has no web address, only its title.`); } return; }
-  patchTask({ files: clean }, true);
+  const curHtml = briefHtmlOf(t), newHtml = stripLinksHtml(curHtml, have, norm), moved = newHtml !== curHtml;
+  if (!added && !moved) { if (pasted) { const miss = titleOnlyLines(t.brief); if (miss.length) toast(`“${miss[0]}” has no web address, only its title.`); } return; }
+  patchTask(moved ? { files: clean, briefHtml: newHtml, brief: clipText(newHtml) } : { files: clean }, true);
+  if (moved && briefEd) briefEd.set(newHtml);
   setTimeout(() => {
     const t2 = { ...(S.merged.get(id) || {}), ...(taskDraft || {}) }, box = document.createElement("div"); box.innerHTML = filesBox(t2);
     const fl = $("#tBody .flist"); if (fl) fl.innerHTML = $(".flist", box).innerHTML;
     $$(".frow").slice(-added).forEach((r) => { r.classList.add("fresh"); setTimeout(() => r.classList.remove("fresh"), 1600); });
-    toast(`Added ${added} link${added > 1 ? "s" : ""} to Footage & links (they stay in the brief too)`);
+    const miss = titleOnlyLines(t.brief);
+    toast(added ? `Moved ${added} link${added > 1 ? "s" : ""} from the brief into Footage & links${miss.length ? `. “${miss[0]}” had no web address, only its title.` : ""}` : "Links already in Footage & links or Exports were taken out of the brief");
   }, 30);
+}
+// Same job on the formatted brief: known links (and their "Label:" line) leave the brief, headings / bullets / bold stay.
+function stripLinksHtml(html, known, norm) {
+  const doc = new DOMParser().parseFromString("<body>" + (html || "") + "</body>", "text/html");
+  const urlRe = /https?:\/\/[^\s<>"'\])]+/g, isKnown = (u) => known.has(norm(String(u).replace(/[.,;:!?]+$/, "")));
+  const text = (n) => n.textContent.replace(/[\s\u00a0]+/g, " ").trim();
+  const labelOnly = (s) => /^[^:：]{1,40}[:：]$/.test(s);
+  let prev = null;
+  [...doc.body.querySelectorAll("p,li,h1,h2,h3,div")].forEach((blk) => {
+    if (!blk.isConnected || blk.querySelector("p,li,h1,h2,h3,div")) return;          // work on the innermost blocks only
+    let hit = false;
+    blk.querySelectorAll("a[href]").forEach((a) => {
+      if (!isKnown(a.getAttribute("href"))) return;
+      const words = a.textContent.replace(urlRe, "").replace(/[\s\u00a0]+/g, " ").trim();          // "reference https://…" keeps "reference"
+      words ? a.replaceWith(doc.createTextNode(words)) : a.remove(); hit = true;
+    });
+    const w = doc.createTreeWalker(blk, 4); const nodes = []; while (w.nextNode()) nodes.push(w.currentNode);
+    nodes.forEach((n) => { const v = n.nodeValue.replace(urlRe, (u) => isKnown(u) ? (hit = true, "") : u); if (v !== n.nodeValue) n.nodeValue = v; });
+    if (!hit) { prev = blk; return; }
+    blk.querySelectorAll("br").forEach((b) => { if (!b.nextSibling || !text({ textContent: b.nextSibling.textContent || "" })) b.remove(); });
+    const rest = text(blk);
+    if (!rest || labelOnly(rest)) {                                                    // "Footage:" + its link -> gone
+      const li = blk.tagName === "LI" ? blk : null, parent = blk.parentElement;
+      if (!rest && prev && prev.isConnected && labelOnly(text(prev))) prev.remove();   // label sat in the line above the link
+      blk.remove(); if (li && parent && !parent.children.length) parent.remove();
+      return;
+    }
+    prev = blk;
+  });
+  return doc.body.innerHTML.replace(/(<p>\s*(<br>)?\s*<\/p>\s*){2,}/g, "<p><br></p>");
 }
 // Take links that now live in Footage & links / Exports out of the brief, with their "Label :" lines.
 function stripLinks(text, known, norm) {
