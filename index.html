@@ -570,6 +570,13 @@ button.tc:hover { background: var(--accent); color: var(--accent-ink); }
 }
 @media (max-width: 860px) and (max-height: 500px) { .rv-main { grid-template-rows: 80vh auto; } }
 @media (max-width: 720px) { .acct .who { display: none; } }
+.rv-voice{display:flex;align-items:center;gap:8px;margin-top:6px;flex-wrap:wrap}
+.rv-voice.busy{opacity:.55;pointer-events:none}
+.rv-rec{display:inline-flex;align-items:center;gap:6px;color:#d14343;font-weight:600}
+.rv-rec i{width:9px;height:9px;border-radius:50%;background:currentColor;display:inline-block;animation:rvpulse 1s infinite}
+#rvMic.rec{background:#d14343;color:#fff;border-color:#d14343}
+.cm-voice{margin-left:6px;vertical-align:middle}
+@keyframes rvpulse{50%{opacity:.25}}
 </style>
 </head>
 <body>
@@ -727,7 +734,8 @@ button.tc:hover { background: var(--accent); color: var(--accent-ink); }
       <form class="rv-comp" id="rvComp" novalidate>
         <div class="rv-comp-row"><button class="tc-chip" id="rvChip" type="button" title="Attach the current video time (click to turn off)"></button><input id="rvTime" placeholder="Time 0:12" inputmode="numeric" aria-label="Time in the video" hidden></div>
         <textarea id="rvText" rows="2" placeholder="Leave a comment…" aria-label="Comment" maxlength="2000"></textarea>
-        <div class="rv-comp-f"><span class="muted" id="rvHint"></span><button class="btn primary sm">Send</button></div>
+        <div class="rv-voice" id="rvVoice" hidden></div>
+        <div class="rv-comp-f"><span class="muted" id="rvHint"></span><button class="btn sm" id="rvMic" type="button" title="Record a voice note" aria-label="Record a voice note">🎤</button><button class="btn primary sm">Send</button></div>
       </form>
     </aside>
   </div>
@@ -2228,6 +2236,7 @@ function openReview(id, ver, vid) {
 }
 function closeReview() {
   if (!rv.id) return;
+  try { clearVoice(); } catch (e) {} try { rvAud && rvAud.pause(); } catch (e) {}
   clearInterval(rv.tick); try { rv.unsub && rv.unsub(); } catch (e) {}
   rvCompare(0); rv.player && rv.player.destroy(); rv.player = null; rv.unsub = null; rv.id = null;
   rvEl.hidden = true; document.body.classList.remove("rv-lock");
@@ -2304,7 +2313,7 @@ function rvRender() {
     const jump = c.t != null && !isReply;
     return `<div class="cm${c.done ? " done" : ""}${isReply ? " reply" : ""}${jump ? " jump" : ""}${rv.active === c.id ? " active" : ""}" data-id="${esc(c.id)}"${jump ? ` data-t="${Number(c.t)}" data-v="${c.v || 1}" title="Go to ${fmtTC(c.t)}"` : ""}>
       <div class="cm-h">${isReply ? "" : `<span class="cm-no" title="Comment ${num.get(c.id)}${rv.filter === "all" ? " on v" + (c.v || 1) : ""}">${rv.filter === "all" && (c.v || 1) !== rv.view ? "v" + (c.v || 1) + " " : ""}#${num.get(c.id)}</span>`}<span class="av">${esc(initials(c.name))}</span><b>${esc(c.name || "Someone")}</b>${c.by === "client" ? `<span class="tag">Client</span>` : ""}${c.mis && !isReply && !isClient() ? `<span class="tag mis" title="Counts as a mistake in the editor's rating">Mistake</span>` : ""}${old ? `<span class="tag">v${c.v || 1}</span>` : ""}<span class="cm-at">${esc(fmtTime(c.at))}</span></div>
-      <div class="cm-b">${tc}<span class="cm-text">${esc(c.text)}</span></div>
+      <div class="cm-b">${tc}<span class="cm-text">${esc(c.text)}</span>${c.audio ? `<button class="btn sm cm-voice" type="button" data-voice="${esc(c.audio)}" data-lbl="▶ Voice${c.adur ? " · " + fmtTC(c.adur) : ""}">▶ Voice${c.adur ? " · " + fmtTC(c.adur) : ""}</button>` : ""}</div>
       <div class="cm-a">${isReply ? "" : `<button type="button" data-reply>Reply</button><button type="button" data-done>${c.done ? "↺ Reopen" : "✓ Done"}</button>${isAdmin() ? `<button type="button" data-mis class="${c.mis ? "on" : ""}" title="Mistakes lower the editor's rating">${c.mis ? "⚠ Mistake (undo)" : "Mark as mistake"}</button>` : ""}`}${mine || isAdmin() ? `<button type="button" data-del>Delete</button>` : ""}${c.done && !isReply ? `<span class="muted">Done${c.doneBy ? " by " + esc(c.doneBy) : ""}</span>` : ""}</div>
       ${isReply ? "" : replies(c.id).map((r) => one(r, true)).join("")}
       ${!isReply && rv.replyTo === c.id ? `<div class="cm-rbox"><textarea id="rvReply" rows="2" placeholder="Write a reply…" aria-label="Reply">${esc(rv.replyText)}</textarea><div><button class="btn sm ghost" type="button" data-rcancel>Cancel</button><button class="btn sm primary" type="button" data-rsend>Reply</button></div></div>` : ""}
@@ -2315,9 +2324,10 @@ function rvRender() {
   if (focused || rv.replyTo) { const r = $("#rvReply"); if (r && focused) { r.focus(); r.setSelectionRange(r.value.length, r.value.length); } }
 }
 
-function rvAdd(text, t, parent) {
+function rvAdd(text, t, parent, audio, adur) {
   const id = uid();
   const c = { text: text.slice(0, 2000), t: t == null ? null : Math.round(t * 10) / 10, v: rv.view, vid: rv.vid, by: isClient() ? "client" : "team", uid: me.uid, name: (me.name || me.email || "").slice(0, 80), at: now(), parent: parent || "", done: false, doneBy: "", doneAt: "" };
+  if (audio) { c.audio = String(audio).slice(0, 300); c.adur = Math.round(adur || 0); }
   rv.comments.set(id, c); rvRender();
   Store.set("reviews/" + rv.id + "/comments", id, c);
   { const tk = S.merged.get(rv.id) || {}, ttl = tk.title || "a video", who = me.name || "Someone";
@@ -2343,9 +2353,20 @@ $("#rvFilter").addEventListener("change", (e) => { rv.filter = e.target.value; r
 $("#rvChip").addEventListener("click", () => { rv.stampOn = !rv.stampOn; rvChip(); });
 $("#rvText").addEventListener("input", (e) => { if (e.target.value.length === 1 && rv.player && rv.player.canTime) { rv.stamp = rv.player.time(); rv.player.pause(); rvChip(); } });
 $("#rvText").addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.shiftKey && !e.isComposing) { e.preventDefault(); $("#rvComp").requestSubmit(); } });
-$("#rvComp").addEventListener("submit", (e) => {
+$("#rvComp").addEventListener("submit", async (e) => {
   e.preventDefault();
-  const text = $("#rvText").value.trim(); if (!text) { $("#rvText").focus(); return; }
+  const text = $("#rvText").value.trim();
+  if (rv.rec && rv.rec.blob) {        // sending a voice note
+    const t = rv.rec.t, dur = rv.rec.dur, ext = rv.rec.ext, blob = rv.rec.blob;
+    const label = text || ("🎤 Voice note" + (dur ? " · " + fmtTC(dur) : ""));
+    $("#rvMic").disabled = true; $("#rvVoice").classList.add("busy");
+    try { const url = await uploadAudio(blob, ext); rvAdd(label, t, "", url, dur); }
+    catch (err) { toast("Couldn't send the voice note. Try again."); $("#rvMic").disabled = false; $("#rvVoice").classList.remove("busy"); return; }
+    clearVoice(); $("#rvMic").disabled = false; $("#rvText").value = "";
+    if (rv.player && rv.player.canTime) { rv.stampOn = true; rv.stamp = rv.player.time(); rvChip(); }
+    return;
+  }
+  if (!text) { $("#rvText").focus(); return; }
   let t = null;
   if (rv.player && rv.player.canTime) t = rv.stampOn ? rv.stamp : null;
   else { t = parseTC($("#rvTime").value); if (Number.isNaN(t)) { toast("Write the time like 0:12 or 1:05:30."); $("#rvTime").focus(); return; } }
@@ -2353,7 +2374,71 @@ $("#rvComp").addEventListener("submit", (e) => {
   $("#rvText").value = ""; $("#rvTime").value = "";
   if (rv.player && rv.player.canTime) { rv.stampOn = true; rv.stamp = rv.player.time(); rvChip(); }
 });
+
+/* ---------------- Voice notes (recorded in the browser, stored in R2) ---------------- */
+let rvAud = null;
+const voiceOK = () => !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia && window.MediaRecorder);
+function pickMime() { for (const m of ["audio/webm;codecs=opus", "audio/webm", "audio/mp4", "audio/mpeg"]) { try { if (MediaRecorder.isTypeSupported(m)) return m; } catch (e) {} } return ""; }
+function drawVoice() {
+  const box = $("#rvVoice"), mic = $("#rvMic"); if (!box) return;
+  const r = rv.rec;
+  if (!r) { box.hidden = true; box.innerHTML = ""; box.classList.remove("busy"); if (mic) { mic.textContent = "🎤"; mic.classList.remove("rec"); } return; }
+  box.hidden = false;
+  if (r.state === "rec") { box.innerHTML = `<span class="rv-rec"><i></i> Recording… ${fmtTC(r.dur)}</span><button class="btn sm" type="button" data-vstop>Stop</button><button class="btn ghost sm" type="button" data-vcancel>✕</button>`; if (mic) { mic.textContent = "⏹"; mic.classList.add("rec"); } }
+  else { box.innerHTML = `<button class="btn sm" type="button" data-vplay>▶ Play</button><span class="muted">Voice note · ${fmtTC(r.dur)}${r.t != null ? " · at " + fmtTC(r.t) : ""}</span><button class="btn ghost sm" type="button" data-vcancel>✕ Discard</button>`; if (mic) { mic.textContent = "🎤"; mic.classList.remove("rec"); } }
+}
+function clearVoice() {
+  const r = rv.rec;
+  if (r) { try { clearInterval(r.timer); } catch (e) {} try { r.stream && r.stream.getTracks().forEach((t) => t.stop()); } catch (e) {} if (r.previewUrl) { try { URL.revokeObjectURL(r.previewUrl); } catch (e) {} } }
+  rv.rec = null; drawVoice();
+}
+async function startRec() {
+  if (!voiceOK()) { toast("Voice notes need a modern browser like Chrome."); return; }
+  const mime = pickMime(); if (!mime) { toast("This browser can't record audio."); return; }
+  let stream; try { stream = await navigator.mediaDevices.getUserMedia({ audio: true }); }
+  catch (e) { toast("Microphone is blocked. Allow the mic for this site, then try again."); return; }
+  const t = (rv.player && rv.player.canTime) ? rv.player.time() : (parseTC($("#rvTime").value) || null);
+  if (rv.player && rv.player.canTime) rv.player.pause();
+  const chunks = [], mr = new MediaRecorder(stream, { mimeType: mime });
+  const r = { state: "rec", mr, stream, chunks, mime, ext: mime.includes("mp4") ? "m4a" : (mime.includes("mpeg") ? "mp3" : "webm"), t, dur: 0, t0: Date.now(), timer: 0, blob: null, previewUrl: "" };
+  rv.rec = r;
+  mr.ondataavailable = (e) => { if (e.data && e.data.size) chunks.push(e.data); };
+  mr.onstop = () => { r.blob = new Blob(chunks, { type: mime }); r.dur = Math.max(1, Math.round((Date.now() - r.t0) / 1000)); r.state = "ready"; try { r.stream.getTracks().forEach((x) => x.stop()); } catch (e) {} drawVoice(); };
+  try { mr.start(); } catch (e) { toast("Couldn't start recording."); clearVoice(); return; }
+  r.timer = setInterval(() => { r.dur = Math.round((Date.now() - r.t0) / 1000); if (r.dur >= 180) { stopRec(); return; } drawVoice(); }, 1000);
+  drawVoice();
+}
+function stopRec() { const r = rv.rec; if (r && r.state === "rec") { try { clearInterval(r.timer); } catch (e) {} try { r.mr.stop(); } catch (e) {} } }
+async function uploadAudio(blob, ext) {
+  const tok = await auth.currentUser.getIdToken();
+  const r = await fetch(R2_WORKER + "/u?kind=audio&ext=" + encodeURIComponent(ext || "webm"), { method: "PUT", headers: { Authorization: "Bearer " + tok, "Content-Type": blob.type || "audio/webm" }, body: blob });
+  const d = await r.json().catch(() => ({}));
+  if (!r.ok || !d.key) throw new Error(d.error || "upload_failed");
+  return R2_WORKER + "/v?key=" + encodeURIComponent(d.key);
+}
+const r2KeyOf = (u) => { try { return new URL(u).searchParams.get("key") || ""; } catch (e) { return ""; } };
+async function playVoice(storedUrl, btn) {
+  const key = r2KeyOf(storedUrl); if (!key) { toast("Can't play this voice note."); return; }
+  if (!rvAud) rvAud = new Audio();
+  const lbl = btn ? (btn.dataset.lbl || btn.textContent) : "";
+  try {
+    if (btn) btn.textContent = "…";
+    const tok = await auth.currentUser.getIdToken();
+    const r = await fetch(R2_WORKER + "/view", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ idToken: tok, key }) });
+    const d = await r.json().catch(() => ({}));
+    if (!d.url) throw new Error("no_url");
+    rvAud.pause(); rvAud.src = d.url; await rvAud.play();
+  } catch (e) { toast("Couldn't play the voice note."); }
+  finally { if (btn) btn.textContent = lbl; }
+}
+$("#rvMic").addEventListener("click", () => { const r = rv.rec; if (r && r.state === "rec") stopRec(); else if (r && r.state === "ready") clearVoice(); else startRec(); });
+$("#rvVoice").addEventListener("click", (e) => {
+  if (e.target.closest("[data-vstop]")) { stopRec(); return; }
+  if (e.target.closest("[data-vcancel]")) { clearVoice(); return; }
+  if (e.target.closest("[data-vplay]")) { const r = rv.rec; if (r && r.blob) { if (!rvAud) rvAud = new Audio(); r.previewUrl = r.previewUrl || URL.createObjectURL(r.blob); rvAud.pause(); rvAud.src = r.previewUrl; rvAud.play().catch(() => {}); } return; }
+});
 $("#rvList").addEventListener("click", (e) => {
+  const vp = e.target.closest("[data-voice]"); if (vp) { playVoice(vp.dataset.voice, vp); return; }
   const seek = e.target.closest("[data-seek]"); if (seek) { rvJump(seek.closest(".cm"), Number(seek.dataset.seek)); return; }
   const card = e.target.closest(".cm[data-t]");
   if (card && !e.target.closest("button, a, textarea, input")) { rvJump(card, Number(card.dataset.t)); return; }
