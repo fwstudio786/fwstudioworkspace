@@ -91,7 +91,7 @@ service cloud.firestore {
         }
         allow read: if canSee();
         allow create: if canSee()
-          && request.resource.data.keys().hasOnly(["text", "t", "v", "by", "uid", "name", "at", "parent", "done", "doneBy", "doneAt"])
+          && request.resource.data.keys().hasOnly(["text", "t", "v", "vid", "by", "uid", "name", "at", "parent", "done", "doneBy", "doneAt", "mis", "audio", "adur"])
           && request.resource.data.uid == request.auth.uid
           && ((isClient() && request.resource.data.by == "client") || (isTeam() && request.resource.data.by == "team"))
           && request.resource.data.text is string
@@ -99,7 +99,7 @@ service cloud.firestore {
           && request.resource.data.done == false;
         // Anyone on the video can tick a comment done; only the author can change its text.
         allow update: if canSee()
-          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["done", "doneBy", "doneAt", "text"])
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["done", "doneBy", "doneAt", "text", "mis"])
           && (request.resource.data.text == resource.data.text || resource.data.uid == request.auth.uid);
         allow delete: if isAdmin() || (canSee() && resource.data.uid == request.auth.uid);
       }
