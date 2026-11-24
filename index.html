@@ -764,6 +764,10 @@ const FIREBASE_CONFIG = {
   appId: "1:410473842570:web:74c7a3281e81589c626a73"
 };
 const OWNER_EMAIL = "fwstudio786@gmail.com";      // this account becomes the first admin automatically
+// Review videos (not project files) upload here for seekable playback; the Worker keeps them private.
+const R2_WORKER = "https://fw-review.fwstudio786.workers.dev";
+const R2_HOST = (() => { try { return new URL(R2_WORKER).host; } catch (e) { return ""; } })();
+const R2_MAX = 95 * 1024 * 1024;   // up to ~95MB goes to R2 (seekable); larger review videos fall back to Drive
 
 const $ = (s, r = document) => r.querySelector(s);
 const $$ = (s, r = document) => [...r.querySelectorAll(s)];
@@ -2052,6 +2056,7 @@ function parseVideo(raw) {
   let u; try { u = new URL(url); } catch (e) { return null; }
   const h = u.hostname.replace(/^(www|m)\./, "");
   const okId = (x) => (x && /^[\w-]{6,64}$/.test(x) ? x : "");
+  if (R2_HOST && h === R2_HOST && u.pathname === "/v") { const key = u.searchParams.get("key"); if (key && /^v\/[\w.-]+$/.test(key)) return { kind: "r2", key, url }; }
   if (h === "youtu.be") { const id = okId(u.pathname.split("/")[1]); if (id) return { kind: "yt", id, url }; }
   if (h === "youtube.com" || h === "youtube-nocookie.com") {
     const id = okId(u.searchParams.get("v") || (u.pathname.match(/^\/(?:shorts|embed|live)\/([^/?#]+)/) || [])[1]);
@@ -2130,6 +2135,24 @@ function makePlayer(stage, v, team) {
   if (v.kind === "notvideo") return msg("This link isn't a video", team ? "It's a Google Doc or Sheet. Upload the video to Google Drive, set sharing to “Anyone with the link”, then paste that link in the task." : "The team linked a document here by mistake. Let them know.", v.url);
   if (v.kind === "wetransfer") return msg("This video is on WeTransfer", "WeTransfer only gives a download page, so it can't play inside the workspace. Open it, watch or download it there, then come back and leave your comments with the time, e.g. 0:12. Free WeTransfer links stop working after about 7 days.", v.url);
   if (v.kind === "link") return msg("This video opens on another site", "It can't play inside the workspace. Open it, then come back here to leave your comments.", v.url);
+  if (v.kind === "r2") {
+    // Private review video on R2: ask the Worker for a short-lived signed link, then play it as a real (seekable) video.
+    stage.innerHTML = `<video controls playsinline preload="metadata"></video><div class="rv-wait">Loading video…</div>`;
+    const el = $("video", stage); let dead = false;
+    (async () => {
+      try {
+        const tok = await auth.currentUser.getIdToken();
+        const r = await fetch(R2_WORKER + "/view", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ idToken: tok, key: v.key }) });
+        const d = await r.json().catch(() => ({}));
+        if (dead) return;
+        if (!d.url) throw new Error(d.error || "no_url");
+        el.src = d.url;
+      } catch (e) { if (!dead) stage.innerHTML = `<div class="rv-msg"><b>Couldn't load this video</b><p>Try again in a moment. If it keeps happening, re-upload it.</p></div>`; }
+    })();
+    el.addEventListener("loadedmetadata", () => $(".rv-wait", stage)?.remove(), { once: true });
+    el.addEventListener("error", () => $(".rv-wait", stage)?.remove(), { once: true });
+    return { canTime: true, ready: true, time: () => el.currentTime || 0, seek: (t) => { el.currentTime = t; el.play().catch(() => {}); }, setTime: (t) => { el.currentTime = t; }, pause: () => el.pause(), play: () => el.play().catch(() => { el.muted = true; el.play().catch(() => {}); }), playing: () => !el.paused && !el.ended, mute: (m) => { el.muted = !!m; }, destroy() { dead = true; el.pause(); el.removeAttribute("src"); el.load(); stage.innerHTML = ""; } };
+  }
   if (v.kind === "drive") {
     // First try playing the Drive file directly (gives exact times and jumping); if Drive won't stream it, use Drive's own player.
     let dead = false, tm = 0;
@@ -2543,6 +2566,25 @@ async function sendPiece(u, q, body, off, total) {
     }
   }
 }
+// Upload a review video straight to R2 through the Worker (seekable playback, no Drive).
+function runUploadR2(u, job) {
+  return auth.currentUser.getIdToken().then((tok) => new Promise((resolve, reject) => {
+    const f = job.file, ext = (String(f.name).split(".").pop() || "mp4").toLowerCase();
+    const x = new XMLHttpRequest(); u.xhr = x;
+    x.open("PUT", R2_WORKER + "/u?ext=" + encodeURIComponent(ext));
+    x.setRequestHeader("Authorization", "Bearer " + tok);
+    x.setRequestHeader("Content-Type", f.type || "video/mp4");
+    x.upload.onprogress = (e) => { u.sent = e.loaded; upPaint(u); };
+    x.onload = () => {
+      let d = {}; try { d = JSON.parse(x.responseText || "{}"); } catch (e) {}
+      if (x.status === 200 && d.key) resolve({ url: R2_WORKER + "/v?key=" + encodeURIComponent(d.key), id: d.key, size: f.size });
+      else reject(new Error(d.error === "not_signed_in" ? "Please sign in again." : "R2 upload failed (" + x.status + ")"));
+    };
+    x.onerror = () => reject(new Error("network"));
+    x.onabort = () => reject(new Error("cancelled"));
+    x.send(f);
+  }));
+}
 async function runUpload(u, job) {
   const f = job.file;
   const r = await upReq(u, "POST", "/upload/init", { headers: { "Content-Type": "application/json" },
@@ -2604,7 +2646,12 @@ async function startUpload(taskId, scope, job) {
   const u = { id: uid(), task: taskId, scope, name, size, sent: 0, state: "wait", msg: "", zip: !!job.zip, drive, sub: scope === "project" ? "Project File" : "Exports" };
   UP.set(u.id, u); upRefresh(u); u.state = "up"; upRefresh(u);
   try {
-    const res = await runUpload(u, job);
+    const useR2 = R2_WORKER && scope !== "project" && job.file && job.file.size <= R2_MAX;
+    let res;
+    if (useR2) {
+      try { res = await runUploadR2(u, job); }
+      catch (e) { if (e.message === "cancelled") throw e; toast("Couldn't reach R2, uploading to Drive instead."); u.sent = 0; upPaint(u); res = await runUpload(u, job); }
+    } else res = await runUpload(u, job);
     u.state = "done"; u.sent = u.size; attachUpload(u, res);
     upRefresh(u); setTimeout(() => { UP.delete(u.id); upRefresh(u); }, 3500);
   } catch (e) {
@@ -2704,7 +2751,7 @@ function filesOf(t) {
   return out;
 }
 const WT_NOTE = "WeTransfer saved. It can't play here, so people open it on WeTransfer and comment with a typed time. Free links expire after about 7 days. Use Drive, YouTube or Dropbox for full review and compare.";
-const playable = (url) => { const v = parseVideo(url); return !!v && ["yt", "drive", "file"].includes(v.kind); };
+const playable = (url) => { const v = parseVideo(url); return !!v && ["yt", "drive", "file", "r2"].includes(v.kind); };
 function filesBox(t, tid) {
   const rows = filesOf(t).map((f) => {
     const url = safeUrl(f.url);
