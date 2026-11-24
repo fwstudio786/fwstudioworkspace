@@ -1274,11 +1274,12 @@ function renderClientsSheet(m) {
   };
   m.innerHTML = `<div class="bar"><button class="btn" id="csBack">← Sheets</button><h1>Clients overview</h1>
       <input type="search" id="csq" placeholder="Search client or video" value="${esc(ui.csq || "")}" aria-label="Search clients overview">
-      <button class="btn" id="csCsv">⬇ Download CSV</button></div>
+      <button class="btn" id="csMake">\u{1F4C1} Make editable sheets</button><button class="btn" id="csCsv">⬇ Download CSV</button></div>
     <p class="muted" style="margin:.1rem 0 1rem">Auto-updated from your tasks. ${names.length} client${names.length === 1 ? "" : "s"} · ${shown.length} task${shown.length === 1 ? "" : "s"} · ${totalVideos} video${totalVideos === 1 ? "" : "s"} in total.</p>` +
     (shown.length ? `<div class="tablewrap"><table class="list"><thead><tr><th>Video / task</th><th>Videos</th><th>Date given</th><th>Due date</th><th>Delivered</th><th>Status</th></tr></thead><tbody>${names.map(section).join("")}</tbody></table></div>`
       : `<div class="empty"><b>${loaded ? (q ? "Nothing found" : "No tasks yet") : "Loading…"}</b>${loaded && !q ? "When you add tasks with clients, they show up here grouped by client." : ""}</div>`);
   $("#csBack").addEventListener("click", () => { ui.sheetsTab = null; render(); });
+  $("#csMake").addEventListener("click", buildClientSheets);
   $("#csq").addEventListener("input", (e) => { ui.csq = e.target.value; render(); });
   $("#csCsv").addEventListener("click", () => {
     const esc3 = (s) => `"${String(s == null ? "" : s).replace(/"/g, '""')}"`;
@@ -1287,6 +1288,34 @@ function renderClientsSheet(m) {
     const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob(["﻿" + lines.join("\r\n")], { type: "text/csv;charset=utf-8" }));
     a.download = "fw-clients-" + today + ".csv"; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 3000);
   });
+}
+/* ---------------- Per-client editable sheets (one XLS per client, auto-filled from tasks) ---------------- */
+function fmtDay(d) { if (!d) return ""; const x = new Date(String(d).slice(0, 10) + "T00:00:00"); return isNaN(x) ? String(d) : x.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" }); }
+function clientSheetData(cid, existing) {
+  const lbl = (c) => c === "unassigned" ? "Unassigned" : (ST[c] || {}).label || c;
+  const tasks = [...S.merged.entries()].filter(([, t]) => (t.client || "") === cid).sort((a, b) => String(a[1].due || "~").localeCompare(String(b[1].due || "~")));
+  const head = ["Video / Task", "Link", "Videos", "Date given", "Due date", "Assigned to", "Status", "Notes"];
+  const prevNotes = {};
+  if (existing && Array.isArray(existing.taskOrder) && existing.cells) existing.taskOrder.forEach((tid, i) => { const n = existing.cells[refName(i + 1, 7)]; if (n) prevNotes[tid] = n; });
+  let totalVideos = 0; const order = [];
+  const body = tasks.map(([id, t]) => {
+    const a = wlAuto(id, t), vids = videosOf(t).filter((v) => liveCount(v));
+    const link = vids.length ? (latestOf(vids[0]) || {}).url || "" : "";
+    totalVideos += vids.length; order.push(id);
+    return [a.title, safeUrl(link), String(vids.length), fmtDay(a.assignedAt), fmtDay(a.due), personName(t.assignee) || "", lbl(boardCol(t)), prevNotes[id] || ""];
+  });
+  const rowsArr = [head, ...body, ["Total", "", String(totalVideos), "", "", "", "", ""]];
+  const cells = {}; rowsArr.forEach((row, r) => row.forEach((v, c) => { if (String(v || "").trim() !== "") cells[refName(r, c)] = String(v); }));
+  return { title: (personName(cid) || "Client").slice(0, 60), cells, rows: Math.max(rowsArr.length + 2, 12), cols: head.length, auto: "client", client: cid, taskOrder: order, updatedAt: now(), createdAt: (existing && existing.createdAt) || now(), createdBy: (existing && existing.createdBy) || me.uid };
+}
+function buildClientSheets() {
+  const cids = [...new Set([...S.merged.values()].map((t) => t.client).filter(Boolean))];
+  if (!cids.length) { toast("No clients on your tasks yet."); return; }
+  const existingByClient = {}; S.sheets.forEach((s, id) => { if (s && s.auto === "client" && s.client) existingByClient[s.client] = { id, ...s }; });
+  let made = 0, upd = 0;
+  cids.forEach((cid) => { const ex = existingByClient[cid], data = clientSheetData(cid, ex), id = ex ? ex.id : uid(); S.sheets.set(id, data); try { Store.set("sheets", id, data); } catch (e) {} ex ? upd++ : made++; });
+  toast(`Client sheets ready — ${made} new, ${upd} updated. Open them in Sheets.`);
+  ui.sheetsTab = null; render();
 }
 /* ---------------- Gemini (Firebase AI Logic) for reading a screenshot into a sheet ---------------- */
 const AI_CDN = "https://www.gstatic.com/firebasejs/13.2.0/";
