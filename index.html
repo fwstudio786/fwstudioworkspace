@@ -210,8 +210,12 @@ table.list tr:last-child td { border-bottom: 0; }
 .sh-grid td { max-width: 220px; min-width: 110px; cursor: cell; }
 .sh-grid td.n { text-align: right; }
 .sh-grid td.err { color: var(--st-rejected); }
+.sh-grid td { position: relative; }
+.sh-grid td.inr { background: var(--accent-soft); }
 .sh-grid td.sel { box-shadow: inset 0 0 0 2px var(--accent); background: var(--accent-soft); }
-.sh-grid td.edit { padding: 0; }
+.sh-grid td.fillt { box-shadow: inset 0 0 0 1px var(--accent-2); }
+.sh-grid .fh { position: absolute; right: 0; bottom: 0; width: 8px; height: 8px; background: var(--accent); border: 1px solid var(--panel); cursor: crosshair; z-index: 4; }
+.sh-grid td.edit { padding: 0; overflow: visible; }
 .sh-grid td.edit input { width: 100%; height: 100%; border: 0; outline: 2px solid var(--accent); background: var(--panel-3); padding: 0 6px; font: inherit; color: var(--fg); }
 .sh-foot { display: flex; gap: 8px; padding: 7px; border-top: 1px solid var(--line); flex-wrap: wrap; align-items: center; font-size: 12px; color: var(--faint); }
 
@@ -922,88 +926,135 @@ function makeGrid(host, model, onChange, opts = {}) {
       <div class="sh-bar"><span class="ref" aria-live="polite">A1</span><label class="fx"><i>fx</i><input aria-label="Cell contents or formula" placeholder="Type a value, or a formula like =SUM(B2:B10)"></label></div>
       <div class="sh-grid ${opts.tall ? "tall" : ""}" tabindex="0" aria-label="Spreadsheet"></div>
       <div class="sh-foot"><button class="btn sm" data-a="row">+ Row</button><button class="btn sm" data-a="col">+ Column</button>
-        <span>Formulas: SUM, AVERAGE, MIN, MAX, COUNT, ROUND, IF. You can paste cells from Excel or Google Sheets.</span></div>
+        <span>Drag to select a block · drag the little corner box to fill · Ctrl/⌘ C · X · V to copy, cut, paste · formulas like =SUM(B2:B10), AVERAGE, MIN, MAX, COUNT, ROUND, IF.</span></div>
     </div>`;
   const grid = $(".sh-grid", host), fx = $(".fx input", host), refEl = $(".ref", host);
-  let sel = { r: 0, c: 0 }, editing = null;
-  function cellsFix(c) { return c || {}; }
+  const RO = !!opts.readOnly;
+  const handle = document.createElement("span"); handle.className = "fh"; handle.setAttribute("aria-hidden", "true");
+  let a = { r: 0, c: 0 }, f = { r: 0, c: 0 }, editing = null, drag = null;
+  const cells = () => (model.cells = model.cells || {});
+  const clamp = (r, c) => ({ r: Math.max(0, Math.min(model.rows - 1, r)), c: Math.max(0, Math.min(model.cols - 1, c)) });
+  const rect = () => ({ r1: Math.min(a.r, f.r), c1: Math.min(a.c, f.c), r2: Math.max(a.r, f.r), c2: Math.max(a.c, f.c) });
+  const td = (r, c) => grid.querySelector(`td[data-r="${r}"][data-c="${c}"]`);
   function render() {
-    const cells = cellsFix(model.cells), calc = makeCalc(cells);
+    const cl = cells(), calc = makeCalc(cl);
     let h = "<table><thead><tr><th class='rh'></th>";
     for (let c = 0; c < model.cols; c++) h += `<th>${colName(c)}</th>`;
     h += "</tr></thead><tbody>";
     for (let r = 0; r < model.rows; r++) {
       h += `<tr><td class="rh">${r + 1}</td>`;
       for (let c = 0; c < model.cols; c++) {
-        const ref = refName(r, c), v = cells[ref] != null ? calc.val(ref) : "";
-        const cls = (typeof v === "number" ? "n" : "") + (typeof v === "string" && v[0] === "#" && /^#[A-Z/0]+$/.test(v) ? " err" : "") + (r === sel.r && c === sel.c ? " sel" : "");
+        const ref = refName(r, c), v = cl[ref] != null ? calc.val(ref) : "";
+        const cls = (typeof v === "number" ? "n" : "") + (typeof v === "string" && v[0] === "#" && /^#[A-Z/0]+$/.test(v) ? " err" : "");
         h += `<td data-r="${r}" data-c="${c}" class="${cls}">${esc(showVal(v))}</td>`;
       }
       h += "</tr>";
     }
     grid.innerHTML = h + "</tbody></table>";
+    paint();
+  }
+  function paint() {
+    const R = rect();
+    $$("td.sel,td.inr", grid).forEach((x) => x.classList.remove("sel", "inr"));
+    for (let r = R.r1; r <= R.r2; r++) for (let c = R.c1; c <= R.c2; c++) { const el = td(r, c); if (el) el.classList.add(r === f.r && c === f.c ? "sel" : "inr"); }
+    const act = td(f.r, f.c); if (act) act.classList.add("sel");
+    const corner = td(R.r2, R.c2);
+    if (!RO && !editing && corner) corner.appendChild(handle); else if (handle.parentNode) handle.parentNode.removeChild(handle);
     syncBar();
   }
-  function syncBar() { const ref = refName(sel.r, sel.c); refEl.textContent = ref; if (document.activeElement !== fx) fx.value = cellsFix(model.cells)[ref] ?? ""; }
-  function td(r, c) { return grid.querySelector(`td[data-r="${r}"][data-c="${c}"]`); }
-  function select(r, c, scroll = true) {
-    sel = { r: Math.max(0, Math.min(model.rows - 1, r)), c: Math.max(0, Math.min(model.cols - 1, c)) };
-    $$("td.sel", grid).forEach((x) => x.classList.remove("sel"));
-    const el = td(sel.r, sel.c); if (el) { el.classList.add("sel"); if (scroll) el.scrollIntoView({ block: "nearest", inline: "nearest" }); }
-    syncBar();
+  function syncBar() { const ref = refName(f.r, f.c); refEl.textContent = ref; if (document.activeElement !== fx) fx.value = cells()[ref] ?? ""; }
+  function select(r, c, extend, scroll = true) {
+    const p = clamp(r, c); f = p; if (!extend) a = p;
+    const el = td(f.r, f.c); if (el && scroll) el.scrollIntoView({ block: "nearest", inline: "nearest" });
+    paint();
   }
-  function commit(ref, raw) {
-    model.cells = cellsFix(model.cells);
-    if (raw === "" || raw == null) delete model.cells[ref]; else model.cells[ref] = raw;
-    onChange(model); render();
-  }
+  function commit(ref, raw) { cells(); if (raw === "" || raw == null) delete model.cells[ref]; else model.cells[ref] = raw; onChange(model); render(); }
   function startEdit(initial) {
-    if (opts.readOnly) return;
-    const el = td(sel.r, sel.c); if (!el) return;
-    const ref = refName(sel.r, sel.c);
-    editing = ref; el.classList.add("edit");
-    el.innerHTML = `<input aria-label="Edit ${ref}">`;
-    const inp = el.firstChild; inp.value = initial != null ? initial : (cellsFix(model.cells)[ref] ?? "");
+    if (RO) return;
+    const el = td(f.r, f.c); if (!el) return;
+    const ref = refName(f.r, f.c); editing = ref; if (handle.parentNode) handle.parentNode.removeChild(handle);
+    el.classList.add("edit"); el.innerHTML = `<input aria-label="Edit ${ref}">`;
+    const inp = el.firstChild; inp.value = initial != null ? initial : (cells()[ref] ?? "");
     inp.focus(); inp.setSelectionRange(inp.value.length, inp.value.length);
     inp.addEventListener("input", () => { fx.value = inp.value; });
     inp.addEventListener("keydown", (e) => {
-      if (e.key === "Enter" || e.key === "Tab") { e.preventDefault(); finish(inp.value); select(sel.r + (e.key === "Enter" ? (e.shiftKey ? -1 : 1) : 0), sel.c + (e.key === "Tab" ? (e.shiftKey ? -1 : 1) : 0)); grid.focus(); }
+      if (e.key === "Enter" || e.key === "Tab") { e.preventDefault(); finish(inp.value); select(f.r + (e.key === "Enter" ? (e.shiftKey ? -1 : 1) : 0), f.c + (e.key === "Tab" ? (e.shiftKey ? -1 : 1) : 0), false); grid.focus(); }
       else if (e.key === "Escape") { e.preventDefault(); editing = null; render(); grid.focus(); }
       e.stopPropagation();
     });
     inp.addEventListener("blur", () => { if (editing === ref) finish(inp.value); });
   }
   function finish(v) { const ref = editing; editing = null; if (ref) commit(ref, v); }
-  grid.addEventListener("mousedown", (e) => { const el = e.target.closest("td[data-r]"); if (!el || el.classList.contains("edit")) return; if (editing) finish($("input", td(sel.r, sel.c))?.value); select(+el.dataset.r, +el.dataset.c, false); });
-  grid.addEventListener("dblclick", (e) => { if (e.target.closest("td[data-r]")) startEdit(); });
+  function clearRange() { const R = rect(); cells(); let n = 0; for (let r = R.r1; r <= R.r2; r++) for (let c = R.c1; c <= R.c2; c++) { const ref = refName(r, c); if (model.cells[ref] != null) { delete model.cells[ref]; n++; } } if (n) { onChange(model); render(); } }
+  function copyRange(cut) {
+    const R = rect(), cl = cells(), lines = [];
+    for (let r = R.r1; r <= R.r2; r++) { const row = []; for (let c = R.c1; c <= R.c2; c++) row.push(cl[refName(r, c)] ?? ""); lines.push(row.join("\t")); }
+    try { navigator.clipboard.writeText(lines.join("\n")).catch(() => {}); } catch (e) {}
+    if (cut && !RO) clearRange();
+  }
+  function clearPreview() { $$("td.fillt", grid).forEach((x) => x.classList.remove("fillt")); }
+  function previewFill(r, c) {
+    const B = drag.base;
+    const R = (r - B.r2) >= (c - B.c2) ? { r1: B.r1, c1: B.c1, r2: Math.max(B.r2, r), c2: B.c2 } : { r1: B.r1, c1: B.c1, r2: B.r2, c2: Math.max(B.c2, c) };
+    drag.target = R; clearPreview();
+    for (let rr = R.r1; rr <= R.r2; rr++) for (let cc = R.c1; cc <= R.c2; cc++) { const el = td(rr, cc); if (el) el.classList.add("fillt"); }
+  }
+  function applyFill(B, T) {
+    cells(); const bh = B.r2 - B.r1 + 1, bw = B.c2 - B.c1 + 1; let n = 0;
+    for (let r = T.r1; r <= T.r2; r++) for (let c = T.c1; c <= T.c2; c++) {
+      if (r >= B.r1 && r <= B.r2 && c >= B.c1 && c <= B.c2) continue;
+      const raw = model.cells[refName(B.r1 + ((r - B.r1) % bh), B.c1 + ((c - B.c1) % bw))], ref = refName(r, c);
+      if (raw == null || raw === "") delete model.cells[ref]; else model.cells[ref] = raw; n++;
+    }
+    if (n) { onChange(model); render(); }
+  }
+  grid.addEventListener("mousedown", (e) => {
+    if (e.target === handle) { if (RO || editing) return; drag = { kind: "fill", base: rect() }; document.addEventListener("mouseup", endDrag, { once: true }); e.preventDefault(); return; }
+    const el = e.target.closest("td[data-r]"); if (!el || el.classList.contains("edit")) return;
+    if (editing) finish($("input", td(f.r, f.c))?.value);
+    select(+el.dataset.r, +el.dataset.c, e.shiftKey, false);
+    if (!e.shiftKey) { drag = { kind: "sel" }; document.addEventListener("mouseup", endDrag, { once: true }); }
+    grid.focus();
+  });
+  grid.addEventListener("mousemove", (e) => {
+    if (!drag) return;
+    const el = e.target.closest("td[data-r]"); if (!el) return;
+    const r = +el.dataset.r, c = +el.dataset.c;
+    if (drag.kind === "sel") select(r, c, true, false); else if (drag.kind === "fill") previewFill(r, c);
+  });
+  function endDrag() { if (!drag) return; const d = drag; drag = null; if (d.kind === "fill" && d.target) applyFill(d.base, d.target); clearPreview(); paint(); }
+  grid.addEventListener("dblclick", (e) => { if (e.target.closest("td[data-r]") && e.target !== handle) startEdit(); });
   grid.addEventListener("keydown", (e) => {
     if (editing) return;
-    const k = e.key, mv = { ArrowUp: [-1, 0], ArrowDown: [1, 0], ArrowLeft: [0, -1], ArrowRight: [0, 1] }[k];
-    if (mv) { e.preventDefault(); select(sel.r + mv[0], sel.c + mv[1]); }
+    const k = e.key, mod = e.ctrlKey || e.metaKey;
+    const mv = { ArrowUp: [-1, 0], ArrowDown: [1, 0], ArrowLeft: [0, -1], ArrowRight: [0, 1] }[k];
+    if (mv) { e.preventDefault(); select(f.r + mv[0], f.c + mv[1], e.shiftKey); }
     else if (k === "Enter" || k === "F2") { e.preventDefault(); startEdit(); }
-    else if (k === "Tab") { e.preventDefault(); select(sel.r, sel.c + (e.shiftKey ? -1 : 1)); }
-    else if ((k === "Delete" || k === "Backspace") && !opts.readOnly) { e.preventDefault(); commit(refName(sel.r, sel.c), ""); }
-    else if ((e.ctrlKey || e.metaKey) && k.toLowerCase() === "c") { const raw = cellsFix(model.cells)[refName(sel.r, sel.c)] ?? ""; try { navigator.clipboard.writeText(String(raw)).catch(() => {}); } catch (er) {} }
-    else if (k.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey) { e.preventDefault(); startEdit(k); }
+    else if (k === "Tab") { e.preventDefault(); select(f.r, f.c + (e.shiftKey ? -1 : 1), false); }
+    else if ((k === "Delete" || k === "Backspace") && !RO) { e.preventDefault(); clearRange(); }
+    else if (mod && k.toLowerCase() === "c") { copyRange(false); }
+    else if (mod && k.toLowerCase() === "x") { e.preventDefault(); copyRange(true); }
+    else if (mod && k.toLowerCase() === "a") { e.preventDefault(); a = { r: 0, c: 0 }; f = clamp(model.rows - 1, model.cols - 1); paint(); }
+    else if (k.length === 1 && !mod && !e.altKey) { e.preventDefault(); startEdit(k); }
   });
   grid.addEventListener("paste", (e) => {
-    if (editing || opts.readOnly) return;
+    if (editing || RO) return;
     const text = (e.clipboardData || window.clipboardData)?.getData("text"); if (!text) return;
     e.preventDefault();
     const rows = text.replace(/\r/g, "").replace(/\n$/, "").split("\n").map((l) => l.split("\t"));
-    model.cells = cellsFix(model.cells);
-    rows.forEach((row, i) => row.forEach((v, j) => { const r = sel.r + i, c = sel.c + j; if (r >= model.rows) model.rows = r + 1; if (c >= model.cols) model.cols = c + 1; const ref = refName(r, c); v === "" ? delete model.cells[ref] : (model.cells[ref] = v); }));
+    cells();
+    rows.forEach((row, i) => row.forEach((v, j) => { const r = f.r + i, c = f.c + j; if (r >= model.rows) model.rows = r + 1; if (c >= model.cols) model.cols = c + 1; const ref = refName(r, c); v === "" ? delete model.cells[ref] : (model.cells[ref] = v); }));
     onChange(model); render(); toast("Pasted " + rows.length + " row" + (rows.length > 1 ? "s" : ""));
   });
-  fx.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); commit(refName(sel.r, sel.c), fx.value); select(sel.r + 1, sel.c); grid.focus(); } else if (e.key === "Escape") { syncBar(); grid.focus(); } });
-  fx.readOnly = !!opts.readOnly;
+  fx.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); commit(refName(f.r, f.c), fx.value); select(f.r + 1, f.c, false); grid.focus(); } else if (e.key === "Escape") { syncBar(); grid.focus(); } });
+  fx.readOnly = RO;
   $(".sh-foot", host).addEventListener("click", (e) => {
-    const a = e.target.closest("[data-a]")?.dataset.a; if (!a || opts.readOnly) return;
-    if (a === "row") model.rows++; else if (model.cols < 52) model.cols++;
+    const act = e.target.closest("[data-a]")?.dataset.a; if (!act || RO) return;
+    if (act === "row") model.rows++; else if (model.cols < 52) model.cols++;
     onChange(model); render();
   });
   render();
-  return { refresh(m) { if (editing) return; model = m; render(); }, get model() { return model; } };
+  return { refresh(m) { if (editing) return; model = m; a = clamp(a.r, a.c); f = clamp(f.r, f.c); render(); }, get model() { return model; } };
 }
 
 /* ---------------- rich text (Word-like) component ---------------- */
@@ -1307,18 +1358,30 @@ function clientSheetData(cid, existing) {
   const lbl = (c) => c === "unassigned" ? "Unassigned" : (ST[c] || {}).label || c;
   const tasks = [...S.merged.entries()].filter(([, t]) => (t.client || "") === cid).sort((a, b) => String(a[1].due || "~").localeCompare(String(b[1].due || "~")));
   const head = ["Video / Task", "Link", "Videos", "Date given", "Due date", "Assigned to", "Status", "Notes"];
-  const prevNotes = {};
-  if (existing && Array.isArray(existing.taskOrder) && existing.cells) existing.taskOrder.forEach((tid, i) => { const n = existing.cells[refName(i + 1, 7)]; if (n) prevNotes[tid] = n; });
-  let totalVideos = 0; const order = [];
-  const body = tasks.map(([id, t]) => {
-    const a = wlAuto(id, t), vids = videosOf(t).filter((v) => liveCount(v));
+  const AUTO = 7;                       // columns 0..6 belong to the board; column 7 (Notes) and anything to its right are yours
+  const ex = (existing && existing.cells) || {};
+  const exCols = Math.max(head.length, (existing && existing.cols) || head.length);
+  const oldRow = {};                    // task id -> the row it was on last time, so your own cells follow the task
+  if (existing && Array.isArray(existing.taskOrder)) existing.taskOrder.forEach((tid, i) => { oldRow[tid] = i + 1; });
+  const cells = {}, order = [];
+  head.forEach((hd, c) => { cells[refName(0, c)] = hd; });
+  for (let c = head.length; c < exCols; c++) { const v = ex[refName(0, c)]; if (v != null && v !== "") cells[refName(0, c)] = v; }   // keep extra column headers you added
+  let totalVideos = 0;
+  tasks.forEach(([id, t], i) => {
+    const r = i + 1, a = wlAuto(id, t), vids = videosOf(t).filter((v) => liveCount(v));
     const link = vids.length ? (latestOf(vids[0]) || {}).url || "" : "";
     totalVideos += vids.length; order.push(id);
-    return [a.title, safeUrl(link), String(vids.length), fmtDay(a.assignedAt), fmtDay(a.due), personName(t.assignee) || "", lbl(boardCol(t)), prevNotes[id] || ""];
+    const auto = [a.title, safeUrl(link), String(vids.length), fmtDay(a.assignedAt), fmtDay(a.due), personName(t.assignee) || "", lbl(boardCol(t))];
+    auto.forEach((v, c) => { if (String(v || "").trim() !== "") cells[refName(r, c)] = String(v); });
+    const from = oldRow[id];
+    if (from != null) for (let c = AUTO; c < exCols; c++) { const v = ex[refName(from, c)]; if (v != null && v !== "") cells[refName(r, c)] = v; }   // your Notes + extra columns, kept per task
   });
-  const rowsArr = [head, ...body, ["Total", "", String(totalVideos), "", "", "", "", ""]];
-  const cells = {}; rowsArr.forEach((row, r) => row.forEach((v, c) => { if (String(v || "").trim() !== "") cells[refName(r, c)] = String(v); }));
-  return { title: (personName(cid) || "Client").slice(0, 60), cells, rows: Math.max(rowsArr.length + 2, 12), cols: head.length, auto: "client", client: cid, taskOrder: order, updatedAt: now(), createdAt: (existing && existing.createdAt) || now(), createdBy: (existing && existing.createdBy) || me.uid };
+  const totalRow = tasks.length + 1;
+  cells[refName(totalRow, 0)] = "Total";
+  if (totalVideos) cells[refName(totalRow, 2)] = String(totalVideos);
+  const oldTotal = (existing && Array.isArray(existing.taskOrder)) ? existing.taskOrder.length + 1 : null;
+  if (oldTotal != null) for (let c = AUTO; c < exCols; c++) { const v = ex[refName(oldTotal, c)]; if (v != null && v !== "") cells[refName(totalRow, c)] = v; }
+  return { title: (existing && existing.title) || (personName(cid) || "Client").slice(0, 60), cells, rows: Math.max(totalRow + 3, (existing && existing.rows) || 0, 12), cols: Math.max(head.length, exCols), auto: "client", client: cid, taskOrder: order, updatedAt: now(), createdAt: (existing && existing.createdAt) || now(), createdBy: (existing && existing.createdBy) || me.uid };
 }
 function buildClientSheets() {
   const cids = [...new Set([...S.merged.values()].map((t) => t.client).filter(Boolean))];
@@ -1328,6 +1391,23 @@ function buildClientSheets() {
   cids.forEach((cid) => { const ex = existingByClient[cid], data = clientSheetData(cid, ex), id = ex ? ex.id : uid(); S.sheets.set(id, data); try { Store.set("sheets", id, data); } catch (e) {} ex ? upd++ : made++; });
   toast(`Client sheets ready — ${made} new, ${upd} updated. Open them in Sheets.`);
   ui.sheetsTab = null; render();
+}
+// Keep the per-client sheets in step with the board automatically (admin's browser): a client with tasks
+// always has a sheet, task columns refresh, and a deleted task drops out. Only writes when something changed.
+let csTimer = 0;
+function csSchedule() { if (!isAdmin() || csTimer) return; csTimer = setTimeout(() => { csTimer = 0; csSync(); }, 1500); }
+function csSameSheet(ex, data) {
+  return JSON.stringify({ c: ex.cells || {}, r: ex.rows, k: ex.cols, o: ex.taskOrder || [], t: ex.title }) === JSON.stringify({ c: data.cells, r: data.rows, k: data.cols, o: data.taskOrder, t: data.title });
+}
+function csSync() {
+  if (!isAdmin() || !["tasks", "reviews", "sheets"].every((c) => got.has(c))) return;
+  const existingByClient = {}; S.sheets.forEach((s, id) => { if (s && s.auto === "client" && s.client) existingByClient[s.client] = { id, ...s }; });
+  const clients = new Set([...S.merged.values()].map((t) => t.client).filter(Boolean));
+  clients.forEach((cid) => {
+    const ex = existingByClient[cid], data = clientSheetData(cid, ex), id = ex ? ex.id : uid();
+    if (ex && csSameSheet(ex, data)) return;
+    S.sheets.set(id, data); try { Store.set("sheets", id, data); } catch (e) {}
+  });
 }
 /* ---------------- Gemini (Firebase AI Logic) for reading a screenshot into a sheet ---------------- */
 const AI_CDN = "https://www.gstatic.com/firebasejs/13.2.0/";
@@ -1819,7 +1899,7 @@ function render() {
   const client = isClient();
   $("#tabs").hidden = client; $("#newBtn").hidden = !isAdmin(); $("#peopleBtn").hidden = !isAdmin();
   $("#wlTab").hidden = !wlAccess(); $("#wlTab").textContent = wlAccess() === "count" ? "My videos" : "Work log"; if (view === "worklog" && !wlAccess()) view = "board";
-  wlSchedule(); fiSchedule();
+  wlSchedule(); fiSchedule(); csSchedule();
   $("#rtTab").hidden = !rtAccess(); $("#rtTab").textContent = rtAccess() === "own" ? "My rating" : "Ratings";
   $("#fiTab").hidden = !fiAccess(); $("#actTab").hidden = !actAccess();
   if ((view === "ratings" && !rtAccess()) || (view === "business" && !fiAccess()) || (view === "activity" && !actAccess())) view = "board";
@@ -3185,7 +3265,7 @@ function taskActions(t, id) {
   const admin = isAdmin(), ready = hasExport(t);
   const left = ui.draftId === id
     ? `<div class="save-row"><button class="btn primary" data-save type="button">Save task</button>${ready && t.client ? `<button class="btn" data-send type="button">Save &amp; send to client</button>` : ""}<span class="muted">Nothing is added to the board until you save.</span></div>`
-    : ready ? `<button class="btn primary" data-send type="button" ${t.status === "review" ? "disabled" : ""}>${t.status === "review" ? "With the client for review" : "Send to client for review"}</button>`
+    : ready ? `<div class="save-row"><button class="btn primary" data-send type="button" ${t.status === "review" ? "disabled" : ""}>${t.status === "review" ? "With the client for review" : "Send to client for review"}</button>${admin && t.status !== "review" ? `<button class="btn" data-save type="button">Save, don't send</button>` : ""}<span class="muted">${t.status === "review" ? "" : "Save keeps it with the team — it won't go to the client."}</span></div>`
     : `<div class="save-row"><button class="btn primary" data-save type="button">${admin ? "Save task" : "Save"}</button><span class="muted">${admin ? "The editor sees it straight away and adds the export in the Exports tab when the edit is ready." : "Add your export in the Exports tab when the edit is ready, then send it to the client."}</span></div>`;
   return `<div class="sec tact">${left}${admin ? `<button class="btn ghost danger" data-del type="button">${ui.draftId === id ? "Discard" : "Delete task"}</button>` : ""}</div>`;
 }
@@ -3209,7 +3289,10 @@ function bindActions(body, id) {
   del?.addEventListener("click", () => {
     if (ui.draftId === id) { discardDraft(); closeDrawer2(); render(); toast("New task thrown away"); return; }
     if (!armed) { armed = true; del.textContent = "Click again to delete for good"; setTimeout(() => { armed = false; if (del.isConnected) del.textContent = "Delete task"; }, 3500); return; }
-    logAct("delete", "Deleted the task", { id, title: (S.merged.get(id) || {}).title }, { every: 0 }); taskDraft = null; S.tasks.delete(id); S.reviews.delete(id); merge(); Store.remove("tasks", id); Store.remove("reviews", id); closeDrawer(); render(); toast("Task deleted");
+    logAct("delete", "Deleted the task", { id, title: (S.merged.get(id) || {}).title }, { every: 0 }); taskDraft = null; S.tasks.delete(id); S.reviews.delete(id);
+    if (S.worklog && S.worklog.has(id)) { S.worklog.delete(id); try { Store.remove("worklog", id); } catch (e) {} }   // its pay row goes too
+    if (S.finance && S.finance.has(id)) { S.finance.delete(id); try { Store.remove("finance", id); } catch (e) {} }   // and its business row
+    merge(); Store.remove("tasks", id); Store.remove("reviews", id); csSchedule(); closeDrawer(); render(); toast("Task deleted everywhere");
   });
 }
 
@@ -3263,7 +3346,7 @@ function wlSync() {
   });
   S.worklog.forEach((row, id) => {
     if (row.manual) { if (!row.paid && (row.defRate ?? null) !== def(row.editor)) { S.worklog.set(id, { ...row, defRate: def(row.editor) }); Store.update("worklog", id, { defRate: def(row.editor) }); } return; }
-    if (!S.merged.has(id) && !row.gone) { S.worklog.set(id, { ...row, gone: true }); Store.update("worklog", id, { gone: true }); }
+    if (!S.merged.has(id)) { S.worklog.delete(id); try { Store.remove("worklog", id); } catch (e) {} }   // the task was deleted: drop its pay row (also cleans up older "gone" rows)
   });
 }
 
@@ -3629,7 +3712,7 @@ function fiSync() {
     if (!row.clientPaid && (row.defRate ?? null) !== def(a.client)) patch.defRate = def(a.client);
     if (Object.keys(patch).length) { S.finance.set(id, { ...row, ...patch }); Store.update("finance", id, patch); }
   });
-  S.finance.forEach((row, id) => { if (!row.manual && !S.merged.has(id) && !row.gone) { S.finance.set(id, { ...row, gone: true }); Store.update("finance", id, { gone: true }); } });
+  S.finance.forEach((row, id) => { if (!row.manual && !S.merged.has(id)) { S.finance.delete(id); try { Store.remove("finance", id); } catch (e) {} } });   // deleted task: remove its business row (and any older "gone" rows)
 }
 function fiRows() {
   return [...S.finance.entries()].map(([id, r]) => {
