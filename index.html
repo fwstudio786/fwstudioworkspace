@@ -1237,7 +1237,8 @@ function renderLib(m, kind) {
   const text = (d) => (d.title + " " + (isDoc ? String(d.html || "").replace(/<[^>]+>/g, " ") : Object.values(d.cells || {}).join(" "))).toLowerCase();
   const all = [...map.entries()].map(([id, d]) => ({ id, ...d })).sort((a, b) => String(b.updatedAt || "").localeCompare(String(a.updatedAt || "")));
   const items = lq ? all.filter((d) => text(d).includes(lq)) : all;
-  m.innerHTML = `<div class="bar"><h1>${isDoc ? "Docs" : "Sheets"}</h1><input type="search" id="lq" placeholder="Search ${isDoc ? "docs" : "sheets"}" value="${esc(ui.lq || "")}" aria-label="Search ${isDoc ? "docs" : "sheets"}"><button class="btn primary" id="newFile">+ New ${isDoc ? "doc" : "sheet"}</button></div>` +
+  m.innerHTML = `<div class="bar"><h1>${isDoc ? "Docs" : "Sheets"}</h1><input type="search" id="lq" placeholder="Search ${isDoc ? "docs" : "sheets"}" value="${esc(ui.lq || "")}" aria-label="Search ${isDoc ? "docs" : "sheets"}">${kind === "sheets" ? `<button class="btn" id="fromShot">\u{1F4F7} From screenshot</button><input type="file" id="shotFile" accept="image/*" hidden>` : ""}<button class="btn primary" id="newFile">+ New ${isDoc ? "doc" : "sheet"}</button></div>` +
+    (kind === "sheets" ? `<div class="lib"><button class="file" id="clientsSheet"><span class="ico sheet">XLS</span><b>Clients overview</b><span class="muted" style="font-size:12px">Auto-updated from tasks</span></button></div>` : "") +
     (lq && all.length && !items.length ? `<div class="empty"><b>Nothing found</b>No ${isDoc ? "doc" : "sheet"} mentions “${esc(ui.lq)}”.</div>` : "") +
     (items.length || (lq && all.length) ? `<div class="lib">${items.map((d) => `<button class="file" data-id="${esc(d.id)}"><span class="ico ${isDoc ? "doc" : "sheet"}">${isDoc ? "DOC" : "XLS"}</span><b>${esc(d.title || "Untitled")}</b><span class="muted" style="font-size:12px">Edited ${esc(fmtTime(d.updatedAt))}</span></button>`).join("")}</div>`
       : `<div class="empty"><b>No ${isDoc ? "docs" : "sheets"} yet</b>${isDoc ? "Use docs for scripts, client briefs and meeting notes." : "Use sheets for budgets, payment tracking and content calendars."} Click <b style="display:inline;font:inherit;color:var(--accent-2)">+ New ${isDoc ? "doc" : "sheet"}</b> to make one.</div>`);
@@ -1246,8 +1247,111 @@ function renderLib(m, kind) {
     const data = isDoc ? { ...base, html: "" } : { ...base, cells: {}, rows: 30, cols: 8 };
     map.set(id, data); Store.set(kind, id, data); openFile(kind, id);
   });
-  $$(".file", m).forEach((f) => f.addEventListener("click", () => openFile(kind, f.dataset.id)));
+  $("#clientsSheet")?.addEventListener("click", () => { ui.sheetsTab = "clients"; render(); });
+  $("#fromShot")?.addEventListener("click", () => $("#shotFile").click());
+  $("#shotFile")?.addEventListener("change", (e) => { const f = e.target.files[0]; e.target.value = ""; if (f) sheetFromImage(f); });
+  $$(".file[data-id]", m).forEach((f) => f.addEventListener("click", () => openFile(kind, f.dataset.id)));
   $("#lq").addEventListener("input", (e) => { ui.lq = e.target.value; render(); });
+}
+function renderClientsSheet(m) {
+  const lbl = (c) => c === "unassigned" ? "Unassigned" : (ST[c] || {}).label || c;
+  const rows = [...S.merged.entries()].map(([id, t]) => { const a = wlAuto(id, t); a.count = videosOf(t).filter((v) => v.versions.length).length; a.col = boardCol(t); return a; });
+  const q = (ui.csq || "").trim().toLowerCase();
+  const shown = q ? rows.filter((r) => (r.client + " " + r.title).toLowerCase().includes(q)) : rows;
+  const groups = new Map();
+  shown.forEach((r) => { const k = r.client || "No client"; if (!groups.has(k)) groups.set(k, []); groups.get(k).push(r); });
+  const names = [...groups.keys()].sort((a, b) => (a === "No client") - (b === "No client") || a.localeCompare(b));
+  const totalVideos = shown.reduce((n, r) => n + (r.count || 0), 0), today = isoDay(now());
+  const section = (name) => {
+    const list = groups.get(name).slice().sort((a, b) => String(a.due || "~").localeCompare(String(b.due || "~")));
+    const vids = list.reduce((n, r) => n + (r.count || 0), 0);
+    return `<tr><td colspan="6" style="padding-top:16px"><b style="font-size:14px">${esc(name)}</b> <span class="muted mono" style="font-size:12px">${list.length} task${list.length === 1 ? "" : "s"} · ${vids} video${vids === 1 ? "" : "s"}</span></td></tr>` +
+      list.map((r) => `<tr><td><b>${esc(r.title)}</b>${r.type ? ` <span class="tag">${esc(r.type)}</span>` : ""}</td>
+        <td class="num">${r.count}</td><td class="num">${esc(fmtDate(r.assignedAt))}</td>
+        <td class="num ${r.status !== "approved" && r.due && r.due < today ? "due late" : ""}">${esc(fmtDate(r.due)) || '<span class="muted">—</span>'}</td>
+        <td class="num">${esc(fmtDate(r.deliveredAt)) || '<span class="muted">—</span>'}</td>
+        <td><span class="pill" data-st="${esc(r.col)}">${esc(lbl(r.col))}</span></td></tr>`).join("");
+  };
+  m.innerHTML = `<div class="bar"><button class="btn" id="csBack">← Sheets</button><h1>Clients overview</h1>
+      <input type="search" id="csq" placeholder="Search client or video" value="${esc(ui.csq || "")}" aria-label="Search clients overview">
+      <button class="btn" id="csCsv">⬇ Download CSV</button></div>
+    <p class="muted" style="margin:.1rem 0 1rem">Auto-updated from your tasks. ${names.length} client${names.length === 1 ? "" : "s"} · ${shown.length} task${shown.length === 1 ? "" : "s"} · ${totalVideos} video${totalVideos === 1 ? "" : "s"} in total.</p>` +
+    (shown.length ? `<div class="tablewrap"><table class="list"><thead><tr><th>Video / task</th><th>Videos</th><th>Date given</th><th>Due date</th><th>Delivered</th><th>Status</th></tr></thead><tbody>${names.map(section).join("")}</tbody></table></div>`
+      : `<div class="empty"><b>${loaded ? (q ? "Nothing found" : "No tasks yet") : "Loading…"}</b>${loaded && !q ? "When you add tasks with clients, they show up here grouped by client." : ""}</div>`);
+  $("#csBack").addEventListener("click", () => { ui.sheetsTab = null; render(); });
+  $("#csq").addEventListener("input", (e) => { ui.csq = e.target.value; render(); });
+  $("#csCsv").addEventListener("click", () => {
+    const esc3 = (s) => `"${String(s == null ? "" : s).replace(/"/g, '""')}"`;
+    const lines = [["Client", "Video / task", "Type", "Videos", "Date given", "Due date", "Delivered", "Status"].map(esc3).join(",")];
+    names.forEach((name) => groups.get(name).forEach((r) => lines.push([name, r.title, r.type, r.count, r.assignedAt, r.due, r.deliveredAt, lbl(r.col)].map(esc3).join(","))));
+    const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob(["﻿" + lines.join("\r\n")], { type: "text/csv;charset=utf-8" }));
+    a.download = "fw-clients-" + today + ".csv"; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 3000);
+  });
+}
+/* ---------------- Gemini (Firebase AI Logic) for reading a screenshot into a sheet ---------------- */
+const AI_CDN = "https://www.gstatic.com/firebasejs/13.2.0/";
+const AI_MODELS = ["gemini-3.8-flash", "gemini-3.6-flash", "gemini-3.8-flash-lite"];
+let _aiApp = null, _aiCache = {}, _aiNoThink = false, _shotBusy = false;
+const aiTimeout = (p, ms, what) => Promise.race([p, new Promise((_, rej) => setTimeout(() => rej(new Error(what + " took too long")), ms))]);
+async function aiModel(name) {
+  const key = name + (_aiNoThink ? "|p" : "|l");
+  if (_aiCache[key]) return _aiCache[key];
+  const [{ initializeApp }, AI] = await Promise.all([import(AI_CDN + "firebase-app.js"), import(AI_CDN + "firebase-ai.js")]);
+  _aiApp = _aiApp || initializeApp(FIREBASE_CONFIG, "ai");
+  const ai = AI.getAI(_aiApp, { backend: new AI.GoogleAIBackend() });
+  const opts = { model: name };
+  if (!_aiNoThink && AI.ThinkingLevel) opts.generationConfig = { thinkingConfig: { thinkingLevel: AI.ThinkingLevel.LOW } };
+  return (_aiCache[key] = AI.getGenerativeModel(ai, opts, { timeout: 75000 }));
+}
+function imgPart(file) {
+  return new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res({ inlineData: { mimeType: file.type || "image/png", data: String(r.result).split(",")[1] } }); r.onerror = () => rej(new Error("Couldn't read the image")); r.readAsDataURL(file); });
+}
+async function aiVisionJSON(prompt, file, onTry) {
+  const part = await imgPart(file), plan = [AI_MODELS[0], AI_MODELS[0], AI_MODELS[1], AI_MODELS[2]]; let last;
+  for (let i = 0; i < plan.length; i++) {
+    try {
+      if (i && onTry) onTry();
+      const m = await aiModel(plan[i]);
+      const r = await aiTimeout(m.generateContent([{ text: prompt }, part]), 70000, "The AI");
+      let t = r.response.text().trim().replace(/^```(?:json)?\s*/i, "").replace(/```\s*$/, "");
+      const a = t.indexOf("{"), b = t.lastIndexOf("}"); if (a >= 0 && b > a) t = t.slice(a, b + 1);
+      return JSON.parse(t);
+    } catch (e) {
+      last = e; const msg = String(e && e.message);
+      if (!_aiNoThink && /thinking/i.test(msg)) { _aiNoThink = true; i--; continue; }
+      if (/\b(500|503|504)\b|high demand|overloaded|UNAVAILABLE|took too long/i.test(msg)) { await new Promise((r) => setTimeout(r, i === 0 ? 2500 : 1200)); continue; }
+      if (/\b404\b|NOT_FOUND|not supported/i.test(msg) && i >= 2) continue;
+      throw e;
+    }
+  }
+  throw last;
+}
+function aiErr(e) {
+  const m = String((e && e.message) || "");
+  if (/app.?check|attestation|recaptcha/i.test(m)) return "The workspace AI is blocked by App Check. In the fwstudioworkspace Firebase project, open App Check and set Firebase AI Logic to Unenforced.";
+  if (/api-not-enabled|SERVICE_DISABLED|has not been used|is disabled|\b403\b|PERMISSION_DENIED/i.test(m)) return "Turn on the AI first: in the fwstudioworkspace Firebase project open Build → AI Logic → Get started → Gemini Developer API.";
+  if (/high demand|overloaded|UNAVAILABLE|\b50[034]\b|took too long/i.test(m)) return "Google's AI is busy right now. Try again in a minute.";
+  if (/quota|RESOURCE_EXHAUSTED|\b429\b/i.test(m)) return "The free AI limit was reached for now. Try again later.";
+  if (/\b404\b|NOT_FOUND|not supported/i.test(m)) return "The AI model name isn't available any more. Tell Claude to update it.";
+  if (/invalid|JSON|Unexpected/i.test(m)) return "The AI answer came back in the wrong format. Try again.";
+  return "Couldn't read the screenshot. Try a clearer image." + (m ? " (" + m.slice(0, 120) + ")" : "");
+}
+async function sheetFromImage(file) {
+  if (!file || !/^image\//.test(file.type)) { toast("Pick an image (PNG or JPG) of a sheet."); return; }
+  if (_shotBusy) { toast("Still reading the last screenshot. One moment."); return; }
+  _shotBusy = true; toast("Reading the screenshot… this can take a few seconds.");
+  let data;
+  try {
+    data = await aiVisionJSON(`You are reading a screenshot of a spreadsheet or table. Extract its contents EXACTLY as a grid. Reply with ONLY one JSON object, no other text: {"title":"a short name for the sheet from its heading or content","rows":[["cell A1","cell B1","..."],["cell A2","cell B2","..."]]}. Each inner array is one row of cells, left to right. Keep the SAME number of columns in every row (pad short rows with ""). Copy every number and word exactly as shown, including headers. Do not add, merge, summarise, translate or reorder anything. Ignore the spreadsheet's own row numbers (1,2,3…) and column letters (A,B,C…) along the edges unless they are real data in the table.`, file, () => toast("Google is busy, trying again…"));
+  } catch (e) { toast(aiErr(e)); _shotBusy = false; return; }
+  const grid = Array.isArray(data && data.rows) ? data.rows : [];
+  if (!grid.length) { toast("No table found in that image."); _shotBusy = false; return; }
+  const cells = {}; let maxC = 0;
+  grid.forEach((row, r) => (Array.isArray(row) ? row : [row]).forEach((v, c) => { const s = String(v == null ? "" : v).trim(); if (s !== "") cells[refName(r, c)] = s; if (c + 1 > maxC) maxC = c + 1; }));
+  const id = uid(), sheet = { title: String((data && data.title) || "Imported sheet").slice(0, 60), cells, rows: Math.max(grid.length + 2, 12), cols: Math.min(52, Math.max(maxC + 1, 6)), updatedAt: now(), createdAt: now(), createdBy: me.uid };
+  try { S.sheets.set(id, sheet); Store.set("sheets", id, sheet); } catch (e) { toast("Couldn't save the sheet."); _shotBusy = false; return; }
+  _shotBusy = false; ui.sheetsTab = null; openFile("sheets", id);
+  toast("Sheet created from your screenshot — check it over.");
 }
 function dlButton(id) {
   const d = S.dl.get(id), url = d && safeUrl(d.url);
@@ -1666,7 +1770,7 @@ $("#addClient").addEventListener("submit", (e) => {
 });
 
 /* ---------------- top-level render ---------------- */
-$("#tabs").addEventListener("click", (e) => { const b = e.target.closest("[data-v]"); if (!b) return; view = b.dataset.v; try { localStorage.setItem("fw-ws-view", view); } catch (er) {} render(); });
+$("#tabs").addEventListener("click", (e) => { const b = e.target.closest("[data-v]"); if (!b) return; view = b.dataset.v; ui.sheetsTab = null; try { localStorage.setItem("fw-ws-view", view); } catch (er) {} render(); });
 $("#newBtn").addEventListener("click", newTask);
 function render() {
   if (!me) return;
@@ -1685,7 +1789,7 @@ function render() {
   if (client) renderClient(m);
   else if (view === "tasks") renderTasks(m);
   else if (view === "docs") renderLib(m, "docs");
-  else if (view === "sheets") renderLib(m, "sheets");
+  else if (view === "sheets") { if (ui.sheetsTab === "clients") renderClientsSheet(m); else renderLib(m, "sheets"); }
   else if (view === "worklog") renderWorklog(m);
   else if (view === "ratings") renderRatings(m);
   else if (view === "business") renderFinance(m);
