@@ -2148,8 +2148,8 @@ function makePlayer(stage, v, team) {
       rvPlayerReady();
     }, { once: true });
     el.addEventListener("error", useIframe, { once: true });
-    tm = setTimeout(useIframe, 9000);
-    el.src = `https://drive.google.com/uc?export=download&id=${encodeURIComponent(v.id)}`;
+    tm = setTimeout(useIframe, 12000);
+    el.src = `https://drive.usercontent.google.com/download?id=${encodeURIComponent(v.id)}&export=download&confirm=t`;
     return api;
   }
   if (v.kind === "file") {
