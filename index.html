@@ -85,6 +85,7 @@ main { padding-block: 18px 40px; }
 .card { background: var(--panel-2); border: 1px solid var(--line); border-radius: 9px; padding: 10px 11px; cursor: pointer; text-align: left; width: 100%; display: grid; gap: 7px; }
 .card:hover { border-color: var(--line-2); }
 .card.dragging { opacity: .4; }
+.card.drag-ghost { box-shadow: 0 16px 40px rgb(0 0 0 / .55); opacity: .92; }
 .card h3 { margin: 0; font: 600 14px/1.35 var(--body); }
 .meta { display: flex; flex-wrap: wrap; gap: 6px 10px; font-size: 12px; color: var(--muted); align-items: center; }
 .meta .who { display: inline-flex; align-items: center; gap: 5px; }
@@ -215,6 +216,7 @@ table.list tr:last-child td { border-bottom: 0; }
 .sh-grid td.sel { box-shadow: inset 0 0 0 2px var(--accent); background: var(--accent-soft); }
 .sh-grid td.fillt { box-shadow: inset 0 0 0 1px var(--accent-2); }
 .sh-grid .fh { position: absolute; right: 0; bottom: 0; width: 8px; height: 8px; background: var(--accent); border: 1px solid var(--panel); cursor: crosshair; z-index: 4; }
+.sh-foot .btn.on { background: var(--accent); border-color: var(--accent); color: #fff; }
 .sh-grid td.edit { padding: 0; overflow: visible; }
 .sh-grid td.edit input { width: 100%; height: 100%; border: 0; outline: 2px solid var(--accent); background: var(--panel-3); padding: 0 6px; font: inherit; color: var(--fg); }
 .sh-foot { display: flex; gap: 8px; padding: 7px; border-top: 1px solid var(--line); flex-wrap: wrap; align-items: center; font-size: 12px; color: var(--faint); }
@@ -930,13 +932,13 @@ function makeGrid(host, model, onChange, opts = {}) {
     <div class="sh">
       <div class="sh-bar"><span class="ref" aria-live="polite">A1</span><label class="fx"><i>fx</i><input aria-label="Cell contents or formula" placeholder="Type a value, or a formula like =SUM(B2:B10)"></label></div>
       <div class="sh-grid ${opts.tall ? "tall" : ""}" tabindex="0" aria-label="Spreadsheet"></div>
-      <div class="sh-foot"><button class="btn sm" data-a="row">+ Row</button><button class="btn sm" data-a="col">+ Column</button>
-        <span>Drag to select a block · drag the little corner box to fill · Ctrl/⌘ C · X · V to copy, cut, paste · formulas like =SUM(B2:B10), AVERAGE, MIN, MAX, COUNT, ROUND, IF.</span></div>
+      <div class="sh-foot"><button class="btn sm" data-a="row">+ Row</button><button class="btn sm" data-a="col">+ Column</button><button class="btn sm" data-a="sel" title="Tap cells to select a block — for phones">▦ Select</button><button class="btn sm" data-a="filld" title="Copy the top cells down the selection">⬇ Fill down</button><button class="btn sm" data-a="fillr" title="Copy the left cells across the selection">➡ Fill right</button>
+        <span>On a computer: drag to select, drag the corner box to fill, Ctrl/⌘ C·X·V. On a phone: tap <b>▦ Select</b>, tap the far cell, then <b>Fill</b>; double-tap a cell to type. Formulas: =SUM(B2:B10), AVERAGE, MIN, MAX, COUNT, ROUND, IF.</span></div>
     </div>`;
   const grid = $(".sh-grid", host), fx = $(".fx input", host), refEl = $(".ref", host);
   const RO = !!opts.readOnly;
   const handle = document.createElement("span"); handle.className = "fh"; handle.setAttribute("aria-hidden", "true");
-  let a = { r: 0, c: 0 }, f = { r: 0, c: 0 }, editing = null, drag = null;
+  let a = { r: 0, c: 0 }, f = { r: 0, c: 0 }, editing = null, drag = null, selMode = false;
   const cells = () => (model.cells = model.cells || {});
   const clamp = (r, c) => ({ r: Math.max(0, Math.min(model.rows - 1, r)), c: Math.max(0, Math.min(model.cols - 1, c)) });
   const rect = () => ({ r1: Math.min(a.r, f.r), c1: Math.min(a.c, f.c), r2: Math.max(a.r, f.r), c2: Math.max(a.c, f.c) });
@@ -991,6 +993,16 @@ function makeGrid(host, model, onChange, opts = {}) {
   }
   function finish(v) { const ref = editing; editing = null; if (ref) commit(ref, v); }
   function clearRange() { const R = rect(); cells(); let n = 0; for (let r = R.r1; r <= R.r2; r++) for (let c = R.c1; c <= R.c2; c++) { const ref = refName(r, c); if (model.cells[ref] != null) { delete model.cells[ref]; n++; } } if (n) { onChange(model); render(); } }
+  // Fill the top row down the selection, or the left column across it (tap-friendly alternative to the drag handle).
+  function fillDir(dir) {
+    const R = rect();
+    if (R.r1 === R.r2 && R.c1 === R.c2) { toast("Select a block first — tap ▦ Select, then tap the far cell."); return; }
+    cells(); let n = 0;
+    const put = (r, c, raw) => { const ref = refName(r, c); (raw == null || raw === "") ? delete model.cells[ref] : (model.cells[ref] = raw); n++; };
+    if (dir === "down") { for (let c = R.c1; c <= R.c2; c++) { const s = model.cells[refName(R.r1, c)]; for (let r = R.r1 + 1; r <= R.r2; r++) put(r, c, s); } }
+    else { for (let r = R.r1; r <= R.r2; r++) { const s = model.cells[refName(r, R.c1)]; for (let c = R.c1 + 1; c <= R.c2; c++) put(r, c, s); } }
+    if (n) { onChange(model); render(); }
+  }
   function copyRange(cut) {
     const R = rect(), cl = cells(), lines = [];
     for (let r = R.r1; r <= R.r2; r++) { const row = []; for (let c = R.c1; c <= R.c2; c++) row.push(cl[refName(r, c)] ?? ""); lines.push(row.join("\t")); }
@@ -1017,8 +1029,10 @@ function makeGrid(host, model, onChange, opts = {}) {
     if (e.target === handle) { if (RO || editing) return; drag = { kind: "fill", base: rect() }; document.addEventListener("mouseup", endDrag, { once: true }); e.preventDefault(); return; }
     const el = e.target.closest("td[data-r]"); if (!el || el.classList.contains("edit")) return;
     if (editing) finish($("input", td(f.r, f.c))?.value);
-    select(+el.dataset.r, +el.dataset.c, e.shiftKey, false);
-    if (!e.shiftKey) { drag = { kind: "sel" }; document.addEventListener("mouseup", endDrag, { once: true }); }
+    const ext = e.shiftKey || selMode;
+    select(+el.dataset.r, +el.dataset.c, ext, false);
+    if (selMode) { selMode = false; const sb = $('[data-a="sel"]', host); if (sb) sb.classList.remove("on"); }   // one-shot: extends once, then back to normal taps
+    if (!ext) { drag = { kind: "sel" }; document.addEventListener("mouseup", endDrag, { once: true }); }
     grid.focus();
   });
   grid.addEventListener("mousemove", (e) => {
@@ -1054,8 +1068,11 @@ function makeGrid(host, model, onChange, opts = {}) {
   fx.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); commit(refName(f.r, f.c), fx.value); select(f.r + 1, f.c, false); grid.focus(); } else if (e.key === "Escape") { syncBar(); grid.focus(); } });
   fx.readOnly = RO;
   $(".sh-foot", host).addEventListener("click", (e) => {
-    const act = e.target.closest("[data-a]")?.dataset.a; if (!act || RO) return;
-    if (act === "row") model.rows++; else if (model.cols < 52) model.cols++;
+    const btn = e.target.closest("[data-a]"), act = btn && btn.dataset.a; if (!act || RO) return;
+    if (act === "sel") { selMode = !selMode; if (selMode) a = { r: f.r, c: f.c }; btn.classList.toggle("on", selMode); return; }
+    if (act === "filld") { fillDir("down"); return; }
+    if (act === "fillr") { fillDir("right"); return; }
+    if (act === "row") model.rows++; else if (act === "col" && model.cols < 52) model.cols++; else return;
     onChange(model); render();
   });
   render();
@@ -1259,6 +1276,37 @@ function renderBoard(m) {
     c.addEventListener("click", () => openTask(c.dataset.id));
     c.addEventListener("dragstart", (e) => { e.dataTransfer.setData("text/plain", c.dataset.id); e.dataTransfer.effectAllowed = "move"; c.classList.add("dragging"); });
     c.addEventListener("dragend", () => { c.classList.remove("dragging"); $$(".col.drop").forEach((x) => { x.classList.remove("drop"); x.style.removeProperty("--slot"); }); });
+    // Touch: phones can't do HTML5 drag, so long-press a card to pick it up, slide to a column, lift to drop.
+    c.addEventListener("touchstart", (e) => {
+      if (e.touches.length !== 1) return;
+      const st = e.touches[0], sx = st.clientX, sy = st.clientY;
+      let dragging = false, clone = null;
+      const press = setTimeout(start, 300);
+      function start() {
+        dragging = true; c.classList.add("dragging");
+        const r = c.getBoundingClientRect();
+        clone = c.cloneNode(true); clone.className = "card drag-ghost";
+        clone.style.cssText = `position:fixed;left:${r.left}px;top:${r.top}px;width:${r.width}px;margin:0;pointer-events:none;z-index:80;opacity:.92;`;
+        document.body.appendChild(clone); moveTo(sx, sy);
+        try { navigator.vibrate && navigator.vibrate(12); } catch (err) {}
+      }
+      function moveTo(x, y) {
+        if (clone) clone.style.transform = `translate(${x - sx}px,${y - sy}px) rotate(1.5deg)`;
+        const col = colAt(x); $$(".col.drop", board).forEach((z) => { if (z !== col) { z.classList.remove("drop"); z.style.removeProperty("--slot"); } });
+        if (col) col.classList.add("drop");
+        const br = board.getBoundingClientRect(); if (x > br.right - 56) board.scrollLeft += 14; else if (x < br.left + 56) board.scrollLeft -= 14;
+      }
+      const onMove = (ev) => { const t = ev.touches[0]; if (!t) return; if (!dragging) { if (Math.hypot(t.clientX - sx, t.clientY - sy) > 10) done(); return; } ev.preventDefault(); moveTo(t.clientX, t.clientY); };
+      const onEnd = (ev) => {
+        if (dragging) { ev.preventDefault(); const t = (ev.changedTouches && ev.changedTouches[0]) || st; const col = colAt(t.clientX), id = c.dataset.id, cur = S.merged.get(id);
+          if (col && cur && boardCol(cur) !== col.dataset.st) { ui.landed = { id, from: boardCol(cur), until: Date.now() + 1100 }; dropOn(id, col.dataset.st); } }
+        done();
+      };
+      function done() { clearTimeout(press); dragging = false; c.classList.remove("dragging"); if (clone) { clone.remove(); clone = null; } clearDrop(); c.removeEventListener("touchmove", onMove); c.removeEventListener("touchend", onEnd); c.removeEventListener("touchcancel", onEnd); }
+      c.addEventListener("touchmove", onMove, { passive: false });
+      c.addEventListener("touchend", onEnd);
+      c.addEventListener("touchcancel", onEnd);
+    }, { passive: true });
   });
   // Dropping works anywhere in a column's strip, even below a short column, so a card at the bottom of a long list
   // can go straight across. The column under the mouse lights up; near the edges the board scrolls sideways.
