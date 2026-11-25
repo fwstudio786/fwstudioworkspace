@@ -779,7 +779,9 @@ const OWNER_EMAIL = "fwstudio786@gmail.com";      // this account becomes the fi
 // Review videos (not project files) upload here for seekable playback; the Worker keeps them private.
 const R2_WORKER = "https://fw-review.fwstudio786.workers.dev";
 const R2_HOST = (() => { try { return new URL(R2_WORKER).host; } catch (e) { return ""; } })();
-const R2_MAX = 95 * 1024 * 1024;   // up to ~95MB goes to R2 (seekable); larger review videos fall back to Drive
+const R2_MAX = 1.5 * 1024 * 1024 * 1024;   // up to 1.5GB streams from R2 (seekable, big files go up in chunks); larger review videos fall back to Drive
+const R2_SINGLE = 90 * 1024 * 1024;        // at or below this, one straight PUT; above it, multipart (chunked) upload
+const R2_PART = 40 * 1024 * 1024;          // chunk size for multipart (stays under the Worker's request limit)
 
 const $ = (s, r = document) => r.querySelector(s);
 const $$ = (s, r = document) => [...r.querySelectorAll(s)];
@@ -2705,6 +2707,20 @@ function driveTrash(fids) {
     fetch(UPLOAD_API + "/file/" + encodeURIComponent(f), { method: "DELETE", headers: { Authorization: "Bearer " + tok } }).then((r) => { if (!r.ok) throw new Error(r.status); }))))
     .catch(() => toast("Removed here, but Google Drive didn't delete the file. You can delete it in Drive."));
 }
+// Cloudflare (R2) review-video files have keys like "v/..." or "a/..."; Drive files have plain ids.
+const isR2Key = (fid) => /^[va]\/[\w.-]+$/.test(String(fid || ""));
+// Deletes review-video files from Cloudflare (R2) when a version/video is removed.
+function r2Trash(keys) {
+  keys = [...new Set((keys || []).filter(Boolean))].filter(isR2Key); if (!keys.length) return Promise.resolve();
+  return auth.currentUser.getIdToken().then((tok) => Promise.all(keys.map((k) =>
+    fetch(R2_WORKER + "/del", { method: "POST", headers: { Authorization: "Bearer " + tok, "Content-Type": "application/json" }, body: JSON.stringify({ key: k }) }).then((r) => { if (!r.ok) throw new Error(r.status); }))))
+    .catch(() => toast("Removed here, but a Cloudflare file didn't delete. It'll clear on its own."));
+}
+// Removes a set of file ids from wherever they live: R2 keys go to Cloudflare, Drive ids to the Drive bin.
+function trashFiles(fids) {
+  fids = [...new Set((fids || []).filter(Boolean))];
+  r2Trash(fids.filter(isR2Key)); driveTrash(fids.filter((f) => !isR2Key(f)));
+}
 // Sends one piece (a Blob or bytes) that starts at byte `off`. total is the file size, or "*" while a zip is still being made.
 async function sendPiece(u, q, body, off, total) {
   let len = body.size ?? body.length, fails = 0;
@@ -2732,23 +2748,57 @@ async function sendPiece(u, q, body, off, total) {
   }
 }
 // Upload a review video straight to R2 through the Worker (seekable playback, no Drive).
+// Small files go in one PUT; big ones (up to R2_MAX) go up in chunks (multipart).
 function runUploadR2(u, job) {
-  return auth.currentUser.getIdToken().then((tok) => new Promise((resolve, reject) => {
-    const f = job.file, ext = (String(f.name).split(".").pop() || "mp4").toLowerCase();
-    const x = new XMLHttpRequest(); u.xhr = x;
-    x.open("PUT", R2_WORKER + "/u?ext=" + encodeURIComponent(ext));
-    x.setRequestHeader("Authorization", "Bearer " + tok);
-    x.setRequestHeader("Content-Type", f.type || "video/mp4");
-    x.upload.onprogress = (e) => { u.sent = e.loaded; upPaint(u); };
-    x.onload = () => {
-      let d = {}; try { d = JSON.parse(x.responseText || "{}"); } catch (e) {}
-      if (x.status === 200 && d.key) resolve({ url: R2_WORKER + "/v?key=" + encodeURIComponent(d.key), id: d.key, size: f.size });
-      else reject(new Error(d.error === "not_signed_in" ? "Please sign in again." : "R2 upload failed (" + x.status + ")"));
+  const f = job.file, ext = (String(f.name).split(".").pop() || "mp4").toLowerCase();
+  if (f.size <= R2_SINGLE) {
+    return auth.currentUser.getIdToken().then((tok) => new Promise((resolve, reject) => {
+      const x = new XMLHttpRequest(); u.xhr = x;
+      x.open("PUT", R2_WORKER + "/u?ext=" + encodeURIComponent(ext));
+      x.setRequestHeader("Authorization", "Bearer " + tok);
+      x.setRequestHeader("Content-Type", f.type || "video/mp4");
+      x.upload.onprogress = (e) => { u.sent = e.loaded; upPaint(u); };
+      x.onload = () => {
+        let d = {}; try { d = JSON.parse(x.responseText || "{}"); } catch (e) {}
+        if (x.status === 200 && d.key) resolve({ url: R2_WORKER + "/v?key=" + encodeURIComponent(d.key), id: d.key, size: f.size });
+        else reject(new Error(d.error === "not_signed_in" ? "Please sign in again." : "R2 upload failed (" + x.status + ")"));
+      };
+      x.onerror = () => reject(new Error("network"));
+      x.onabort = () => reject(new Error("cancelled"));
+      x.send(f);
+    }));
+  }
+  // big file: multipart. Each chunk is a separate request so nothing exceeds the Worker's limit.
+  return (async () => {
+    let ctl = null; u.xhr = { abort: () => ctl && ctl.abort() };
+    const authHdr = async () => "Bearer " + (await auth.currentUser.getIdToken());
+    const jpost = async (path, body) => {
+      ctl = new AbortController();
+      const r = await fetch(R2_WORKER + path, { method: "POST", headers: { Authorization: await authHdr(), "Content-Type": "application/json" }, body: JSON.stringify(body), signal: ctl.signal });
+      const d = await r.json().catch(() => ({})); if (!r.ok) throw new Error(d.error || "r2_" + r.status); return d;
     };
-    x.onerror = () => reject(new Error("network"));
-    x.onabort = () => reject(new Error("cancelled"));
-    x.send(f);
-  }));
+    const cr = await jpost("/mpu/create", { ext });
+    const key = cr.key, uploadId = cr.uploadId, parts = [], total = Math.ceil(f.size / R2_PART);
+    if (!key || !uploadId) throw new Error("R2 upload failed (create)");
+    try {
+      for (let i = 0; i < total; i++) {
+        if (u.cancelled) throw new Error("cancelled");
+        const chunk = f.slice(i * R2_PART, Math.min(f.size, (i + 1) * R2_PART));
+        ctl = new AbortController();
+        const r = await fetch(R2_WORKER + "/mpu/part?key=" + encodeURIComponent(key) + "&uploadId=" + encodeURIComponent(uploadId) + "&part=" + (i + 1), { method: "PUT", headers: { Authorization: await authHdr() }, body: chunk, signal: ctl.signal });
+        const d = await r.json().catch(() => ({}));
+        if (!r.ok || !d.etag) throw new Error(d.error || "R2 upload failed (part " + (i + 1) + ")");
+        parts.push({ partNumber: i + 1, etag: d.etag });
+        u.sent = Math.min(f.size, (i + 1) * R2_PART); upPaint(u);
+      }
+      await jpost("/mpu/complete", { key, uploadId, parts });
+      return { url: R2_WORKER + "/v?key=" + encodeURIComponent(key), id: key, size: f.size };
+    } catch (e) {
+      try { await jpost("/mpu/abort", { key, uploadId }); } catch (e2) {}
+      if (u.cancelled || (e && e.name === "AbortError")) throw new Error("cancelled");
+      throw e;
+    }
+  })();
 }
 async function runUpload(u, job) {
   const f = job.file;
@@ -3170,7 +3220,7 @@ function exportsTab(t, id) {
           <a class="vlink" href="${esc(safeUrl(x.url))}" target="_blank" rel="noopener" title="${esc(x.url)}">${esc(x.url.replace(/^https?:\/\/(www\.)?/, ""))}</a><button class="btn sm" data-watch="${esc(v.id)}|${x.v}" type="button">▶ Watch</button>${isAdmin() || (editable && x.v !== top) ? `<button class="btn sm ghost danger vdel-ver" data-verdel="${x.v}" type="button" title="Delete v${x.v} (an uploaded file goes to the Drive bin)" aria-label="Delete v${x.v} of ${esc(v.name)}">🗑</button>` : ""}</div>`).join("")}${v.removed.length ? `<div class="vrow muted vgone">Deleted: ${v.removed.map((k) => "v" + k).join(", ")}</div>` : ""}</div>` : (v.removed.length ? `<div class="vlist"><div class="vrow muted vgone">Deleted: ${v.removed.map((k) => "v" + k).join(", ")}</div></div>` : "")}
       <div class="f"><label>${n ? `Link of v${top}. Only change it to fix a wrong link` : "Export link"}</label><div class="linkrow"><input class="vlatest" value="${esc(n ? l.url : "")}" placeholder="Unlisted YouTube, Google Drive or Dropbox link (WeTransfer works too, comments only)" inputmode="url" aria-label="Export link for ${esc(v.name)}">${n ? `<a class="btn" href="${esc(safeUrl(l.url))}" target="_blank" rel="noopener">Open ↗</a>` : ""}</div>
         ${n ? "" : `<small class="muted" style="font-size:12px">Paste the export here when it's ready. For Drive, set sharing to “Anyone with the link”.</small>`}</div>
-      ${editable ? `<div class="upwrap"><button class="btn" data-upv type="button">⬆ Upload ${n ? "v" + nx : "video"} from your computer</button><input class="upfile" data-scope="video" type="file" accept="video/*,.mp4,.mov,.m4v,.mkv,.webm,.avi,.mxf" hidden><small class="muted">Saved to Google Drive, no link needed. You can also drag a video onto this card. Keep this tab open until it finishes. Big videos need a few minutes in Drive before they play.</small></div><div class="uplist" data-uplist="${esc(v.id)}">${upHtml(id, v.id)}</div>` : ""}
+      ${editable ? `<div class="upwrap"><button class="btn" data-upv type="button">⬆ Upload ${n ? "v" + nx : "video"} from your computer</button><input class="upfile" data-scope="video" type="file" accept="video/*,.mp4,.mov,.m4v,.mkv,.webm,.avi,.mxf" hidden><small class="muted">Streams from Cloudflare, no link needed — big files upload in chunks. You can also drag a video onto this card. Keep this tab open until it finishes. Videos over 1.5GB save to Google Drive instead.</small></div><div class="uplist" data-uplist="${esc(v.id)}">${upHtml(id, v.id)}</div>` : ""}
       ${n ? `<div><button class="btn" data-nvopen type="button">+ Add new version (v${nx})</button>
         <div class="nv-box" hidden><label style="font-weight:600">Link to v${nx} of ${esc(v.name)}</label><input class="nvurl" placeholder="Link of the new export" inputmode="url">
           <textarea class="nvnote" rows="2" placeholder="What changed? (optional, the client sees this)" maxlength="500"></textarea>
@@ -3221,7 +3271,7 @@ function bindExports(body, id) {
       const all = vids(), gone = all.find((x) => x.id === c.dataset.vid), left = all.filter((x) => x.id !== c.dataset.vid);
       logAct("export", `Deleted ${gone ? gone.name : "a video"} and its versions`, { id, title: (S.merged.get(id) || {}).title }, { every: 0 });
       const fids = gone ? gone.versions.map((x) => x.fid) : [];
-      saveVideos(id, left.length ? left : [{ id: uid(), name: "Video 1", versions: [] }]); driveTrash(fids); toast("Video deleted" + (fids.some(Boolean) ? " and its files moved to the Drive bin" : "")); setTimeout(drawTask, 30); return;
+      saveVideos(id, left.length ? left : [{ id: uid(), name: "Video 1", versions: [] }]); trashFiles(fids); toast("Video deleted" + (fids.some(Boolean) ? " and its files removed from Cloudflare and Drive" : "")); setTimeout(drawTask, 30); return;
     }
     const vd = e.target.closest("[data-verdel]");
     if (vd) {
@@ -3231,7 +3281,7 @@ function bindExports(body, id) {
       const gone = slot.fid;
       v.versions[k - 1] = { url: "", at: slot.at || now(), note: "", sentAt: "", removed: true };
       logAct("export", `${v.name}: deleted v${k}`, { id, title: (S.merged.get(id) || {}).title }, { every: 0 });
-      saveVideos(id, all); driveTrash([gone]); toast(`v${k} deleted${gone ? " and moved to the Drive bin" : ""}`); setTimeout(drawTask, 30); return;
+      saveVideos(id, all); trashFiles([gone]); toast(`v${k} deleted${gone ? " and its file removed" : ""}`); setTimeout(drawTask, 30); return;
     }
     const send = !!e.target.closest("[data-nvsend]");
     if (send || e.target.closest("[data-nvsave]")) {
