@@ -375,6 +375,9 @@ body.rv-lock { overflow: hidden; }
 .rv-stage { position: relative; background: #000; min-height: 0; }
 .rv-stage > iframe, .rv-stage > video, .rv-stage > div:not(.rv-msg) { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; object-fit: contain; background: #000; }
 .rv-stage iframe { border: 0; }
+/* Remove the browser's dark control-bar gradient so it doesn't shade the bottom of the video on hover */
+.rv-stage video::-webkit-media-controls-enclosure,
+.rv-stage video::-webkit-media-controls-panel { background: transparent !important; background-image: none !important; box-shadow: none !important; }
 .rv-msg { position: absolute; inset: 0; display: grid; place-content: center; justify-items: center; gap: 10px; padding: 24px; text-align: center; color: #e8e0da; }
 .rv-msg b { font: 700 17px/1.2 var(--display); }
 .rv-msg p { margin: 0; max-width: 44ch; color: #b5a89f; }
@@ -2550,7 +2553,10 @@ $("#rvList").addEventListener("click", (e) => {
   if (del) {
     if (del.dataset.armed !== "1") { del.dataset.armed = "1"; del.textContent = "Click again to delete"; setTimeout(() => { if (del.isConnected) { del.dataset.armed = ""; del.textContent = "Delete"; } }, 3000); return; }
     const kids = [...rv.comments.entries()].filter(([, x]) => x.parent === id).map(([k]) => k);
-    [id, ...(isAdmin() || kids.every((k) => rv.comments.get(k).uid === me.uid) ? kids : [])].forEach((k) => { rv.comments.delete(k); Store.remove("reviews/" + rv.id + "/comments", k); });
+    const toDelete = [id, ...(isAdmin() || kids.every((k) => rv.comments.get(k).uid === me.uid) ? kids : [])];
+    const voiceKeys = toDelete.map((k) => { const cc = rv.comments.get(k); return cc && cc.audio ? r2KeyOf(cc.audio) : ""; });   // their voice notes, to remove from Cloudflare
+    toDelete.forEach((k) => { rv.comments.delete(k); Store.remove("reviews/" + rv.id + "/comments", k); });
+    r2Trash(voiceKeys);
     rvRender();
   }
 });
@@ -2881,10 +2887,43 @@ async function uploadVideos(id, vid, files) {
     await startUpload(id, vid, { file: f });
   }
 }
+// Which files count as an editable project (Premiere / After Effects / DaVinci Resolve).
+const PROJECT_EXT = /\.(prproj|aep|aepx|aet|drp|drt)$/i;
+// Reads just the index inside a .zip (not the whole file) and lists the names in it. null = couldn't read it.
+async function zipEntryNames(file) {
+  try {
+    const size = file.size, tailLen = Math.min(size, 65557);
+    const tail = new DataView(await file.slice(size - tailLen, size).arrayBuffer());
+    let eocd = -1;
+    for (let i = tail.byteLength - 22; i >= 0; i--) { if (tail.getUint32(i, true) === 0x06054b50) { eocd = i; break; } }
+    if (eocd < 0) return null;
+    const cdSize = tail.getUint32(eocd + 12, true), cdOff = tail.getUint32(eocd + 16, true), total = tail.getUint16(eocd + 10, true);
+    if (cdOff === 0xffffffff || cdSize === 0xffffffff || total === 0xffff) return null;   // Zip64: skip the check rather than risk a wrong read
+    const cd = new DataView(await file.slice(cdOff, cdOff + cdSize).arrayBuffer()), names = []; let p = 0;
+    while (p + 46 <= cd.byteLength && cd.getUint32(p, true) === 0x02014b50) {
+      const nameLen = cd.getUint16(p + 28, true), extraLen = cd.getUint16(p + 30, true), commentLen = cd.getUint16(p + 32, true);
+      names.push(new TextDecoder().decode(new Uint8Array(cd.buffer, p + 46, nameLen)));
+      p += 46 + nameLen + extraLen + commentLen;
+    }
+    return names;
+  } catch (e) { return null; }
+}
+// True if the upload has at least one project file. Best-effort: if a zip can't be read, don't false-alarm.
+async function projectFilesPresent(entries) {
+  const nameOf = (e) => e.path || (e.file && e.file.name) || "";
+  if (entries.some((e) => PROJECT_EXT.test(nameOf(e)))) return true;
+  if (entries.length === 1 && /\.zip$/i.test(nameOf(entries[0]))) {
+    const names = await zipEntryNames(entries[0].file);
+    if (names == null) return true;
+    return names.some((n) => PROJECT_EXT.test(n));
+  }
+  return false;
+}
 // entries = [{ path, file }]. One loose file goes up as it is; a folder or several files become one zip.
 async function uploadProject(id, entries, dirName) {
   entries = entries.filter((e) => !/^(\.DS_Store|Thumbs\.db|desktop\.ini)$/i.test(e.path.split("/").pop()));
   if (!entries.length) { toast("There's nothing to upload there."); return; }
+  if (!(await projectFilesPresent(entries)) && !confirm("No project file found in this upload (no .prproj, .aep or .drp).\n\nUpload it anyway?")) return;
   if (entries.length === 1 && !dirName) { await startUpload(id, "project", { file: entries[0].file }); return; }
   const total = entries.reduce((a, e) => a + e.file.size, 0), t = S.merged.get(id) || S.tasks.get(id) || {};
   if (total > 2e9 && !confirm(`This is ${fmtSize(total)} in ${entries.length} files. Upload it all as one zip?`)) return;
