@@ -2034,7 +2034,7 @@ function authMsg(e) {
 }
 $("#gBtn").addEventListener("click", async () => {
   $("#aErr").textContent = "";
-  try { await auth.signInWithPopup(new firebase.auth.GoogleAuthProvider()); }
+  try { const gp = new firebase.auth.GoogleAuthProvider(); gp.setCustomParameters({ prompt: "select_account" }); await auth.signInWithPopup(gp); }
   catch (e) { if (e && (e.code === "auth/popup-closed-by-user" || e.code === "auth/cancelled-popup-request")) return; $("#aErr").textContent = authMsg(e); }
 });
 $("#emailForm").addEventListener("submit", async (e) => {
