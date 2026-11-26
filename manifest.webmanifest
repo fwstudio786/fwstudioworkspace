@@ -1,0 +1,17 @@
+{
+  "name": "FW Studio Workspace",
+  "short_name": "FW Workspace",
+  "id": "/fwstudioworkspace/",
+  "start_url": "/fwstudioworkspace/",
+  "scope": "/fwstudioworkspace/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#0e0a09",
+  "theme_color": "#0e0a09",
+  "description": "FW Studio's team workspace: tasks, client reviews, sheets and work log.",
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
