@@ -4164,8 +4164,17 @@ function markRead(ids) {
 }
 function openBell(on) {
   const p = $("#bellPanel"); p.hidden = !on; $("#bellBtn").setAttribute("aria-expanded", String(on));
-  if (on) { drawBell(); setTimeout(() => $("#bellList .nt")?.focus(), 0); }
+  if (on) { drawBell(); positionBell(); setTimeout(() => $("#bellList .nt")?.focus(), 0); }
 }
+// Keep the panel on screen: drop it just below the bell and clamp it inside the viewport (so it never runs off the left edge on phones).
+function positionBell() {
+  const p = $("#bellPanel"), b = $("#bellBtn"); if (!p || !b || p.hidden) return;
+  const r = b.getBoundingClientRect(), vw = innerWidth, vh = innerHeight, gut = 8, pw = Math.min(380, vw - gut * 2);
+  const left = Math.min(Math.max(gut, r.right - pw), vw - gut - pw), top = r.bottom + 8;
+  p.style.position = "fixed"; p.style.right = "auto"; p.style.left = left + "px"; p.style.top = top + "px";
+  p.style.width = pw + "px"; p.style.maxHeight = Math.max(200, Math.min(560, vh - top - gut)) + "px";
+}
+addEventListener("resize", () => { if (!$("#bellPanel").hidden) positionBell(); });
 $("#bellBtn").addEventListener("click", (e) => { e.stopPropagation(); openBell($("#bellPanel").hidden); });
 $("#bellAll").addEventListener("click", () => markRead([...noteList().filter((n) => !isRead(n)).map((n) => n.id), "rt-reminder"]));
 $("#bellClear").addEventListener("click", () => {
