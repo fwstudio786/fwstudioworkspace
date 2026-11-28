@@ -1264,8 +1264,7 @@ let me = null, view = "board", loaded = false;
 const ui = { draftId: null, q: "", fAssignee: "", fClient: "", sort: { key: "due", dir: 1 }, openKind: null, openId: null, subtab: "overview" };
 try { const v = localStorage.getItem("fw-ws-view"); if (v) view = v; } catch (e) {}
 const isAdmin = () => me && me.role === "admin", isEditor = () => me && me.role === "editor", isClient = () => me && (me.role === "client" || me.role === "guest");
-// --- background-sync safety: only ONE browser (the owner's) keeps sheets/work log/finance in step, so admins never ping-pong writes; a circuit breaker stops any runaway before it can exhaust the database quota ---
-const isPrimary = () => me && String(me.email || "").toLowerCase() === OWNER_EMAIL;
+// --- background-sync safety: every admin keeps sheets/work log/finance in step, but a circuit breaker stops any runaway (e.g. two browsers overwriting each other) before it can exhaust the database write quota ---
 let _autoW = [], _autoOff = false;
 function autoOK() {
   if (_autoOff) return false;
@@ -1519,12 +1518,12 @@ function buildClientSheets() {
 // Keep the per-client sheets in step with the board automatically (admin's browser): a client with tasks
 // always has a sheet, task columns refresh, and a deleted task drops out. Only writes when something changed.
 let csTimer = 0;
-function csSchedule() { if (!isPrimary() || csTimer) return; csTimer = setTimeout(() => { csTimer = 0; csSync(); }, 1500); }
+function csSchedule() { if (!isAdmin() || csTimer) return; csTimer = setTimeout(() => { csTimer = 0; csSync(); }, 1500); }
 function csSameSheet(ex, data) {
   return JSON.stringify({ c: ex.cells || {}, r: ex.rows, k: ex.cols, o: ex.taskOrder || [], t: ex.title }) === JSON.stringify({ c: data.cells, r: data.rows, k: data.cols, o: data.taskOrder, t: data.title });
 }
 function csSync() {
-  if (!isPrimary() || !["tasks", "reviews", "sheets"].every((c) => got.has(c))) return;
+  if (!isAdmin() || !["tasks", "reviews", "sheets"].every((c) => got.has(c))) return;
   const existingByClient = {}; S.sheets.forEach((s, id) => { if (s && s.auto === "client" && s.client) existingByClient[s.client] = { id, ...s }; });
   const clients = new Set([...S.merged.values()].map((t) => t.client).filter(Boolean));
   clients.forEach((cid) => {
@@ -3535,9 +3534,9 @@ const WL_AUTO_KEYS = Object.keys(wlAuto("x", {}));
 
 // Admin only: copy task facts into the work log. Paid rows keep the rate they were paid at.
 let wlTimer = 0;
-function wlSchedule() { if (!isPrimary() || wlTimer) return; wlTimer = setTimeout(() => { wlTimer = 0; wlSync(); }, 1000); }
+function wlSchedule() { if (!isAdmin() || wlTimer) return; wlTimer = setTimeout(() => { wlTimer = 0; wlSync(); }, 1000); }
 function wlSync() {
-  if (!isPrimary() || !["tasks", "reviews", "worklog", "rates"].every((c) => got.has(c))) return;
+  if (!isAdmin() || !["tasks", "reviews", "worklog", "rates"].every((c) => got.has(c))) return;
   const rates = (S.wlRates && S.wlRates.rates) || {};
   const def = (ed) => (typeof rates[ed] === "number" ? rates[ed] : null);
   S.merged.forEach((t, id) => {
@@ -3903,9 +3902,9 @@ function fiAuto(id, t) {
 }
 const FI_AUTO_KEYS = Object.keys(fiAuto("x", {}));
 let fiTimer = 0;
-function fiSchedule() { if (!isPrimary() || fiTimer) return; fiTimer = setTimeout(() => { fiTimer = 0; fiSync(); }, 1200); }
+function fiSchedule() { if (!isAdmin() || fiTimer) return; fiTimer = setTimeout(() => { fiTimer = 0; fiSync(); }, 1200); }
 function fiSync() {
-  if (!isPrimary() || !["tasks", "reviews", "finance", "worklog", "finset"].every((c) => got.has(c))) return;
+  if (!isAdmin() || !["tasks", "reviews", "finance", "worklog", "finset"].every((c) => got.has(c))) return;
   const prices = (S.fiSettings && S.fiSettings.clientRates) || {};
   const def = (c) => (typeof prices[c] === "number" ? prices[c] : null);
   S.merged.forEach((t, id) => {
