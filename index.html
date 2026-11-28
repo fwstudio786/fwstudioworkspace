@@ -1264,6 +1264,19 @@ let me = null, view = "board", loaded = false;
 const ui = { draftId: null, q: "", fAssignee: "", fClient: "", sort: { key: "due", dir: 1 }, openKind: null, openId: null, subtab: "overview" };
 try { const v = localStorage.getItem("fw-ws-view"); if (v) view = v; } catch (e) {}
 const isAdmin = () => me && me.role === "admin", isEditor = () => me && me.role === "editor", isClient = () => me && (me.role === "client" || me.role === "guest");
+// --- background-sync safety: only ONE browser (the owner's) keeps sheets/work log/finance in step, so admins never ping-pong writes; a circuit breaker stops any runaway before it can exhaust the database quota ---
+const isPrimary = () => me && String(me.email || "").toLowerCase() === OWNER_EMAIL;
+let _autoW = [], _autoOff = false;
+function autoOK() {
+  if (_autoOff) return false;
+  const t = Date.now(); _autoW = _autoW.filter((x) => t - x < 60000);
+  if (_autoW.length >= 200) { _autoOff = true; console.warn("[fw] background sync paused — too many writes in a minute (possible loop)."); try { toast("Background sync paused to protect the database. Reload to resume."); } catch (e) {} return false; }
+  return true;
+}
+const autoWrote = () => { _autoW.push(Date.now()); };
+const aSet = (c, id, d) => { if (autoOK()) { autoWrote(); try { Store.set(c, id, d); } catch (e) {} } };
+const aUpd = (c, id, d) => { if (autoOK()) { autoWrote(); try { Store.update(c, id, d); } catch (e) {} } };
+const aRem = (c, id) => { if (autoOK()) { autoWrote(); try { Store.remove(c, id); } catch (e) {} } };
 const team = () => [...S.users.entries()].filter(([, u]) => (u.role === "admin" || u.role === "editor") && !u.actsAs).map(([id, u]) => ({ id, name: u.name || u.email })).sort((a, b) => a.name.localeCompare(b.name));
 const clients = () => [...S.clients.entries()].map(([id, c]) => ({ id, name: c.name })).sort((a, b) => a.name.localeCompare(b.name));
 const personName = (id) => { if (!id) return ""; const u = S.users.get(id); if (u && u.actsAs && S.users.has(u.actsAs)) return personName(u.actsAs); if (u) return u.name || u.email || ""; const c = S.clients.get(id); return c ? c.name : ""; };
@@ -1506,18 +1519,18 @@ function buildClientSheets() {
 // Keep the per-client sheets in step with the board automatically (admin's browser): a client with tasks
 // always has a sheet, task columns refresh, and a deleted task drops out. Only writes when something changed.
 let csTimer = 0;
-function csSchedule() { if (!isAdmin() || csTimer) return; csTimer = setTimeout(() => { csTimer = 0; csSync(); }, 1500); }
+function csSchedule() { if (!isPrimary() || csTimer) return; csTimer = setTimeout(() => { csTimer = 0; csSync(); }, 1500); }
 function csSameSheet(ex, data) {
   return JSON.stringify({ c: ex.cells || {}, r: ex.rows, k: ex.cols, o: ex.taskOrder || [], t: ex.title }) === JSON.stringify({ c: data.cells, r: data.rows, k: data.cols, o: data.taskOrder, t: data.title });
 }
 function csSync() {
-  if (!isAdmin() || !["tasks", "reviews", "sheets"].every((c) => got.has(c))) return;
+  if (!isPrimary() || !["tasks", "reviews", "sheets"].every((c) => got.has(c))) return;
   const existingByClient = {}; S.sheets.forEach((s, id) => { if (s && s.auto === "client" && s.client) existingByClient[s.client] = { id, ...s }; });
   const clients = new Set([...S.merged.values()].map((t) => t.client).filter(Boolean));
   clients.forEach((cid) => {
     const ex = existingByClient[cid], data = clientSheetData(cid, ex), id = ex ? ex.id : uid();
     if (ex && csSameSheet(ex, data)) return;
-    S.sheets.set(id, data); try { Store.set("sheets", id, data); } catch (e) {}
+    S.sheets.set(id, data); aSet("sheets", id, data);
   });
 }
 /* ---------------- Gemini (Firebase AI Logic) for reading a screenshot into a sheet ---------------- */
@@ -3522,9 +3535,9 @@ const WL_AUTO_KEYS = Object.keys(wlAuto("x", {}));
 
 // Admin only: copy task facts into the work log. Paid rows keep the rate they were paid at.
 let wlTimer = 0;
-function wlSchedule() { if (!isAdmin() || wlTimer) return; wlTimer = setTimeout(() => { wlTimer = 0; wlSync(); }, 1000); }
+function wlSchedule() { if (!isPrimary() || wlTimer) return; wlTimer = setTimeout(() => { wlTimer = 0; wlSync(); }, 1000); }
 function wlSync() {
-  if (!isAdmin() || !["tasks", "reviews", "worklog", "rates"].every((c) => got.has(c))) return;
+  if (!isPrimary() || !["tasks", "reviews", "worklog", "rates"].every((c) => got.has(c))) return;
   const rates = (S.wlRates && S.wlRates.rates) || {};
   const def = (ed) => (typeof rates[ed] === "number" ? rates[ed] : null);
   S.merged.forEach((t, id) => {
@@ -3533,16 +3546,16 @@ function wlSync() {
     if (!row) {
       if (!a.editor) return;
       const r = { ...a, defRate: def(a.editor), rate: null, paid: false, paidAt: "", note: "", oAssigned: null, oDue: null, oDelivered: null, oApproved: null, manual: false };
-      S.worklog.set(id, r); Store.set("worklog", id, r); return;
+      S.worklog.set(id, r); aSet("worklog", id, r); return;
     }
     const patch = {};
     WL_AUTO_KEYS.forEach((k) => { if (JSON.stringify(row[k] ?? "") !== JSON.stringify(a[k] ?? "")) patch[k] = a[k]; });
     if (!row.paid && (row.defRate ?? null) !== def(a.editor)) patch.defRate = def(a.editor);
-    if (Object.keys(patch).length) { S.worklog.set(id, { ...row, ...patch }); Store.update("worklog", id, patch); }
+    if (Object.keys(patch).length) { S.worklog.set(id, { ...row, ...patch }); aUpd("worklog", id, patch); }
   });
   S.worklog.forEach((row, id) => {
-    if (row.manual) { if (!row.paid && (row.defRate ?? null) !== def(row.editor)) { S.worklog.set(id, { ...row, defRate: def(row.editor) }); Store.update("worklog", id, { defRate: def(row.editor) }); } return; }
-    if (!S.merged.has(id)) { S.worklog.delete(id); try { Store.remove("worklog", id); } catch (e) {} }   // the task was deleted: drop its pay row (also cleans up older "gone" rows)
+    if (row.manual) { if (!row.paid && (row.defRate ?? null) !== def(row.editor)) { S.worklog.set(id, { ...row, defRate: def(row.editor) }); aUpd("worklog", id, { defRate: def(row.editor) }); } return; }
+    if (!S.merged.has(id)) { S.worklog.delete(id); aRem("worklog", id); }   // the task was deleted: drop its pay row (also cleans up older "gone" rows)
   });
 }
 
@@ -3890,9 +3903,9 @@ function fiAuto(id, t) {
 }
 const FI_AUTO_KEYS = Object.keys(fiAuto("x", {}));
 let fiTimer = 0;
-function fiSchedule() { if (!isAdmin() || fiTimer) return; fiTimer = setTimeout(() => { fiTimer = 0; fiSync(); }, 1200); }
+function fiSchedule() { if (!isPrimary() || fiTimer) return; fiTimer = setTimeout(() => { fiTimer = 0; fiSync(); }, 1200); }
 function fiSync() {
-  if (!isAdmin() || !["tasks", "reviews", "finance", "worklog", "finset"].every((c) => got.has(c))) return;
+  if (!isPrimary() || !["tasks", "reviews", "finance", "worklog", "finset"].every((c) => got.has(c))) return;
   const prices = (S.fiSettings && S.fiSettings.clientRates) || {};
   const def = (c) => (typeof prices[c] === "number" ? prices[c] : null);
   S.merged.forEach((t, id) => {
@@ -3901,14 +3914,14 @@ function fiSync() {
     if (!row) {
       if (!a.client && !a.editor) return;
       const r = { ...a, manual: false, defRate: def(a.client), rate: null, oCount: null, oCost: null, clientPaid: false, paidAt: "", note: "" };
-      S.finance.set(id, r); Store.set("finance", id, r); return;
+      S.finance.set(id, r); aSet("finance", id, r); return;
     }
     const patch = {};
     FI_AUTO_KEYS.forEach((k) => { if (JSON.stringify(row[k] ?? "") !== JSON.stringify(a[k] ?? "")) patch[k] = a[k]; });
     if (!row.clientPaid && (row.defRate ?? null) !== def(a.client)) patch.defRate = def(a.client);
-    if (Object.keys(patch).length) { S.finance.set(id, { ...row, ...patch }); Store.update("finance", id, patch); }
+    if (Object.keys(patch).length) { S.finance.set(id, { ...row, ...patch }); aUpd("finance", id, patch); }
   });
-  S.finance.forEach((row, id) => { if (!row.manual && !S.merged.has(id)) { S.finance.delete(id); try { Store.remove("finance", id); } catch (e) {} } });   // deleted task: remove its business row (and any older "gone" rows)
+  S.finance.forEach((row, id) => { if (!row.manual && !S.merged.has(id)) { S.finance.delete(id); aRem("finance", id); } });   // deleted task: remove its business row (and any older "gone" rows)
 }
 function fiRows() {
   return [...S.finance.entries()].map(([id, r]) => {
